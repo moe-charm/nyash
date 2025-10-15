@@ -1,0 +1,14 @@
+// LLVM 11.2 minimal smoke: core ops only (Const/BinOp/Compare/Branch/Return)
+
+static box Main {
+  main() {
+    local x, y
+    x = 1
+    y = 2
+    if (x < y) {
+      x = x + y
+    }
+    return x
+  }
+}
+

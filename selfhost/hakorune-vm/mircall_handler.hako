@@ -1,0 +1,130 @@
+// MirCallHandlerBox - Unified call instruction handler
+// Single Responsibility: Dispatch MirCall to appropriate handler based on callee type
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/callee_parser.hako" as CalleeParserBox
+using "selfhost/hakorune-vm/args_extractor.hako" as ArgsExtractorBox
+using "selfhost/hakorune-vm/global_call_handler.hako" as GlobalCallHandlerBox
+using "selfhost/hakorune-vm/extern_call_handler.hako" as ExternCallHandlerBox
+using "selfhost/hakorune-vm/module_function_call_handler.hako" as ModuleFunctionCallHandlerBox
+using "selfhost/hakorune-vm/method_call_handler.hako" as MethodCallHandlerBox
+using "selfhost/hakorune-vm/constructor_call_handler.hako" as ConstructorCallHandlerBox
+using "selfhost/hakorune-vm/closure_call_handler.hako" as ClosureCallHandlerBox
+using "selfhost/shared/host_bridge/host_bridge_box.hako" as HostBridge
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/boxcall_builder.hako" as BoxcallBuilderBox
+using "selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box MirCallHandlerBox {
+  // Internal helpers (boxed for clarity)
+  _alloc_tmp_reg(regs) {
+    local tmp_id = 900001
+    local try_key = StringHelpers.int_to_str(tmp_id)
+    loop(regs.has(try_key)) { tmp_id = tmp_id + 1  try_key = StringHelpers.int_to_str(tmp_id) }
+    return tmp_id
+  }
+  _build_boxcall_js(dst_reg, vid, tmp_id) {
+    return "{\"op\":\"boxcall\",\"dst\":" + StringHelpers.int_to_str(dst_reg) + ",\"box\":" + StringHelpers.int_to_str(vid) + ",\"method\":\"call\",\"args\":[" + StringHelpers.int_to_str(tmp_id) + "]}"
+  }
+
+  // Handle MirCall instruction
+  // inst_json: {"op":"mir_call","mir_call":{...},"dst":X}
+  // regs: register MapBox
+  // mem: memory MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(inst_json, regs, mem) {
+    // Extract mir_call field
+    local mir_call_key = "\"mir_call\":"
+    local mir_call_start = inst_json.indexOf(mir_call_key)
+    if mir_call_start < 0 {
+      return Result.Err("mir_call: mir_call field not found")
+    }
+    mir_call_start = mir_call_start + mir_call_key.size()
+
+    // Find mir_call object end (using balanced bracket matching)
+    // mir_call_start now points to '{' (first char of mir_call object)
+    local mir_call_end = JsonCursorBox.seek_obj_end(inst_json, mir_call_start)
+    if mir_call_end < 0 {
+      return Result.Err("mir_call: mir_call object end not found")
+    }
+
+    // Extract mir_call object
+    local mir_call_json = inst_json.substring(mir_call_start, mir_call_end + 1)
+
+    // Extract callee type
+    local callee_type = CalleeParserBox.extract_type(mir_call_json)
+    if callee_type == null {
+      return Result.Err("mir_call: failed to extract callee type")
+    }
+
+    // Extract destination register (may be null)
+    local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
+    // Note: dst can be null for void functions, JsonFieldExtractor returns null
+
+    // Extract arguments (common for all callee types)
+    local args_array = ArgsExtractorBox.extract_and_load(mir_call_json, regs)
+
+    // Method: Dispatch directly (receiver/method handled in MethodCallHandlerBox)
+    if callee_type == "Method" {
+      return MethodCallHandlerBox.handle(mir_call_json, dst_reg, regs)
+    }
+
+    // Constructor: Dispatch directly (box_type handled in ConstructorCallHandlerBox)
+    if callee_type == "Constructor" {
+      local box_type = CalleeParserBox.extract_box_type(mir_call_json)
+      if box_type == null {
+        return Result.Err("mir_call: failed to extract box_type from Constructor")
+      }
+      return ConstructorCallHandlerBox.handle(box_type, args_array, dst_reg, regs)
+    }
+
+    // Closure: Dispatch directly (params/captures handled in ClosureCallHandlerBox)
+    if callee_type == "Closure" {
+      return ClosureCallHandlerBox.handle(mir_call_json, dst_reg, regs)
+    }
+
+    // Phase 2: Value (handle before name extraction since Value has no name field)
+    if callee_type == "Value" {
+      // Directly invoke CallableBox.call(args_array) instead of synthesizing boxcall JSON.
+      // This mirrors the Rust VM behaviour where call/1 flattens the Array of arguments.
+      local vid = CalleeParserBox.extract_value_id(mir_call_json)
+      if vid == null { return Result.Err("mir_call: Value callee missing 'value'") }
+      local fnv = ValueManagerBox.get(regs, vid)
+      if fnv == null { return Result.Err("mir_call: value v%" + vid + " is unset") }
+
+      // Invoke callable with provided arguments (ArrayBox). Empty array => zero-arg call.
+      // Allocate temp for args_array and synthesize boxcall
+      local tmp_id = me._alloc_tmp_reg(regs)
+      regs.set(StringHelpers.int_to_str(tmp_id), args_array)
+      local js = me._build_boxcall_js(dst_reg, vid, tmp_id)
+      local bc = BoxCallHandlerBox.handle(js, regs)
+      if bc.is_Err() { return bc }
+return Result.Ok(0)
+    }
+
+    // For other callee types (Global, Extern, ModuleFunction): Extract name
+    local callee_name = CalleeParserBox.extract_name(mir_call_json)
+    if callee_name == null {
+      return Result.Err("mir_call: failed to extract callee name")
+    }
+
+    // Dispatch based on callee type
+    if callee_type == "Global" {
+      return GlobalCallHandlerBox.handle(callee_name, args_array, dst_reg, regs)
+    }
+
+    if callee_type == "Extern" {
+      return ExternCallHandlerBox.handle(callee_name, args_array, dst_reg, regs, mem)
+    }
+
+    if callee_type == "ModuleFunction" {
+      return ModuleFunctionCallHandlerBox.handle(callee_name, args_array, dst_reg, regs)
+    }
+
+    return Result.Err("mir_call: unknown callee type: " + callee_type)
+  }
+}

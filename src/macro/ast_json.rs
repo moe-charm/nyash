@@ -3,10 +3,20 @@ use nyash_rust::ast::{ASTNode, LiteralValue, BinaryOperator, UnaryOperator, Span
 
 pub fn ast_to_json(ast: &ASTNode) -> Value {
     match ast.clone() {
-        ASTNode::Program { statements, .. } => json!({
-            "kind": "Program",
-            "statements": statements.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()
-        }),
+        ASTNode::Program { statements, .. } => {
+            let mut root = json!({
+                "kind": "Program",
+                "statements": statements.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()
+            });
+            // Thin CLI bridge: when NYASH_DEV_JSON_MARKER=1, add "__cli_dev__":1 to AST JSON.
+            // FlowRunner will normalize this to {"__dev__":1} on the MIR JSON path.
+            if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
+                if let Value::Object(map) = &mut root {
+                    map.insert("__cli_dev__".to_string(), Value::from(1));
+                }
+            }
+            root
+        },
         ASTNode::Loop { condition, body, .. } => json!({
             "kind": "Loop",
             "condition": ast_to_json(&condition),

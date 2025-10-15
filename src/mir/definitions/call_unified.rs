@@ -2,7 +2,7 @@
  * Unified MIR Call Definitions - ChatGPT5 Pro A++ Design
  *
  * This module contains all call-related definitions for the unified MIR Call instruction
- * that replaces Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure
+ * that replaces Call/BoxCall/ExternCall/NewBox/NewClosure
  */
 
 use crate::mir::{Effect, EffectMask, ValueId};
@@ -23,6 +23,10 @@ pub enum Callee {
     /// Global function call (e.g., nyash.builtin.print)
     /// Resolves to built-in or global functions at compile time
     Global(String),
+
+    /// Module function call (e.g., ParserBox.starts_with/3)
+    /// Fully qualified function present in the MIR module function table
+    ModuleFunction(String),
 
     /// Box method call with explicit receiver
     /// Enables static resolution of box.method() patterns
@@ -144,7 +148,7 @@ impl Default for CallFlags {
     }
 }
 
-/// Unified MIR Call instruction - replaces Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure
+/// Unified MIR Call instruction - replaces Call/BoxCall/ExternCall/NewBox/NewClosure
 /// ChatGPT5 Pro A++ design for complete call unification
 #[derive(Debug, Clone, PartialEq)]
 pub struct MirCall {

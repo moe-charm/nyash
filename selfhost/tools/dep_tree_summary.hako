@@ -1,0 +1,43 @@
+// dep_tree_summary.hako — DepTreeSummaryBox
+// Responsibility: summarize annotated dep_tree nodes (include/using resolved/missing) recursively.
+
+static box DepTreeSummaryBox {
+  _zero() { return map({ nodes: 0, include_resolved: 0, include_missing: 0, using_resolved: 0, using_unresolved: 0 }) }
+  _merge(a, b) {
+    local out = me._zero()
+    out.set("nodes", a.get("nodes") + b.get("nodes"))
+    out.set("include_resolved", a.get("include_resolved") + b.get("include_resolved"))
+    out.set("include_missing", a.get("include_missing") + b.get("include_missing"))
+    out.set("using_resolved", a.get("using_resolved") + b.get("using_resolved"))
+    out.set("using_unresolved", a.get("using_unresolved") + b.get("using_unresolved"))
+    return out
+  }
+  summarize_node(n) {
+    if n == null { return me._zero() }
+    local acc = me._zero()
+    acc.set("nodes", 1)
+    // includes annotations on this node (optional arrays)
+    if n.has("include_resolved") { acc.set("include_resolved", acc.get("include_resolved") + n.get("include_resolved").size()) }
+    if n.has("include_missing") { acc.set("include_missing", acc.get("include_missing") + n.get("include_missing").size()) }
+    // using array entries
+    if n.has("using") {
+      local us = n.get("using")
+      local i = 0
+      loop(i < us.size()) {
+        local u = us.get(i)
+        if u != null {
+          if u.get != null && u.get("resolved") != null { acc.set("using_resolved", acc.get("using_resolved") + 1) }
+          if u.get != null && u.get("unresolved") == true { acc.set("using_unresolved", acc.get("using_unresolved") + 1) }
+        }
+        i = i + 1
+      }
+    }
+    // children
+    if n.has("children") {
+      local ch = n.get("children")
+      local i = 0
+      loop(i < ch.size()) { acc = me._merge(acc, me.summarize_node(ch.get(i)))  i = i + 1 }
+    }
+    return acc
+  }
+}

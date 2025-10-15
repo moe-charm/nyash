@@ -6,7 +6,6 @@
 
 use crate::ast::ASTNode;
 use crate::parser::{NyashParser, ParseError};
-use crate::parser::common::ParserUtils;
 use crate::parser::cursor::TokenCursor;
 use crate::tokenizer::TokenType;
 
@@ -55,26 +54,6 @@ impl NyashParser {
             TokenType::USING => Some("using"),
             TokenType::FROM => Some("from"),
             _ => None,
-        }
-    }
-
-    /// Small helper: build UnexpectedToken with current token and line
-    pub(super) fn err_unexpected<S: Into<String>>(&self, expected: S) -> ParseError {
-        ParseError::UnexpectedToken {
-            found: self.current_token().token_type.clone(),
-            expected: expected.into(),
-            line: self.current_token().line,
-        }
-    }
-
-    /// Expect an identifier and advance. Returns its string or an UnexpectedToken error
-    pub(super) fn expect_identifier(&mut self, what: &str) -> Result<String, ParseError> {
-        if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
-            let out = name.clone();
-            self.advance();
-            Ok(out)
-        } else {
-            Err(self.err_unexpected(what))
         }
     }
 }

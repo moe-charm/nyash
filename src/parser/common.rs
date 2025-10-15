@@ -61,7 +61,7 @@ pub trait ParserUtils {
                 let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
                     let lv = v.to_ascii_lowercase();
                     lv == "1" || lv == "true" || lv == "on"
-                }).unwrap_or(false);
+                }).unwrap_or(true);
                 loop {
                     let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
                     let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);

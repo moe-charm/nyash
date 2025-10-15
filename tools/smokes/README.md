@@ -1,4 +1,4 @@
-# Nyash Smoke Tests v2 — Guide
+# HakoRune Smoke Tests v2 (aka Nyash) — Guide
 
 Overview
 - Entry: `tools/smokes/v2/run.sh` — unified runner for quick/integration/full.
@@ -72,7 +72,7 @@ tools/smokes/v2/run.sh --profile quick
 テストランナーは LLVM 非対応時にヒントを出力します（buildコマンドの案内）。
 
 Notes
-- Using resolution: prefer nyash.toml aliases (SSOT). Some tests may enable `NYASH_ALLOW_USING_FILE=1` internally for convenience.
+- Using resolution: prefer hako.toml aliases (SSOT; compat: nyash.toml). Some tests may enable `NYASH_ALLOW_USING_FILE=1` internally for convenience.
 - Plugin warnings are informational; smokes are designed to pass without dynamic plugins.
 - Harness single-run may take longer due to link+exec; integration profile includes generous timeouts.
 

@@ -376,7 +376,12 @@ impl P2PBox {
                             #[cfg(not(feature = "interpreter-legacy"))]
                             {
                                 if crate::config::env::cli_verbose() {
+                                    // Human-readable warn
                                     eprintln!("[warn] FunctionBox handler requires interpreter-legacy; skipped execution");
+                                    // Optional JSON warn for tooling when enabled
+                                    if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                                        eprintln!("{}", crate::common::diagnostics::p2p_functionbox_legacy_required_warn());
+                                    }
                                 }
                             }
                             if once {

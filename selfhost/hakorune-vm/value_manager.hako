@@ -1,0 +1,38 @@
+// ValueManagerBox - Unified register value management
+// Centralizes all register get/set operations with type conversion
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/vm/boxes/result_box.hako" as Result
+
+static box ValueManagerBox {
+  // Get register value (returns 0 if not found)
+  // reg_id: numeric register ID (e.g., 1, 2, 3)
+  // Returns: register value or 0 if not set
+  get(regs, reg_id) {
+    local key = StringHelpers.int_to_str(reg_id)
+    local v = regs.get(key)
+    return v
+  }
+
+  // Set register value
+  // reg_id: numeric register ID
+  // value: value to store
+  // Returns: Result.Ok(0)
+  set(regs, reg_id, value) {
+    local key = StringHelpers.int_to_str(reg_id)
+    regs.set(key, value)
+    return Result.Ok(0)
+  }
+
+  // Get register as i64 (with type conversion if needed)
+  // Currently same as get(), but allows future type handling
+  get_i64(regs, reg_id) {
+    return me.get(regs, reg_id)
+  }
+
+  // Set register with automatic type conversion
+  // Currently same as set(), but allows future type handling
+  set_i64(regs, reg_id, value) {
+    return me.set(regs, reg_id, value)
+  }
+}

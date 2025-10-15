@@ -1,0 +1,14 @@
+local i = 0
+loop(i < 6) {
+  if (i % 2 == 0) {
+    if (i == 4) {
+      i = i + 1
+      continue
+    }
+    i = i + 1
+    continue
+  }
+  print(i)
+  i = i + 1
+}
+

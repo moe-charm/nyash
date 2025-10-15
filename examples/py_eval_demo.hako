@@ -1,0 +1,16 @@
+// Python plugin demo (Phase 10.5 scaffold)
+// Requires: plugins/nyash-python-plugin built (release) and nyash.toml updated
+// Run:
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_eval_demo.nyash
+
+static box Main {
+  main() {
+    local py, obj
+    py = new PyRuntimeBox()
+    // Evaluate simple Python expression and print its string form
+    obj = py.eval("'hello' * 3")
+    me.console.log("py.eval.str=", obj.str())
+    return 0
+  }
+}
+

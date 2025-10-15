@@ -1,0 +1,62 @@
+// Nyash micro benchmarks using TimerBox (script-level)
+// How to run:
+//  - Interpreter:           ./target/release/nyash examples/ny_bench.nyash
+//  - VM:                    ./target/release/nyash --backend vm examples/ny_bench.nyash
+//  - VM+JIT (fast path!):   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examples/ny_bench.nyash
+
+local ITER
+ITER = 100000  // change for heavier runs
+
+local timer
+timer = new TimerBox()
+
+print("\n=== Nyash Micro Benchmarks (ITER=" + ITER + ") ===")
+
+// 1) Simple arithmetic loop: sum 0..ITER-1
+local i, sum, t0, t1, ms, ops
+i = 0
+sum = 0
+t0 = timer.now()
+loop(i < ITER) {
+  sum = sum + i
+  i = i + 1
+}
+t1 = timer.now()
+ms = t1 - t0
+ops = (ITER * 1000.0) / ms
+print("[arith_loop] elapsed_ms=" + ms + ", ops/sec=" + ops)
+
+// 2) Array push loop: push integers 0..ITER-1
+local arr
+arr = new ArrayBox()
+i = 0
+t0 = timer.now()
+loop(i < ITER) {
+  arr.push(i)
+  i = i + 1
+}
+t1 = timer.now()
+ms = t1 - t0
+ops = (ITER * 1000.0) / ms
+print("[array_push] elapsed_ms=" + ms + ", ops/sec=" + ops)
+
+// 3) Mixed arithmetic: simple_add repeated
+local a, b, z
+a = 1
+b = 2
+i = 0
+t0 = timer.now()
+loop(i < ITER) {
+  z = a + b
+  a = a + 1
+  b = b + 1
+  i = i + 1
+}
+t1 = timer.now()
+ms = t1 - t0
+ops = (ITER * 1000.0) / ms
+print("[simple_add_loop] elapsed_ms=" + ms + ", ops/sec=" + ops)
+
+print("\nDone.")
+return 0
+

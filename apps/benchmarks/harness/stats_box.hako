@@ -1,0 +1,150 @@
+// Stats Box — Commercial-grade statistical calculations for benchmarks
+// Implements mean, median, stddev, and percentiles (p95, p99)
+//
+// Design principles:
+// - Box-First: Encapsulates all statistical logic
+// - Fail-Fast: Validates input (empty samples → error)
+// - Immutable samples: Once pushed, samples are not modified
+
+box StatsBox {
+  samples
+
+  birth() {
+    me.samples = new ArrayBox()
+    return 0
+  }
+
+  // Add a sample (time in nanoseconds)
+  push(ns) {
+    me.samples.push(ns)
+    return 0
+  }
+
+  // Get number of samples
+  count() {
+    return me.samples.size()
+  }
+
+  // Calculate mean (average)
+  mean() {
+    local n = me.samples.size()
+    if n == 0 { return 0 }
+
+    local sum = 0
+    local i = 0
+    loop(i < n) {
+      sum = sum + me.samples.get(i)
+      i = i + 1
+    }
+
+    return sum / n
+  }
+
+  // Calculate median (50th percentile)
+  median() {
+    return me.percentile(50)
+  }
+
+  // Calculate standard deviation
+  stddev() {
+    local n = me.samples.size()
+    if n == 0 { return 0 }
+    if n == 1 { return 0 }
+
+    local avg = me.mean()
+    local variance_sum = 0
+    local i = 0
+
+    loop(i < n) {
+      local diff = me.samples.get(i) - avg
+      variance_sum = variance_sum + (diff * diff)
+      i = i + 1
+    }
+
+    local variance = variance_sum / n
+    // Approximate sqrt using Newton's method (10 iterations)
+    return me._sqrt(variance)
+  }
+
+  // Calculate 95th percentile
+  p95() {
+    return me.percentile(95)
+  }
+
+  // Calculate 99th percentile
+  p99() {
+    return me.percentile(99)
+  }
+
+  // Generic percentile calculation (p: 0-100)
+  percentile(p) {
+    local n = me.samples.size()
+    if n == 0 { return 0 }
+
+    // Create sorted copy (simple bubble sort for now)
+    local sorted = me._sort_samples()
+
+    // Calculate index: (p/100) * (n-1)
+    local idx = (p * (n - 1)) / 100
+
+    // Return value at index
+    if idx >= n { return sorted.get(n - 1) }
+    return sorted.get(idx)
+  }
+
+  // Internal: Sort samples (bubble sort - good enough for benchmarks)
+  _sort_samples() {
+    local n = me.samples.size()
+    local sorted = new ArrayBox()
+
+    // Copy samples to sorted array
+    local i = 0
+    loop(i < n) {
+      sorted.push(me.samples.get(i))
+      i = i + 1
+    }
+
+    // Bubble sort
+    local outer = 0
+    loop(outer < n) {
+      local inner = 0
+      loop(inner < n - 1 - outer) {
+        local a = sorted.get(inner)
+        local b = sorted.get(inner + 1)
+        if a > b {
+          // Swap
+          sorted.set(inner, b)
+          sorted.set(inner + 1, a)
+        }
+        inner = inner + 1
+      }
+      outer = outer + 1
+    }
+
+    return sorted
+  }
+
+  // Internal: Approximate square root using Newton's method
+  _sqrt(x) {
+    if x <= 0 { return 0 }
+    if x == 1 { return 1 }
+
+    // Initial guess: x/2
+    local guess = x / 2
+    local iterations = 10
+    local i = 0
+
+    loop(i < iterations) {
+      // Newton's method: guess = (guess + x/guess) / 2
+      local new_guess = (guess + x / guess) / 2
+      // Check convergence (diff < 1)
+      local diff = new_guess - guess
+      if diff < 0 { diff = 0 - diff }
+      if diff < 1 { return new_guess }
+      guess = new_guess
+      i = i + 1
+    }
+
+    return guess
+  }
+}

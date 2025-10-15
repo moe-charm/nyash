@@ -1,0 +1,25 @@
+// Net round-trip smoke: ServerBox ↔ ClientBox via HTTP over localhost
+// Steps:
+//  1) start server on port 18081
+//  2) client GET http://127.0.0.1:18081/hello and get a ResponseBox handle
+//  3) server accept(), respond with status=200 and body "ok"
+//  4) client read status/body and print values
+
+local srv = new ServerBox()
+srv.start(18081)
+
+local cli = new ClientBox()
+local resp_c = cli.get("http://127.0.0.1:18081/hello")
+
+local req = srv.accept()
+local resp_s = new ResponseBox()
+resp_s.setStatus(200)
+resp_s.setHeader("Content-Type", "text/plain")
+resp_s.write("ok")
+req.respond(resp_s)
+
+print(resp_c.getStatus())
+print(resp_c.readBody())
+
+// Clean up
+srv.stop()

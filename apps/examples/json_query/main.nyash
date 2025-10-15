@@ -40,7 +40,7 @@ static box Main {
     cases.push("[3]")        // -> null (out of range)
 
     local i = 0
-    loop(i < cases.length()) {
+    loop(i < cases.size()) {
       local json_text = cases.get(i)
       local path = cases.get(i + 1)
       if DEBUG == 1 { print("[dbg] path=" + path) }
@@ -72,7 +72,7 @@ static box Main {
     local DEBUG = 0  // set to 1 for ad-hoc debug
     local cur_text = json_text
     local i = 0
-    loop(i < path.length()) {
+    loop(i < path.size()) {
       local ch = path.substring(i, i + 1)
       if DEBUG == 1 { print("[dbg] step ch=" + ch) }
       if ch == "." {
@@ -80,17 +80,17 @@ static box Main {
         i = i + 1
         if DEBUG == 1 { print("[dbg] after dot i=" + i + ", ch1=" + path.substring(i, i + 1)) }
         local start = i
-        loop(i < path.length()) {
+        loop(i < path.size()) {
           local c = path.substring(i, i + 1)
           if DEBUG == 1 { print("[dbg] c=" + c) }
           if this.is_alnum(c) || c == "_" { i = i + 1 } else { break }
         }
         local key = path.substring(start, i)
         if DEBUG == 1 { print("[dbg] key=" + key) }
-        if key.length() == 0 { return null }
+        if key.size() == 0 { return null }
         // Get value text directly; then reset window to that text
-        local next_text = this.object_get_text(cur_text, 0, cur_text.length(), key)
-        if DEBUG == 1 { if next_text == null { print("[dbg] obj miss") } else { print("[dbg] obj hit len=" + next_text.length()) } }
+        local next_text = this.object_get_text(cur_text, 0, cur_text.size(), key)
+        if DEBUG == 1 { if next_text == null { print("[dbg] obj miss") } else { print("[dbg] obj hit len=" + next_text.size()) } }
         if next_text == null { return null }
         cur_text = next_text
       } else {
@@ -99,15 +99,15 @@ static box Main {
           i = i + 1
           if DEBUG == 1 { print("[dbg] after [ i=" + i + ", ch1=" + path.substring(i, i + 1)) }
           local start = i
-          loop(i < path.length() && this.is_digit(path.substring(i, i + 1))) { i = i + 1 }
+          loop(i < path.size() && this.is_digit(path.substring(i, i + 1))) { i = i + 1 }
           local idx_str = path.substring(start, i)
           if DEBUG == 1 { print("[dbg] idx_str=" + idx_str + ", next=" + path.substring(i, i + 1)) }
-          if i >= path.length() || path.substring(i, i + 1) != "]" { return null }
+          if i >= path.size() || path.substring(i, i + 1) != "]" { return null }
           i = i + 1 // skip ']'
           local idx = this.parse_int(idx_str)
           if DEBUG == 1 { print("[dbg] idx=" + idx) }
-          local next_text = this.array_get_text(cur_text, 0, cur_text.length(), idx)
-          if DEBUG == 1 { if next_text == null { print("[dbg] arr miss idx=" + idx_str) } else { print("[dbg] arr hit len=" + next_text.length()) } }
+          local next_text = this.array_get_text(cur_text, 0, cur_text.size(), idx)
+          if DEBUG == 1 { if next_text == null { print("[dbg] arr miss idx=" + idx_str) } else { print("[dbg] arr hit len=" + next_text.size()) } }
           if next_text == null { return null }
           cur_text = next_text
         } else {
@@ -126,7 +126,7 @@ static box Main {
     // membership without using indexOf (avoid VoidBox.* risks)
     local letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     local i = 0
-    loop(i < letters.length()) {
+    loop(i < letters.size()) {
       if letters.substring(i, i+1) == ch { return true }
       i = i + 1
     }
@@ -138,12 +138,12 @@ static box Main {
   parse_int(s) {
     local i = 0
     local neg = false
-    if s.length() > 0 && s.substring(0,1) == "-" {
+    if s.size() > 0 && s.substring(0,1) == "-" {
       neg = true
       i = 1
     }
     local acc = 0
-    loop(i < s.length()) {
+    loop(i < s.size()) {
       local ch = s.substring(i, i + 1)
       if ! this.is_digit(ch) { break }
       // ch to digit
@@ -168,7 +168,7 @@ static box Main {
   span_unpack_i(sp) {
     // find ':' without using indexOf
     local i = 0
-    local n = sp.length()
+    local n = sp.size()
     loop(i < n) {
       if sp.substring(i, i+1) == ":" { break }
       i = i + 1
@@ -178,7 +178,7 @@ static box Main {
   }
   span_unpack_j(sp) {
     local i = 0
-    local n = sp.length()
+    local n = sp.size()
     loop(i < n) {
       if sp.substring(i, i+1) == ":" { break }
       i = i + 1

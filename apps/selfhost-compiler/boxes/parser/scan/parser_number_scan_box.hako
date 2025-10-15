@@ -1,0 +1,24 @@
+// ParserNumberScanBox — scan integer literal starting at index i
+// Returns: "{"type":"Int","value":<digits>}@<pos>"
+
+using "apps/selfhost-compiler/boxes/parser/scan/parser_common_utils_box.hako" as Utils
+
+static box ParserNumberScanBox {
+  scan_int(src, i) {
+    if src == null { return "{"type":"Int","value":0}@" + Utils.i2s(i) }
+    local n = src.size()
+    local j = i
+    local cont = 1
+    local guard = 0
+    local max = 100000
+    loop(cont == 1) {
+      if guard > max { cont = 0 } else { guard = guard + 1 }
+      if j < n {
+        if Utils.is_digit(src.substring(j, j+1)) { j = j + 1 } else { cont = 0 }
+      } else { cont = 0 }
+    }
+    local s = src.substring(i, j)
+    if s.size() == 0 { s = "0" }
+    return "{"type":"Int","value":" + s + "}@" + Utils.i2s(j)
+  }
+}

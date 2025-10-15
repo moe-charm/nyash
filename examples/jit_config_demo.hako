@@ -1,0 +1,13 @@
+// JitConfigBox demo
+static box Main {
+  main() {
+    local jc
+    jc = new JitConfigBox()
+    jc.enable("exec")
+    jc.setThreshold(1)
+    jc.enable("phi_min")
+    jc.apply()
+    print(jc.summary())
+    return 0
+  }
+}

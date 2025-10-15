@@ -1,0 +1,24 @@
+// Integration Test 3: Multi-variant @enum with mixed fields
+//
+// Purpose: Verify complex enums with multiple variants and varying field counts
+// Expected: No parse errors
+
+@enum State {
+  Idle
+  Running(task_id)
+  Paused(task_id, reason)
+  Stopped
+}
+
+// Test: 4 variants, mix of zero-field, single-field, and multi-field
+
+static box Main {
+  console: ConsoleBox
+
+  main() {
+    me.console = new ConsoleBox()
+    me.console.log("[ENUM_MULTI] Complex enum parsed successfully!")
+    me.console.log("[ENUM_MULTI] 4 variants: Idle, Running(1), Paused(2), Stopped")
+    return 0
+  }
+}

@@ -1,7 +1,7 @@
 // 簡単なNyashスクリプトJSON解析の「ずれ」問題分析
 // yyjsonが必要になった理由と最小限の解決要件
 
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 static box ParsingErrorAnalysis {
     
@@ -42,7 +42,7 @@ static box ParsingErrorAnalysis {
         problematic_cases.push("{\"unicode\": \"\\u0041\\u0042\"}")     // Unicode
         
         local i = 0
-        loop(i < problematic_cases.length()) {
+        loop(i < problematic_cases.size()) {
             local json_text = problematic_cases.get(i)
             print("Test case: " + json_text)
             
@@ -70,7 +70,7 @@ static box ParsingErrorAnalysis {
         complex_cases.push("{\"mixed\": [1, \"str\", {\"nested\": true}]}") // 混合配列
         
         local i = 0
-        loop(i < complex_cases.length()) {
+        loop(i < complex_cases.size()) {
             local json_text = complex_cases.get(i)
             print("Complex case: " + json_text)
             
@@ -98,7 +98,7 @@ static box ParsingErrorAnalysis {
         number_cases.push("{\"big\": 9223372036854775807}")   // 大きな数
         
         local i = 0
-        loop(i < number_cases.length()) {
+        loop(i < number_cases.size()) {
             local json_text = number_cases.get(i)
             print("Number case: " + json_text)
             
@@ -122,7 +122,7 @@ static box ParsingErrorAnalysis {
         boundary_cases.push("{\"}bracket{\": \"value}with}brackets\"}")  // 内部ブラケット
         
         local i = 0
-        loop(i < boundary_cases.length()) {
+        loop(i < boundary_cases.size()) {
             local json_text = boundary_cases.get(i)
             print("Boundary case: " + json_text)
             
@@ -145,7 +145,7 @@ static box ParsingErrorAnalysis {
         whitespace_cases.push("{ \"mixed\":\n\t \"whitespace\" }")          // 混合空白
         
         local i = 0
-        loop(i < whitespace_cases.length()) {
+        loop(i < whitespace_cases.size()) {
             local json_text = whitespace_cases.get(i)
             print("Whitespace case: '" + json_text + "'")
             
@@ -163,10 +163,10 @@ static box ParsingErrorAnalysis {
     // ❌ 問題のある簡単な解析（参考用）
     simple_parse(json_text) {
         // これが「ずれ」の原因パターン
-        if json_text.substring(0, 1) == "{" and json_text.substring(json_text.length() - 1, json_text.length()) == "}" {
+        if json_text.substring(0, 1) == "{" and json_text.substring(json_text.size() - 1, json_text.size()) == "}" {
             return "object(simple)"
         } else {
-            if json_text.substring(0, 1) == "[" and json_text.substring(json_text.length() - 1, json_text.length()) == "]" {
+            if json_text.substring(0, 1) == "[" and json_text.substring(json_text.size() - 1, json_text.size()) == "]" {
                 return "array(simple)"
             } else {
                 return "unknown(simple)"
@@ -180,7 +180,7 @@ static box ParsingErrorAnalysis {
         local close = 0
         local i = 0
         
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             if ch == "{" or ch == "[" {
                 open = open + 1

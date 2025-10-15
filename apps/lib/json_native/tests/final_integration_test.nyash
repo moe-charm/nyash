@@ -1,6 +1,6 @@
 // 最終統合テスト - Nyash JSON Native完全版
 
-using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+using "apps/lib/json_native/parser/parser.hako" as JsonParserUtils
 
 static box FinalIntegrationTest {
     
@@ -69,7 +69,7 @@ static box FinalIntegrationTest {
         test_suite.push({name: "mixed whitespace", input: " { \"key\" : \"value\" } "})
         
         local passed = 0
-        local total = test_suite.length()
+        local total = test_suite.size()
         
         local i = 0
         loop(i < total) {
@@ -125,7 +125,7 @@ static box FinalIntegrationTest {
         
         local resolved = 0
         local i = 0
-        loop(i < problematic_cases.length()) {
+        loop(i < problematic_cases.size()) {
             local test = problematic_cases.get(i)
             local parsed = JsonParserUtils.parse_json(test.input)
             
@@ -142,8 +142,8 @@ static box FinalIntegrationTest {
             i = i + 1
         }
         
-        print("Accuracy resolution: " + resolved + "/" + problematic_cases.length())
-        return resolved == problematic_cases.length()
+        print("Accuracy resolution: " + resolved + "/" + problematic_cases.size())
+        return resolved == problematic_cases.size()
     }
     
     // 美しさ vs 性能テスト

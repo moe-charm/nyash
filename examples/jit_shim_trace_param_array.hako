@@ -1,0 +1,33 @@
+// JIT shim trace smoke: helper JIT invokes plugin on param
+// Build plugins first:
+//   (cd plugins/nyash-array-plugin && cargo build --release)
+// Run:
+//   NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//   NYASH_JIT_SHIM_TRACE=1 NYASH_CLI_VERBOSE=1 \
+//   ./target/release/nyash --backend vm examples/jit_shim_trace_param_array.nyash
+
+static box Main {
+  main() {
+    local a, debug, len
+    me.console = new ConsoleBox()
+    debug = new DebugBox()
+    debug.tracePluginCalls(true)
+
+    // Prepare Array in VM path (NewBox on Array is JIT-unsupported)
+    a = new ArrayBox()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+
+    // Call helper (should be JIT-able): only arr.length() on param
+    len = me.helper(a)
+    me.console.log("len=", len)
+
+    // Dump recent JIT shim events (expect i64.start/end etc.)
+    me.console.log(debug.getJitEvents())
+  }
+
+  helper(arr) {
+    return arr.length()
+  }
+}

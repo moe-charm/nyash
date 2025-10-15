@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Wrapper: hakorune → target/release/nyash (Phase 15.75 名称統一)
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+BIN="$ROOT/target/release/nyash"
+if [ ! -x "$BIN" ]; then
+  echo "[hakorune] building nyash (release)..." >&2
+  (cd "$ROOT" && cargo build --release >/dev/null)
+fi
+exec "$BIN" "$@"
+

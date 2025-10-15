@@ -1,9 +1,12 @@
 [env]
 # Put environment defaults used by tools or examples if needed
 # Enable using resolver by default (can be disabled with NYASH_SKIP_TOML_ENV=1)
-NYASH_ENABLE_USING = "1"
+NYASH_USING = "1"
 # Enable dev sugar preexpand for @ local alias (line-head) during parsing
 NYASH_DEV_AT_LOCAL = "1"
+# Macros: enable minimal macro engine and built-in selfhost micro macros (dev)
+NYASH_MACRO_ENABLE = "1"
+NYASH_MACRO_PATHS = "apps/macros/selfhost_min/macros.hako"
 
 [using]
 paths = ["apps", "lib", "."]
@@ -11,45 +14,86 @@ paths = ["apps", "lib", "."]
 # Optional package-style entries (opt-in via using resolver)
 [using.json_native]
 path = "apps/lib/json_native/"
-main = "parser/parser.nyash"
+main = "parser/parser.hako"
 
 # JSON Native – String utilities as a standalone package (single-file)
 [using.string_utils]
-path = "apps/lib/json_native/utils/string.nyash"
+path = "apps/lib/json_native/utils/string.hako"
 
 [using.aliases]
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
-StringUtils = "string_utils"
 JsonNode = "json_node"
 
 [using.json_node]
-path = "apps/lib/json_native/core/node.nyash"
+path = "apps/lib/json_native/core/node.hako"
 
 [modules]
+hakorune.vm.entry = "apps/hakorune/vm/boxes/hakorune_vm_entry.hako"
+hakorune.vm.core = "selfhost/hakorune-vm/hakorune_vm_core.hako"
+hakorune.vm.block_mapper = "selfhost/hakorune-vm/block_mapper.hako"
+hakorune.vm.terminator_handler = "selfhost/hakorune-vm/terminator_handler.hako"
+hakorune.vm.phi_handler = "selfhost/hakorune-vm/phi_handler.hako"
+hakorune.vm.instruction_dispatcher = "selfhost/hakorune-vm/instruction_dispatcher.hako"
+hakorune.vm.value_manager = "selfhost/hakorune-vm/value_manager.hako"
+hakorune.vm.json_field_extractor = "selfhost/hakorune-vm/json_field_extractor.hako"
+hakorune.vm.const_handler = "selfhost/hakorune-vm/const_handler.hako"
+hakorune.vm.binop_handler = "selfhost/hakorune-vm/binop_handler.hako"
+hakorune.vm.compare_handler = "selfhost/hakorune-vm/compare_handler.hako"
+hakorune.vm.copy_handler = "selfhost/hakorune-vm/copy_handler.hako"
+hakorune.vm.unaryop_handler = "selfhost/hakorune-vm/unaryop_handler.hako"
+hakorune.vm.load_handler = "selfhost/hakorune-vm/load_handler.hako"
+hakorune.vm.store_handler = "selfhost/hakorune-vm/store_handler.hako"
+hakorune.vm.nop_handler = "selfhost/hakorune-vm/nop_handler.hako"
+hakorune.vm.safepoint_handler = "selfhost/hakorune-vm/safepoint_handler.hako"
+hakorune.vm.barrier_handler = "selfhost/hakorune-vm/barrier_handler.hako"
+hakorune.vm.typeop_handler = "selfhost/hakorune-vm/typeop_handler.hako"
+hakorune.vm.mircall_handler = "selfhost/hakorune-vm/mircall_handler.hako"
+hakorune.vm.callee_parser = "selfhost/hakorune-vm/callee_parser.hako"
+hakorune.vm.args_extractor = "selfhost/hakorune-vm/args_extractor.hako"
+hakorune.vm.global_call_handler = "selfhost/hakorune-vm/global_call_handler.hako"
+hakorune.vm.extern_call_handler = "selfhost/hakorune-vm/extern_call_handler.hako"
+hakorune.vm.boxcall_handler = "selfhost/hakorune-vm/boxcall_handler.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
-selfhost.compiler.debug = "apps/selfhost/compiler/boxes/debug_box.nyash"
-selfhost.compiler.parser = "apps/selfhost/compiler/boxes/parser_box.nyash"
-selfhost.compiler.emitter = "apps/selfhost/compiler/boxes/emitter_box.nyash"
-selfhost.compiler.mir = "apps/selfhost/compiler/boxes/mir_emitter_box.nyash"
-selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.nyash"
-selfhost.vm.json = "apps/selfhost/common/json_adapter.nyash"
-selfhost.vm.core = "apps/selfhost/vm/boxes/mini_vm_core.nyash"
-selfhost.vm.scan = "apps/selfhost/common/mini_vm_scan.nyash"
-selfhost.vm.binop = "apps/selfhost/common/mini_vm_binop.nyash"
-selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.nyash"
-selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
-selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
-selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.nyash"
+selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
+selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
+selfhost.common.json.mir_builder_min = "selfhost/shared/json/mir_builder_min.hako"
+selfhost.common.json.mir_v1_adapter = "selfhost/shared/json/mir_v1_adapter.hako"
+selfhost.compiler.pipeline_v2.emit_compare = "selfhost/compiler/pipeline_v2/emit_compare_box.hako"
+selfhost.vm.json_cur = "selfhost/vm/boxes/json_cur.hako"
+selfhost.vm.json = "selfhost/shared/json_adapter.hako"
+selfhost.vm.core = "selfhost/vm/boxes/mini_vm_core.hako"
+selfhost.vm.scan = "selfhost/shared/common/mini_vm_scan.hako"
+selfhost.vm.binop = "selfhost/shared/common/mini_vm_binop.hako"
+selfhost.vm.compare = "selfhost/shared/common/mini_vm_compare.hako"
+selfhost.vm.prints = "selfhost/vm/boxes/mini_vm_prints.hako"
+selfhost.vm.seam = "selfhost/vm/boxes/seam_inspector.hako"
+selfhost.vm.mir_min = "selfhost/vm/boxes/mir_vm_min.hako"
+selfhost.vm.entry = "selfhost/vm/boxes/mini_vm_entry.hako"
+selfhost.vm.flow_runner = "selfhost/vm/flow_runner.hako"
+selfhost.vm.scanner = "selfhost/vm/boxes/instruction_scanner.hako"
+selfhost.vm.handlers = "selfhost/vm/boxes/op_handlers.hako"
+selfhost.json.core.json_scan = "selfhost/shared/json/core/json_scan.hako"
+selfhost.json.core.string_scan = "selfhost/shared/json/core/string_scan.hako"
+selfhost.json.utils.json_frag = "selfhost/shared/json/utils/json_frag.hako"
+selfhost.json.cursor = "selfhost/shared/json/json_cursor.hako"
+selfhost.vm.probe = "selfhost/vm/boxes/minivm_probe.hako"
+selfhost.core.timer = "apps/core/timer/TimerBox.hako"
+selfhost.compiler.pipeline_v2.flow_entry = "selfhost/compiler/pipeline_v2/flow_entry.hako"
+
+# WASM target (dev only; refer in smokes)
+targets.wasm.driver = "apps/targets/wasm/wasm_driver_box.hako"
 
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
-selfhost.compiler.main = "apps/selfhost-compiler/compiler.nyash"
+selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 
 # Temporary alias keys (migration aid; keys kept stable)
-selfhost.common.json = "apps/selfhost/common/json_adapter.nyash"
-selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.nyash"
-selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.nyash"
-selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.nyash"
+selfhost.common.json = "selfhost/shared/json_adapter.hako"
+selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
+selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
+selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]
@@ -64,14 +108,51 @@ singleton = false
 
 [libraries."libnyash_filebox_plugin.so".FileBox.methods]
 birth = { method_id = 0 }
-open = { method_id = 4 }
-read = { method_id = 5 }
-write = { method_id = 6 }
-close = { method_id = 7 }
-exists = { method_id = 8 }
-copyFrom = { method_id = 9 }
-cloneSelf = { method_id = 10 }
+open = { method_id = 1 }
+read = { method_id = 2 }
+write = { method_id = 3 }
+close = { method_id = 4 }
+exists = { method_id = 5 }
+copyFrom = { method_id = 7 }
+cloneSelf = { method_id = 8 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
+
+
+[libraries."libnyash_json_plugin.so"]
+boxes = ["JsonDocBox", "JsonNodeBox"]
+path = "plugins/nyash-json-plugin/libnyash_json_plugin.so"
+
+[libraries."libnyash_json_plugin.so".JsonDocBox]
+type_id = 70
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonDocBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 1 }
+root = { method_id = 2 }
+error = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox]
+type_id = 71
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox.methods]
+birth = { method_id = 0 }
+kind = { method_id = 1 }
+get = { method_id = 2 }
+size = { method_id = 3 }
+at = { method_id = 4 }
+str = { method_id = 5 }
+int = { method_id = 6 }
+bool = { method_id = 7 }
+fini = { method_id = 4294967295 }
+
 
 [libraries."libnyash_path_plugin.so"]
 boxes = ["PathBox"]
@@ -90,6 +171,9 @@ basename = { method_id = 6 }
 extname = { method_id = 7 }
 isAbs = { method_id = 8 }
 normalize = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_math_plugin.so"]
@@ -107,6 +191,9 @@ sqrt = { method_id = 4 }
 sin = { method_id = 5 }
 cos = { method_id = 6 }
 round = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_math_plugin.so".TimeBox]
@@ -117,6 +204,9 @@ singleton = false
 [libraries."libnyash_math_plugin.so".TimeBox.methods]
 birth = { method_id = 0 }
 now = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_regex_plugin.so"]
@@ -135,6 +225,9 @@ isMatch = { method_id = 5 }
 find = { method_id = 6 }
 replaceAll = { method_id = 7 }
 split = { method_id = 8 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so"]
@@ -150,6 +243,9 @@ singleton = false
 birth = { method_id = 0 }
 get = { method_id = 4 }
 post = { method_id = 5 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".ResponseBox]
@@ -165,6 +261,9 @@ write = { method_id = 6 }
 readBody = { method_id = 7 }
 getStatus = { method_id = 8 }
 getHeader = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".RequestBox]
@@ -177,6 +276,9 @@ birth = { method_id = 0 }
 path = { method_id = 4 }
 readBody = { method_id = 5 }
 respond = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".ServerBox]
@@ -189,6 +291,9 @@ birth = { method_id = 0 }
 start = { method_id = 4 }
 stop = { method_id = 5 }
 accept = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockServerBox]
@@ -202,6 +307,9 @@ start = { method_id = 4 }
 stop = { method_id = 5 }
 accept = { method_id = 6 }
 acceptTimeout = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockClientBox]
@@ -212,6 +320,9 @@ singleton = false
 [libraries."libnyash_net_plugin.so".SockClientBox.methods]
 birth = { method_id = 0 }
 connect = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockConnBox]
@@ -225,6 +336,9 @@ send = { method_id = 4 }
 recv = { method_id = 5 }
 close = { method_id = 6 }
 recvTimeout = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_encoding_plugin.so"]
@@ -244,6 +358,9 @@ base64Encode = { method_id = 6 }
 base64Decode = { method_id = 7 }
 hexEncode = { method_id = 8 }
 hexDecode = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # Provider Verify — minimal required methods (dev warn by default)
@@ -268,6 +385,9 @@ birth = { method_id = 0 }
 parse = { method_id = 4 }
 root = { method_id = 5 }
 error = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_json_plugin.so".JsonNodeBox]
@@ -284,6 +404,9 @@ at = { method_id = 7 }
 str = { method_id = 8 }
 int = { method_id = 9 }
 bool = { method_id = 10 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_toml_plugin.so"]
@@ -300,6 +423,9 @@ birth = { method_id = 0 }
 parse = { method_id = 4 }
 get = { method_id = 5 }
 toJson = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # Python (v2 TypeBox) plugins
@@ -318,6 +444,9 @@ eval = { method_id = 4 }
 import = { method_id = 5 }
 evalR = { method_id = 11 }
 importR = { method_id = 12 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_plugin.so".PyObjectBox]
@@ -334,6 +463,9 @@ callKw = { method_id = 5 }
 getattrR = { method_id = 11 }
 callR = { method_id = 12 }
 callKwR = { method_id = 15 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_parser_plugin.so"]
@@ -348,6 +480,9 @@ singleton = false
 [libraries."libnyash_python_parser_plugin.so".PythonParserBox.methods]
 birth = { method_id = 0 }
 parse = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_compiler_plugin.so"]
@@ -362,6 +497,9 @@ singleton = false
 [libraries."libnyash_python_compiler_plugin.so".PythonCompilerBox.methods]
 birth = { method_id = 0 }
 compile = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 # StringBox Plugin (Core Box replacement)
 [libraries."libnyash_string_plugin.so"]
@@ -390,6 +528,9 @@ toUtf8 = { method_id = 6 }
 # trim = { method_id = 14 }
 # toUpper = { method_id = 15 }
 # toLower = { method_id = 16 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # IntegerBox Plugin (Core Box replacement)
@@ -398,7 +539,7 @@ boxes = ["IntegerBox"]
 path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
 
 [libraries."libnyash_integer_plugin.so".IntegerBox]
-type_id = 12
+type_id = 14
 abi_version = 1
 singleton = false
 
@@ -406,4 +547,146 @@ singleton = false
 birth = { method_id = 0 }
 get = { method_id = 1 }
 set = { method_id = 2 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
+
+# ArrayBox Plugin (Core Box replacement)
+[libraries."libnyash_nobirth_plugin.so"]
+boxes = ["NoBirthBox"]
+path = "plugins/nyash-nobirth-plugin/target/release/libnyash_nobirth_plugin.so"
+
+[libraries."libnyash_nobirth_plugin.so".NoBirthBox]
+type_id = 120
+abi_version = 1
+singleton = false
+
+# Intentionally omit birth here to test loader no-op synthesis
+[libraries."libnyash_nobirth_plugin.so".NoBirthBox.methods]
+ping = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
+fini = { method_id = 4294967295 }
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 12
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth = { method_id = 0 }
+length = { method_id = 1 }
+size = { method_id = 1 }
+get = { method_id = 2 }
+push = { method_id = 3 }
+set = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "plugins/nyash-map-plugin/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth = { method_id = 0 }
+size = { method_id = 1 }
+get = { method_id = 2 }
+has = { method_id = 3 }
+set = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
+fini = { method_id = 4294967295 }
+
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so"]
+boxes = ["MirJsonBuilderMin"]
+path = "plugins/nyash-mirjsonbuildermin-plugin/libnyash_mirjsonbuildermin_plugin.so"
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin]
+type_id = 72
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin.methods]
+birth = { method_id = 0 }
+start_module = { method_id = 1 }
+start_function = { method_id = 2 }
+start_block = { method_id = 3 }
+add_const = { method_id = 4 }
+add_compare = { method_id = 5 }
+add_ret = { method_id = 6 }
+end_all = { method_id = 7 }
+to_string = { method_id = 8 }
+fini = { method_id = 4294967295 }
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 12
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth = { method_id = 0 }
+len   = { method_id = 1 }
+get   = { method_id = 2 }
+push  = { method_id = 3 }
+slice = { method_id = 5 }
+fini  = { method_id = 4294967295 }
+
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "plugins/nyash-map-plugin/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth   = { method_id = 0 }
+size    = { method_id = 1 }
+get     = { method_id = 2 }
+has     = { method_id = 3 }
+set     = { method_id = 4 }
+remove  = { method_id = 6 }
+clear   = { method_id = 7 }
+keysS   = { method_id = 8 }
+valuesS = { method_id = 13 }
+keys    = { method_id = 15 }
+values  = { method_id = 16 }
+fini    = { method_id = 4294967295 }
+
+# SetBox Plugin (Core Box — Map-backed Set)
+[libraries."libnyash_set_plugin.so"]
+boxes = ["SetBox"]
+path = "plugins/nyash-set-plugin/libnyash_set_plugin.so"
+
+[libraries."libnyash_set_plugin.so".SetBox]
+type_id = 15
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_set_plugin.so".SetBox.methods]
+birth   = { method_id = 0 }
+size    = { method_id = 1 }
+has     = { method_id = 3 }
+add     = { method_id = 4 }
+remove  = { method_id = 6 }
+clear   = { method_id = 7 }
+toArray = { method_id = 15 }
+fini    = { method_id = 4294967295 }

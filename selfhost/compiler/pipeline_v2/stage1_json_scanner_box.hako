@@ -1,0 +1,98 @@
+// stage1_json_scanner_box.hako — Stage1JsonScannerBox
+// Responsibility: Provide common scans for Stage‑1 JSON strings used by PipelineV2
+// - body anchor detection
+// - key search (plain/escaped/": " tolerant)
+// - value start after key
+// - name/args basic extraction
+// Non‑Responsibility: MIR emit, namespace resolution, IO
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+
+static box Stage1JsonScannerBox {
+  // Find the start position of Program.body array key
+  find_body_start(ast_json) {
+    if ast_json == null { return -1 }
+    local s = "" + ast_json
+    local pos = JsonCursorBox.find_key_dual(s, "\"body\":[", "\\\"body\\\":[", 0)
+    return pos
+  }
+  // Tolerant key finder: exact/escaped/colon+space
+  find_key(ast_json, key, start_pos) {
+    if ast_json == null { return -1 }
+    local s = "" + ast_json
+    local plain = "\"" + key + "\":\""
+    local escaped = "\\\"" + key + "\\\":\\\""
+    local p1 = JsonCursorBox.find_key_dual(s, plain, escaped, start_pos)
+    if p1 >= 0 { return p1 }
+    if plain.size() >= 2 {
+      local head = plain.substring(0, plain.size() - 1)
+      local last = plain.substring(plain.size() - 1, plain.size())
+      local spaced = head + " " + last
+      local p2 = JsonCursorBox.find_from(s, spaced, start_pos)
+      if p2 >= 0 { return p2 }
+      // Escaped + spaced: tolerate JSON embedded as string with colon-space
+      if escaped.size() >= 2 {
+        local ehead = escaped.substring(0, escaped.size() - 1)
+        local elast = escaped.substring(escaped.size() - 1, escaped.size())
+        local espaced = ehead + " " + elast
+        local p3 = JsonCursorBox.find_from(s, espaced, start_pos)
+        if p3 >= 0 { return p3 }
+      }
+    }
+    return -1
+  }
+  // Compute the index of first char of a JSON string value following a key at key_pos
+  value_start_after_key_pos(s, key_pos) {
+    if s == null { return -1 }
+    local i = key_pos
+    local n = s.size()
+    loop(i < n) {
+      local ch = s.substring(i,i+1)
+      if ch == ":" { i = i + 1  break }
+      i = i + 1
+    }
+    loop(i < n) {
+      local ch2 = s.substring(i,i+1)
+      if ch2 == " " || ch2 == "\t" { i = i + 1  continue }
+      break
+    }
+    if i < n {
+      local ch0 = s.substring(i, i+1)
+      if ch0 == "\\" { if i + 1 < n && s.substring(i+1,i+2) == "\"" { return i + 2 } else { return i } }
+      if ch0 == "\"" { return i + 1 } else { return i }
+    }
+    return -1
+  }
+  // Extract label (generic) and args slice starting at/after start_pos; returns map or null
+  extract_label_args(ast_json, label_key, start_pos) {
+    if ast_json == null { return null }
+    local s = "" + ast_json
+    local npos = me.find_key(s, label_key, start_pos)
+    local apos = me.find_key(s, "args", start_pos)
+    if npos < 0 || apos < 0 { return null }
+    local vstart = me.value_start_after_key_pos(s, npos)
+    if vstart < 0 { return null }
+    local nend = JsonCursorBox.find_from(s, "\"", vstart)
+    if nend <= vstart { return null }
+    local label = s.substring(vstart, nend)
+    local lb = JsonCursorBox.find_from(s, "[", apos)
+    local rb = s.size()
+    if lb >= 0 {
+      // Use JsonCursorBox for escape-aware array end seeking
+      local rb_result = JsonCursorBox.seek_array_end(s, lb)
+      if rb_result >= lb { rb = rb_result }
+    }
+    local args_text = s.substring(apos, rb)
+    return map({ label: label, args_text: args_text, label_pos: npos, args_pos: apos, label_key: label_key })
+  }
+
+  // Backward compatible helper for Call (label_key = "name")
+  extract_name_args(ast_json, start_pos) {
+    local m = me.extract_label_args(ast_json, "name", start_pos)
+    if m == null { return null }
+    m.set("name", m.get("label"))
+    return m
+  }
+}
+
+static box Stage1JsonScannerMain { main(args){ return 0 } }

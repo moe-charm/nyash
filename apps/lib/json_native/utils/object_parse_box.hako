@@ -1,0 +1,114 @@
+// ObjectParseBox — naive JSON object parser (primitive-only)
+using "./string.hako" as StringUtils
+using "./parse_ops_box.hako" as ParseOpsBox
+using "../core/node.hako" as JsonNode
+
+static box ObjectParseBox {
+  // Internal helpers to avoid raw quote/backslash literals in source (prelude-safe)
+  _dq() { return "\"" }      // '"'
+  _bs() { return "\\" }      // '\\'
+
+  // Parse minimal object like {"k":v, ...}. Values use ParseOpsBox; non-primitive -> null
+  parse_object(text) {
+    if text == null { return JsonNode.create_object() }
+    local s = StringUtils.trim(text)
+    if !(StringUtils.starts_with(s, "{") and StringUtils.ends_with(s, "}")) {
+      return JsonNode.create_object()
+    }
+    local inner = s.substring(1, s.size()-1)
+    local n = inner.size()
+    local i = 0
+    local in_str = 0
+    local current = ""
+    local parts = new ArrayBox() // store raw entry strings
+    local guard = 0
+    local max = 500000
+    // split by commas not inside string
+    loop(i < n) {
+      if guard > max { break } else { guard = guard + 1 }
+      local ch = inner.substring(i, i+1)
+      if in_str == 1 {
+        current = current + ch
+        if ch == me._bs() && i + 1 < n {
+          current = current + inner.substring(i+1, i+2)
+          i = i + 2
+          continue
+        }
+        if ch == me._dq() { in_str = 0 }
+        i = i + 1
+        continue
+      }
+      if ch == me._dq() { in_str = 1 current = current + ch i = i + 1 continue }
+      if ch == "," {
+        local tok = StringUtils.trim(current)
+        if tok.size() > 0 { parts.push(tok) }
+        current = ""
+        i = i + 1
+        continue
+      }
+      current = current + ch
+      i = i + 1
+    }
+    // final part
+    local tok = StringUtils.trim(current)
+    if tok.size() > 0 { parts.push(tok) }
+
+    // build map
+    local out = JsonNode.create_object()
+    local idx = 0
+    loop(idx < parts.size()) {
+      local entry = parts.get(idx)
+      // split on first colon not in string
+      local j = 0
+      local m = entry.size()
+      local in_s = 0
+      local colon = -1
+      loop(j < m) {
+        local c = entry.substring(j, j+1)
+        if in_s == 1 {
+          if c == me._bs() && j + 1 < m { j = j + 2 continue }
+          if c == me._dq() { in_s = 0 }
+          j = j + 1
+          continue
+        }
+        if c == me._dq() { in_s = 1 j = j + 1 continue }
+        if c == ":" { colon = j break }
+        j = j + 1
+      }
+      if colon == -1 { idx = idx + 1 continue }
+      local kraw = StringUtils.trim(entry.substring(0, colon))
+      local vraw = StringUtils.trim(entry.substring(colon + 1, entry.size()))
+      // key must be quoted
+      local ok = 1
+      if StringUtils.starts_with(kraw, me._dq()) == 0 { ok = 0 }
+      if StringUtils.ends_with(kraw, me._dq()) == 0 { ok = 0 }
+      if ok == 0 { idx = idx + 1 continue }
+      // inline minimal unquote for key
+      local key = kraw.substring(1, kraw.size()-1)
+      // inline minimal unescape for key: \" -> " and \\ -> \
+      local keyu = ""
+      local ii = 0
+      local kn = key.size()
+      loop(ii < kn) {
+        local ch2 = key.substring(ii, ii+1)
+        if ch2 == me._bs() && ii + 1 < kn {
+          local nx2 = key.substring(ii+1, ii+2)
+          if nx2 == me._dq() { keyu = keyu + me._dq() ii = ii + 2 continue }
+          if nx2 == me._bs() { keyu = keyu + me._bs() ii = ii + 2 continue }
+          keyu = keyu + nx2
+          ii = ii + 2
+          continue
+        }
+        keyu = keyu + ch2
+        ii = ii + 1
+      }
+      key = keyu
+      // value via primitive parser
+      local node = ParseOpsBox.parse_primitive(vraw)
+      if node == null { node = JsonNode.create_null() }
+      out.object_set(key, node)
+      idx = idx + 1
+    }
+    return out
+  }
+}

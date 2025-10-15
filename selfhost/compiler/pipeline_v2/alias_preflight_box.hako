@@ -1,0 +1,28 @@
+// alias_preflight_box.hako — AliasPreflightBox
+// Responsibility: Early check for using-alias heads in Stage‑1 names.
+// Input: raw dotted label (e.g., "alias.something.method"), UsingResolverBox instance.
+// Behavior: If dotted, verify alias head is known; otherwise print a stable one-line error and return 0.
+// Non‑Responsibility: Namespace normalization or emit.
+
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box AliasPreflightBox {
+  // Returns 1 if OK, 0 if alias head is unresolved (prints error).
+  check_head(raw_label, r) {
+    if raw_label == null { return 1 }
+    if r == null { return 1 }
+    local s = "" + raw_label
+    local dot = RegexFlow.find_from(s, ".", 0)
+    if dot < 0 { return 1 }
+    local head = s.substring(0, dot)
+    if head == null || head == "" { return 1 }
+    if r.resolve_namespace_alias(head) == null {
+      print("[ERROR] Unresolved using alias: " + head)
+      return 0
+    }
+    return 1
+  }
+}
+
+static box AliasPreflightMain { main(args) { return 0 } }

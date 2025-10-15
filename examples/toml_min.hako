@@ -1,0 +1,8 @@
+static box Main {
+  main() {
+    local t = new TOMLBox()
+    t.parse("[a]\nvalue=42\n")
+    local j = t.toJson()
+    return j
+  }
+}

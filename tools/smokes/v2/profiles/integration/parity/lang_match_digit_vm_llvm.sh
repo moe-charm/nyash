@@ -2,13 +2,12 @@
 # lang_match_digit_vm_llvm.sh — Parity for match mapping digits to integers
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability
 
 export NYASH_DEV=1
 
@@ -60,8 +59,8 @@ static box Main {
 }
 EOF
 
-output_vm=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
-NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev)
+output_vm=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | grep -v '^Result: ')
+NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev | grep -v '^Result: ')
 compare_outputs "$output_vm" "$output_llvm" "lang_match_digit_vm_llvm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"

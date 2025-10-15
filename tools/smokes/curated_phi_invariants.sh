@@ -8,9 +8,9 @@ fi
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 
 APPS=(
-  "apps/tests/shortcircuit_nested_selective_assign.nyash"
-  "apps/tests/loop_if_phi.nyash"
-  "apps/tests/ternary_nested.nyash"
+  "apps/tests/shortcircuit_nested_selective_assign.hako"
+  "apps/tests/loop_if_phi.hako"
+  "apps/tests/ternary_nested.hako"
 )
 
 echo "[phi] Running curated PHI invariants parity checks (PyVM vs llvmlite)" >&2

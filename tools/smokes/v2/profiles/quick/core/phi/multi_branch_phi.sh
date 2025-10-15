@@ -25,9 +25,8 @@ if n == 1 {
 print(s)
 '
   local output
-  output=$(run_nyash_vm -c "$script" 2>&1)
+  output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "three" "$output" "multi_branch_phi"
 }
 
 run_test "multi_branch_phi" test_multi_branch_phi
-

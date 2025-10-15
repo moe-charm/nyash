@@ -1,0 +1,34 @@
+// GC Counting demo (VM path) — verifies CountingGc counters and barrier sites
+// Run:
+//   ./target/release/nyash --backend vm examples/gc_counting_demo.nyash
+// Expect (with trace): [GC] counters: safepoints>0 read_barriers>=0 write_barriers>=0
+
+static box Main {
+  main() {
+    // Turn on Counting GC + trace via Box-First path
+    local G
+    G = new GcConfigBox()
+    G = G.setFlag("counting", true)
+    G = G.setFlag("trace", true)
+    G.apply()
+
+    // Make sure we don't engage JIT path for this demo (VM baseline)
+    // If needed, you can set NYASH_JIT_EXEC=0 in the environment.
+
+    // Perform some mutating ops to hit write barriers on the VM path
+    local A, M
+    A = new ArrayBox()
+    A.push(1)
+    A.set(0, 2)
+
+    M = new MapBox()
+    M.set("k", "v")
+
+    // Simple read ops (should register read barriers on some implementations)
+    print(A.length())
+    print(M.size())
+
+    return "done"
+  }
+}
+

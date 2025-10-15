@@ -19,6 +19,7 @@ impl ASTNode {
             ASTNode::ImportStatement { .. } => "ImportStatement",
             ASTNode::BoxDeclaration { .. } => "BoxDeclaration",
             ASTNode::FunctionDeclaration { .. } => "FunctionDeclaration",
+            ASTNode::EnumDeclaration { .. } => "EnumDeclaration",
             ASTNode::GlobalVar { .. } => "GlobalVar",
             ASTNode::Literal { .. } => "Literal",
             ASTNode::Variable { .. } => "Variable",
@@ -37,6 +38,7 @@ impl ASTNode {
             ASTNode::Outbox { .. } => "Outbox",
             ASTNode::FunctionCall { .. } => "FunctionCall",
             ASTNode::Call { .. } => "Call",
+            ASTNode::ExternCCall { .. } => "ExternCCall",
             ASTNode::Nowait { .. } => "Nowait",
             ASTNode::Arrow { .. } => "Arrow",
             ASTNode::TryCatch { .. } => "TryCatch",
@@ -59,6 +61,7 @@ impl ASTNode {
             // Structure nodes - 言語の基本構造
             ASTNode::BoxDeclaration { .. } => ASTNodeType::Structure,
             ASTNode::FunctionDeclaration { .. } => ASTNodeType::Structure,
+            ASTNode::EnumDeclaration { .. } => ASTNodeType::Structure,
             ASTNode::If { .. } => ASTNodeType::Structure,
             ASTNode::Loop { .. } => ASTNodeType::Structure,
             ASTNode::TryCatch { .. } => ASTNodeType::Structure,
@@ -83,6 +86,7 @@ impl ASTNode {
             ASTNode::Lambda { .. } => ASTNodeType::Expression,
             ASTNode::ArrayLiteral { .. } => ASTNodeType::Expression,
             ASTNode::MapLiteral { .. } => ASTNodeType::Expression,
+            ASTNode::ExternCCall { .. } => ASTNodeType::Expression,
 
             // Diagnostic-only wrapper treated as structure
             ASTNode::ScopeBox { .. } => ASTNodeType::Structure,
@@ -209,6 +213,9 @@ impl ASTNode {
                     body.len()
                 )
             }
+            ASTNode::EnumDeclaration { name, variants, .. } => {
+                format!("EnumDeclaration({}, {} variants)", name, variants.len())
+            }
             ASTNode::GlobalVar { name, .. } => {
                 format!("GlobalVar({})", name)
             }
@@ -275,6 +282,9 @@ impl ASTNode {
             } => {
                 format!("FunctionCall({}, {} args)", name, arguments.len())
             }
+            ASTNode::ExternCCall { symbol, arguments, .. } => {
+                format!("ExternCCall({}, {} args)", symbol, arguments.len())
+            }
             ASTNode::Call { .. } => "Call".to_string(),
             ASTNode::Nowait { variable, .. } => {
                 format!("Nowait({})", variable)
@@ -335,6 +345,7 @@ impl ASTNode {
             ASTNode::Throw { span, .. } => *span,
             ASTNode::BoxDeclaration { span, .. } => *span,
             ASTNode::FunctionDeclaration { span, .. } => *span,
+            ASTNode::EnumDeclaration { span, .. } => *span,
             ASTNode::GlobalVar { span, .. } => *span,
             ASTNode::Literal { span, .. } => *span,
             ASTNode::Variable { span, .. } => *span,
@@ -353,6 +364,7 @@ impl ASTNode {
             ASTNode::Outbox { span, .. } => *span,
             ASTNode::FunctionCall { span, .. } => *span,
             ASTNode::Call { span, .. } => *span,
+            ASTNode::ExternCCall { span, .. } => *span,
             ASTNode::AwaitExpression { span, .. } => *span,
             ASTNode::MatchExpr { span, .. } => *span,
             ASTNode::QMarkPropagate { span, .. } => *span,

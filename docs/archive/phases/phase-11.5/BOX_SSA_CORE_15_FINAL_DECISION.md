@@ -1,7 +1,7 @@
 # Box-SSA Core-15 最終決定
 
 Date: 2025-08-31  
-Status: **凍結仕様** (Frozen Specification)  
+Status: **固定仕様** (Frozen Specification)  
 Summary: MIR命令セットを真の15個に統一
 
 ## 📊 問題と解決

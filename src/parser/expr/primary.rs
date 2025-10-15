@@ -6,6 +6,35 @@ use crate::tokenizer::TokenType;
 impl NyashParser {
     pub(crate) fn expr_parse_primary(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token().token_type {
+            // extern_c "symbol" (args)
+            TokenType::IDENTIFIER(id) if id == "extern_c" => {
+                self.advance(); // consume 'extern_c'
+                // Expect string literal symbol
+                let sym = match &self.current_token().token_type {
+                    TokenType::STRING(s) => { let v = s.clone(); self.advance(); v }
+                    _ => {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken {
+                            found: self.current_token().token_type.clone(),
+                            expected: "string literal after extern_c".to_string(),
+                            line,
+                        });
+                    }
+                };
+                // Parse argument list
+                self.consume(TokenType::LPAREN)?;
+                let mut arguments: Vec<ASTNode> = Vec::new();
+                while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                    crate::must_advance!(self, _unused, "extern_c argument parsing");
+                    arguments.push(self.parse_expression()?);
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance();
+                        if self.match_token(&TokenType::RPAREN) { break; }
+                    }
+                }
+                self.consume(TokenType::RPAREN)?;
+                Ok(ASTNode::ExternCCall { symbol: sym, arguments, span: Span::unknown() })
+            }
             // Raw string fallback: IDENT("r") followed by STRING("...") → Literal(String)
             TokenType::IDENTIFIER(id) if id == "r" => {
                 match self.peek_token() {

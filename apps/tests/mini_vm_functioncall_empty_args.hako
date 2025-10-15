@@ -1,0 +1,13 @@
+using selfhost.vm.core as MiniVm
+
+static box Main {
+  main(args) {
+    // Program with empty-args echo() and itoa() to exercise loader-path fallback
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[]}}]}"
+
+    local arr = new MiniVm().collect_prints(json)
+    local i = 0
+    loop (i < arr.size()) { print(arr.get(i))  i = i + 1 }
+    return 0
+  }
+}

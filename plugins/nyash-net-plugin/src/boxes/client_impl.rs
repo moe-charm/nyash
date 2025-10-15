@@ -221,5 +221,5 @@ pub static nyash_typebox_ClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"ClientBox\0".as_ptr() as *const std::os::raw::c_char,
     resolve: Some(clientbox_resolve),
     invoke_id: Some(clientbox_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 1,
 };

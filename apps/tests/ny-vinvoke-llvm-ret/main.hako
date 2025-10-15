@@ -1,0 +1,13 @@
+// ny-vinvoke-llvm-ret - LLVM向け: 可変長(tagged vector) by-id シムの結果を戻り値で検証
+// 期待: ランタイム標準出力に "Result: 42" が出る（ny_mainの戻り値）
+
+static box Main {
+    main() {
+        local m = new MapBox()
+        m.set(1, 42)
+        // 可変長経路を通すため5引数
+        local v = m.get(1, 9, 8, 7, 6)
+        return v
+    }
+}
+

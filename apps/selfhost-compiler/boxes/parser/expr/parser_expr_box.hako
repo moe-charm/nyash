@@ -1,0 +1,353 @@
+// ParserExprBox — expression parser coordinator
+// Responsibility: Parse expressions and delegate to specialized boxes
+// API: parse(src, i, ctx) -> JSON (delegates to parse_expr2)
+
+using "apps/selfhost-compiler/boxes/parser/scan/parser_number_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_peek_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_literal_box.hako"
+
+static box ParserExprBox {
+  parse_number2(src, i, ctx) {
+    local pair = ParserNumberScanBox.scan_int(src, i)
+    local at = pair.lastIndexOf("@")
+    local json = pair.substring(0, at)
+    local pos = i
+    if at >= 0 { pos = ctx.to_int(pair.substring(at+1, pair.size())) }
+    ctx.gpos_set(pos)
+    return json
+  }
+
+  parse_string2(src, i, ctx) {
+    local n = src.size()
+    local j = i + 1
+    local out = ""
+    local guard = 0
+    local max = 200000
+
+    loop(j < n) {
+      if guard > max { break }
+      guard = guard + 1
+      local ch = src.substring(j, j+1)
+
+      if ch == "\"" {
+        j = j + 1
+        ctx.gpos_set(j)
+        return "{\"type\":\"Str\",\"value\":\"" + ctx.esc_json(out) + "\"}"
+      }
+
+      if ch == "\\" && j + 1 < n {
+        local nx = src.substring(j+1, j+2)
+        if nx == "\"" { out = out + "\"" j = j + 2 }
+        else { if nx == "\\" { out = out + "\\" j = j + 2 }
+        else { if nx == "n" { out = out + "\n" j = j + 2 }
+        else { if nx == "r" { out = out + "\r" j = j + 2 }
+        else { if nx == "t" { out = out + "\t" j = j + 2 }
+        else { if nx == "u" && j + 5 < n { out = out + src.substring(j, j+6) j = j + 6 }
+        else { out = out + nx j = j + 2 } } } } } }
+      } else {
+        out = out + ch
+        j = j + 1
+      }
+    }
+
+    ctx.gpos_set(j)
+    return "{\"type\":\"Str\",\"value\":\"" + ctx.esc_json(out) + "\"}"
+  }
+
+  parse_factor2(src, i, ctx) {
+    local j = ctx.skip_ws(src, i)
+    if j >= src.size() {
+      ctx.gpos_set(j)
+      return "{\"type\":\"Int\",\"value\":0}"
+    }
+
+    if ctx.starts_with_kw(src, j, "true") == 1 {
+      ctx.gpos_set(j + 4)
+      return "{\"type\":\"Bool\",\"value\":true}"
+    }
+
+    if ctx.starts_with_kw(src, j, "false") == 1 {
+      ctx.gpos_set(j + 5)
+      return "{\"type\":\"Bool\",\"value\":false}"
+    }
+
+    if ctx.starts_with_kw(src, j, "null") == 1 {
+      ctx.gpos_set(j + 4)
+      return "{\"type\":\"Null\"}"
+    }
+
+    // Peek expression: delegate to ParserPeekBox
+    if ctx.starts_with_kw(src, j, "peek") == 1 {
+      j = j + 4
+      return ParserPeekBox.parse(src, j, ctx)
+    }
+
+    local ch = src.substring(j, j+1)
+
+    // Parenthesized
+    if ch == "(" {
+      local inner = me.parse_expr2(src, j + 1, ctx)
+      local k = ctx.gpos_get()
+      k = ctx.skip_ws(src, k)
+      if src.substring(k, k+1) == ")" { k = k + 1 }
+      ctx.gpos_set(k)
+      return inner
+    }
+
+    // String literal
+    if ch == "\"" {
+      return me.parse_string2(src, j, ctx)
+    }
+
+    // Map literal: delegate to ParserLiteralBox
+    if ch == "{" {
+      return ParserLiteralBox.parse_map(src, j, ctx)
+    }
+
+    // Array literal: delegate to ParserLiteralBox
+    if ch == "[" {
+      return ParserLiteralBox.parse_array(src, j, ctx)
+    }
+
+    // new Class(args)
+    if ctx.starts_with_kw(src, j, "new") == 1 {
+      local p = ctx.skip_ws(src, j + 3)
+      local idp = ctx.read_ident2(src, p)
+      local at = idp.lastIndexOf("@")
+      local cls = idp.substring(0, at)
+      local k = ctx.to_int(idp.substring(at+1, idp.size()))
+      k = ctx.skip_ws(src, k)
+      if src.substring(k, k+1) == "(" { k = k + 1 }
+      local args_and_pos = me.parse_args2(src, k, ctx)
+      local at2 = args_and_pos.lastIndexOf("@")
+      local args_json = args_and_pos.substring(0, at2)
+      k = ctx.to_int(args_and_pos.substring(at2+1, args_and_pos.size()))
+      k = ctx.skip_ws(src, k)
+      if src.substring(k, k+1) == ")" { k = k + 1 }
+      ctx.gpos_set(k)
+      return "{\"type\":\"New\",\"class\":\"" + cls + "\",\"args\":" + args_json + "}"
+    }
+
+    // Identifier / Call / Method chain
+    if ctx.is_alpha(ch) {
+      local idp = ctx.read_ident2(src, j)
+      local at = idp.lastIndexOf("@")
+      local name = idp.substring(0, at)
+      local k = ctx.to_int(idp.substring(at+1, idp.size()))
+      local node = "{\"type\":\"Var\",\"name\":\"" + name + "\"}"
+      local cont2 = 1
+
+      loop(cont2 == 1) {
+        k = ctx.skip_ws(src, k)
+        local tch = src.substring(k, k+1)
+
+        if tch == "(" {
+          k = k + 1
+          local args_and_pos = me.parse_args2(src, k, ctx)
+          local at2 = args_and_pos.lastIndexOf("@")
+          local args_json = args_and_pos.substring(0, at2)
+          k = ctx.to_int(args_and_pos.substring(at2+1, args_and_pos.size()))
+          k = ctx.skip_ws(src, k)
+          if src.substring(k, k+1) == ")" { k = k + 1 }
+          node = "{\"type\":\"Call\",\"name\":\"" + name + "\",\"args\":" + args_json + "}"
+        } else {
+          if tch == "." {
+            k = k + 1
+            k = ctx.skip_ws(src, k)
+            local midp = ctx.read_ident2(src, k)
+            local at3 = midp.lastIndexOf("@")
+            local mname = midp.substring(0, at3)
+            k = ctx.to_int(midp.substring(at3+1, midp.size()))
+            k = ctx.skip_ws(src, k)
+            if src.substring(k, k+1) == "(" { k = k + 1 }
+            local args2 = me.parse_args2(src, k, ctx)
+            local at4 = args2.lastIndexOf("@")
+            local args_json2 = args2.substring(0, at4)
+            k = ctx.to_int(args2.substring(at4+1, args2.size()))
+            k = ctx.skip_ws(src, k)
+            if src.substring(k, k+1) == ")" { k = k + 1 }
+            node = "{\"type\":\"Method\",\"recv\":" + node + ",\"method\":\"" + mname + "\",\"args\":" + args_json2 + "}"
+          } else {
+            cont2 = 0
+          }
+        }
+      }
+
+      ctx.gpos_set(k)
+      return node
+    }
+
+    // Fallback: number
+    return me.parse_number2(src, j, ctx)
+  }
+
+  parse_unary2(src, i, ctx) {
+    local j = ctx.skip_ws(src, i)
+    if src.substring(j, j+1) == "-" {
+      local rhs = me.parse_factor2(src, j + 1, ctx)
+      j = ctx.gpos_get()
+      local zero = "{\"type\":\"Int\",\"value\":0}"
+      ctx.gpos_set(j)
+      return "{\"type\":\"Binary\",\"op\":\"-\",\"lhs\":" + zero + ",\"rhs\":" + rhs + "}"
+    }
+    return me.parse_factor2(src, j, ctx)
+  }
+
+  parse_term2(src, i, ctx) {
+    local lhs = me.parse_unary2(src, i, ctx)
+    local j = ctx.gpos_get()
+    local cont = 1
+
+    loop(cont == 1) {
+      j = ctx.skip_ws(src, j)
+      if j >= src.size() {
+        cont = 0
+      } else {
+        local op = src.substring(j, j+1)
+        if op != "*" && op != "/" {
+          cont = 0
+        } else {
+          local rhs = me.parse_unary2(src, j+1, ctx)
+          j = ctx.gpos_get()
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+
+    ctx.gpos_set(j)
+    return lhs
+  }
+
+  parse_sum2(src, i, ctx) {
+    local lhs = me.parse_term2(src, i, ctx)
+    local j = ctx.gpos_get()
+    local cont = 1
+
+    loop(cont == 1) {
+      j = ctx.skip_ws(src, j)
+      if j >= src.size() {
+        cont = 0
+      } else {
+        local op = src.substring(j, j+1)
+        if op != "+" && op != "-" {
+          cont = 0
+        } else {
+          local rhs = me.parse_term2(src, j+1, ctx)
+          j = ctx.gpos_get()
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+
+    ctx.gpos_set(j)
+    return lhs
+  }
+
+  parse_compare2(src, i, ctx) {
+    local lhs = me.parse_sum2(src, i, ctx)
+    local j = ctx.gpos_get()
+    j = ctx.skip_ws(src, j)
+    local two = src.substring(j, j+2)
+    local one = src.substring(j, j+1)
+    local op = ""
+
+    if two == "==" || two == "!=" || two == "<=" || two == ">=" {
+      op = two
+      j = j + 2
+    } else {
+      if one == "<" || one == ">" {
+        op = one
+        j = j + 1
+      }
+    }
+
+    if op == "" {
+      ctx.gpos_set(j)
+      return lhs
+    }
+
+    local rhs = me.parse_sum2(src, j, ctx)
+    j = ctx.gpos_get()
+    ctx.gpos_set(j)
+    return "{\"type\":\"Compare\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+  }
+
+  parse_expr2(src, i, ctx) {
+    local lhs = me.parse_compare2(src, i, ctx)
+    local j = ctx.gpos_get()
+    local cont = 1
+
+    loop(cont == 1) {
+      j = ctx.skip_ws(src, j)
+      local two = src.substring(j, j+2)
+      if two != "&&" && two != "||" {
+        cont = 0
+      } else {
+        local rhs = me.parse_compare2(src, j+2, ctx)
+        j = ctx.gpos_get()
+        lhs = "{\"type\":\"Logical\",\"op\":\"" + two + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+      }
+    }
+
+    j = ctx.skip_ws(src, j)
+    if src.substring(j, j+1) == "?" {
+      j = j + 1
+      j = ctx.skip_ws(src, j)
+      local then_expr = me.parse_expr2(src, j, ctx)
+      j = ctx.gpos_get()
+      j = ctx.skip_ws(src, j)
+      if src.substring(j, j+1) == ":" { j = j + 1 }
+      j = ctx.skip_ws(src, j)
+      local else_expr = me.parse_expr2(src, j, ctx)
+      j = ctx.gpos_get()
+      if else_expr.size() == 0 { else_expr = "{\"type\":\"Int\",\"value\":0}" }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Ternary\",\"cond\":" + lhs + ",\"then\":" + then_expr + ",\"else\":" + else_expr + "}"
+    }
+
+    ctx.gpos_set(j)
+    return lhs
+  }
+
+  parse_args2(src, i, ctx) {
+    local j = ctx.skip_ws(src, i)
+    local n = src.size()
+    local out = "["
+    j = ctx.skip_ws(src, j)
+
+    if j < n && src.substring(j, j+1) == ")" {
+      return "[]@" + ctx.i2s(j)
+    }
+
+    // first argument
+    local e = me.parse_expr2(src, j, ctx)
+    j = ctx.gpos_get()
+    out = out + e
+
+    // subsequent arguments with guard
+    local cont_args = 1
+    local guard = 0
+    local max = 100000
+
+    loop(cont_args == 1) {
+      if guard > max { cont_args = 0 } else { guard = guard + 1 }
+      local before = j
+      j = ctx.skip_ws(src, j)
+
+      if j < n && src.substring(j, j+1) == "," {
+        j = j + 1
+        j = ctx.skip_ws(src, j)
+        e = me.parse_expr2(src, j, ctx)
+        j = ctx.gpos_get()
+        out = out + "," + e
+      } else {
+        cont_args = 0
+      }
+
+      if j == before { cont_args = 0 }
+    }
+
+    out = out + "]"
+    return out + "@" + ctx.i2s(j)
+  }
+}

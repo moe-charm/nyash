@@ -1,10 +1,10 @@
-// Probe: StringBox.length() value path under JIT-direct
+// Probe: StringBox.size() value path under JIT-direct
 static box Main {
   main() {
     local s
     s = new StringBox("abc")
     local n
-    n = s.length()
+    n = s.size()
     print("len=" + n.toString())
     return n
   }

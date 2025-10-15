@@ -1,0 +1,7 @@
+// error_builder.hako — ErrorBuilderBox
+// Responsibility: build consistent error messages
+
+static box ErrorBuilderBox {
+  unset_reg(label, id_str) { return label + " v%" + id_str + " is unset" }
+  missing_key(name) { return name + " not found" }
+}

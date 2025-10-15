@@ -4,10 +4,10 @@
 
 using "apps/selfhost-runtime/mir_loader.nyash"
 using "apps/selfhost-runtime/ops_calls.nyash"
-using "apps/lib/boxes/console_std.nyash"
-using "apps/lib/boxes/string_std.nyash"
-using "apps/lib/boxes/array_std.nyash"
-using "apps/lib/boxes/map_std.nyash"
+using "apps/lib/boxes/console_std.hako"
+using "apps/lib/boxes/string_std.hako"
+using "apps/lib/boxes/array_std.hako"
+using "apps/lib/boxes/map_std.hako"
 
 static box Main {
   main(args) {
@@ -19,12 +19,12 @@ static box Main {
       @i = 1
       while i < args.size() {
         @flagx = args.get(i)
-        if flagx && flagx.length() > 0 {
+        if flagx && flagx.size() > 0 {
           if flagx == "--trace" { /* handled later */ }
           else {
             @kpos = flagx.indexOf("--box-pref=")
             if kpos == 0 {
-              @val = flagx.substring(11, flagx.length())
+              @val = flagx.substring(11, flagx.size())
               if val == "ny" || val == "plugin" { box_pref = val }
             }
           }
@@ -54,7 +54,7 @@ static box Main {
           @k = loader.summarize_stmt_kinds( loader.parse_root( loader.read_file(path) ) )
           if k {
             @s = ""
-            function app(name, n) { if n > 0 { if s.length() > 0 { s = s + "," } s = s + name + "=" + n } }
+            function app(name, n) { if n > 0 { if s.size() > 0 { s = s + "," } s = s + name + "=" + n } }
             app("Return", k.get("Return"))
             app("Expr", k.get("Expr"))
             app("Local", k.get("Local"))
@@ -64,7 +64,7 @@ static box Main {
             app("Continue", k.get("Continue"))
             app("Try", k.get("Try"))
             app("Extern", k.get("Extern"))
-            if s.length() > 0 { print("[selfhost] body stmt counts: " + s) }
+            if s.size() > 0 { print("[selfhost] body stmt counts: " + s) }
           }
         } else if fmt == "harness" {
           @flen = sum.get("functions_len")

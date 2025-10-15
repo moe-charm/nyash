@@ -52,7 +52,15 @@ impl BoxFactoryRegistry {
     /// Box名からプロバイダーを取得
     pub fn get_provider(&self, name: &str) -> Option<BoxProvider> {
         let providers = self.providers.read().unwrap();
-        providers.get(name).cloned()
+        let p = providers.get(name).cloned();
+        if crate::runtime::env_gate_box::debug_plugin() && name == "FileBox" {
+            match &p {
+                Some(BoxProvider::Plugin(lib)) => eprintln!("[BoxFactoryRegistry] provider(FileBox)=Plugin({})", lib),
+                Some(BoxProvider::Builtin(_)) => eprintln!("[BoxFactoryRegistry] provider(FileBox)=Builtin"),
+                None => eprintln!("[BoxFactoryRegistry] provider(FileBox)=None"),
+            }
+        }
+        p
     }
 
     /// Boxを生成
@@ -87,7 +95,7 @@ impl BoxFactoryRegistry {
         use crate::runtime::get_global_plugin_host;
         let host = get_global_plugin_host();
         let host = host.read().unwrap();
-        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+        if crate::runtime::env_gate_box::debug_plugin() {
             eprintln!(
                 "[BoxFactoryRegistry] create_plugin_box: plugin={} box_type={}",
                 plugin_name, box_name
@@ -114,8 +122,65 @@ impl Clone for BoxProvider {
 // グローバルレジストリインスタンス
 use once_cell::sync::Lazy;
 
-static GLOBAL_REGISTRY: Lazy<Arc<BoxFactoryRegistry>> =
-    Lazy::new(|| Arc::new(BoxFactoryRegistry::new()));
+// ---- Core builtins (minimal, plugin-overrideable) ----
+fn plugin_policy_enabled() -> bool {
+    crate::runtime::env_gate_box::plugin_policy_on()
+}
+
+fn register_core_builtins(reg: &BoxFactoryRegistry) {
+    // TimerBox: provide builtin constructor so `new TimerBox()` works without plugins.
+    // Plugin 設定が適用されると上書きされる（Plugin-First 原則を維持）。
+    #[cfg(feature = "legacy-boxes")]
+    reg.register_builtin("TimerBox", |_args: &[Box<dyn NyashBox>]| {
+        Ok(Box::new(crate::boxes::time_box::TimerBox::new()))
+    });
+
+    // SetBox is a thin wrapper over MapBox and safe to provide as builtin even under plugin-on.
+    // It delegates semantics to Extern("nyrt.set.*") via builder normalization at call sites.
+    #[cfg(feature = "legacy-boxes")]
+    reg.register_builtin("SetBox", |_args: &[Box<dyn NyashBox>]| {
+        Ok(Box::new(crate::boxes::set_box::SetBox::new()))
+    });
+
+    // Thin embedded providers (Hako ABI same-face)
+    // Register only when plugin policy is OFF to avoid shadowing plugin-on path.
+    #[cfg(feature = "legacy-boxes")]
+    if !plugin_policy_enabled() {
+        reg.register_builtin("ArrayBox", |_args: &[Box<dyn NyashBox>]| {
+            Ok(Box::new(crate::boxes::array::ArrayBox::new()))
+        });
+        reg.register_builtin("MapBox", |_args: &[Box<dyn NyashBox>]| {
+            Ok(Box::new(crate::boxes::map_box::MapBox::new()))
+        });
+        reg.register_builtin("StringBox", |args: &[Box<dyn NyashBox>]| {
+            if args.is_empty() {
+                Ok(Box::new(crate::box_trait::StringBox::new("")))
+            } else {
+                Ok(Box::new(
+                    crate::box_trait::StringBox::new(&args[0].to_string_box().value),
+                ))
+            }
+        });
+        reg.register_builtin("FileBox", |args: &[Box<dyn NyashBox>]| {
+            if args.is_empty() {
+                Ok(Box::new(crate::boxes::file::FileBox::new()))
+            } else {
+                let path = &args[0].to_string_box().value;
+                match crate::boxes::file::FileBox::open(path) {
+                    Ok(file_box) => Ok(Box::new(file_box)),
+                    Err(e) => Err(format!("Failed to open file '{}': {}", path, e)),
+                }
+            }
+        });
+    }
+}
+
+static GLOBAL_REGISTRY: Lazy<Arc<BoxFactoryRegistry>> = Lazy::new(|| {
+    let reg = Arc::new(BoxFactoryRegistry::new());
+    // Register minimal core builtins (can be overridden by plugins later)
+    register_core_builtins(&reg);
+    reg
+});
 
 /// グローバルレジストリを取得
 pub fn get_global_registry() -> Arc<BoxFactoryRegistry> {

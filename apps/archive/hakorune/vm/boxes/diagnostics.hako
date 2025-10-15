@@ -1,0 +1,12 @@
+// diagnostics.hako — DiagnosticsBox（既定静か、DEVのみ詳細想定）
+// 方針: error は常に [ERROR] を付けて出力（スモーク抽出は数値末行なので影響最小）
+//       debug は既定OFF（将来 NYASH_DEV で制御予定）
+
+static box DiagnosticsBox {
+  enable_dev() { return 0 }
+  disable_dev() { return 0 }
+  error(msg) { print("[ERROR] " + msg) }
+  warn(msg) { return 0 }
+  info(msg) { return 0 }
+  debug(msg) { return 0 }
+}

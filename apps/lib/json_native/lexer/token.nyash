@@ -34,7 +34,18 @@ box JsonToken {
     end: IntegerBox        // 終了位置
     line: IntegerBox       // 行番号（エラー報告用）
     column: IntegerBox     // 列番号（エラー報告用）
-    
+
+    // No-arg constructor for C++ style auto-birth
+    birth() {
+        me.type = "UNKNOWN"
+        me.value = ""
+        me.start = 0
+        me.end = 0
+        me.line = 1
+        me.column = 1
+    }
+
+    // full initializer
     birth(token_type, token_value, start_pos, end_pos) {
         me.type = token_type
         me.value = token_value
@@ -42,6 +53,28 @@ box JsonToken {
         me.end = end_pos
         me.line = 1
         me.column = start_pos + 1
+    }
+
+    // no-arg birth for uniform constructor behavior
+    birth() {
+        me.type = "UNKNOWN"
+        me.value = ""
+        me.start = 0
+        me.end = 0
+        me.line = 1
+        me.column = 1
+    }
+
+
+    // Runtime-initializer (constructor-independent)
+    setup(token_type, token_value, start_pos, end_pos) {
+        me.type = token_type
+        me.value = token_value
+        me.start = start_pos
+        me.end = end_pos
+        me.line = 1
+        me.column = start_pos + 1
+        return me
     }
     
     // ===== アクセッサーメソッド =====
@@ -98,61 +131,61 @@ static box TokenFactory {
     
     // リテラル値トークン
     create_null(start, end) {
-        return new JsonToken("NULL", "null", start, end)
+        return new JsonToken().birth("NULL", "null", start, end)
     }
     
     create_true(start, end) {
-        return new JsonToken("TRUE", "true", start, end)
+        return new JsonToken().birth("TRUE", "true", start, end)
     }
     
     create_false(start, end) {
-        return new JsonToken("FALSE", "false", start, end)
+        return new JsonToken().birth("FALSE", "false", start, end)
     }
     
     create_number(value, start, end) {
-        return new JsonToken("NUMBER", value, start, end)
+        return new JsonToken().birth("NUMBER", value, start, end)
     }
     
     create_string(value, start, end) {
-        return new JsonToken("STRING", value, start, end)
+        return new JsonToken().birth("STRING", value, start, end)
     }
     
     // 構造文字トークン
     create_lbrace(start) {
-        return new JsonToken("LBRACE", "{", start, start + 1)
+        return new JsonToken().birth("LBRACE", "{", start, start + 1)
     }
     
     create_rbrace(start) {
-        return new JsonToken("RBRACE", "}", start, start + 1)
+        return new JsonToken().birth("RBRACE", "}", start, start + 1)
     }
     
     create_lbracket(start) {
-        return new JsonToken("LBRACKET", "[", start, start + 1)
+        return new JsonToken().birth("LBRACKET", "[", start, start + 1)
     }
     
     create_rbracket(start) {
-        return new JsonToken("RBRACKET", "]", start, start + 1)
+        return new JsonToken().birth("RBRACKET", "]", start, start + 1)
     }
     
     create_comma(start) {
-        return new JsonToken("COMMA", ",", start, start + 1)
+        return new JsonToken().birth("COMMA", ",", start, start + 1)
     }
     
     create_colon(start) {
-        return new JsonToken("COLON", ":", start, start + 1)
+        return new JsonToken().birth("COLON", ":", start, start + 1)
     }
     
     // 制御トークン
     create_eof(pos) {
-        return new JsonToken("EOF", "", pos, pos)
+        return new JsonToken().birth("EOF", "", pos, pos)
     }
     
     create_error(message, start, end) {
-        return new JsonToken("ERROR", message, start, end)
+        return new JsonToken().birth("ERROR", message, start, end)
     }
     
     create_whitespace(value, start, end) {
-        return new JsonToken("WHITESPACE", value, start, end)
+        return new JsonToken().birth("WHITESPACE", value, start, end)
     }
     
     // ===== 文字からトークンタイプを判定 =====
@@ -205,7 +238,7 @@ static box TokenStats {
         local type_counts = new MapBox()
         local i = 0
         
-        loop(i < tokens.length()) {
+        loop(i < tokens.size()) {
             local token = tokens.get(i)
             local type = token.get_type()
             
@@ -220,7 +253,7 @@ static box TokenStats {
         }
         
         stats.set("type_counts", type_counts)
-        stats.set("total_tokens", tokens.length())
+        stats.set("total_tokens", tokens.size())
         
         // エラートークンの存在チェック
         local has_errors = type_counts.has("ERROR")
@@ -247,7 +280,7 @@ static box TokenStats {
         local keys = type_counts.keys()
         local i = 0
         
-        loop(i < keys.length()) {
+        loop(i < keys.size()) {
             local type = keys.get(i)
             local count = type_counts.get(type)
             print("  " + type + ": " + count)

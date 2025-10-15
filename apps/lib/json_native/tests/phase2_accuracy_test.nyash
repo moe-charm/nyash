@@ -1,7 +1,7 @@
 // Phase 2 精度テスト - yyjson相当精度の検証
 
-using "apps/lib/json_native/parser/parser.nyash" as JsonParser
-using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+using "apps/lib/json_native/parser/parser.hako" as JsonParser
+using "apps/lib/json_native/parser/parser.hako" as JsonParserUtils
 
 static box Phase2AccuracyTest {
     
@@ -54,7 +54,7 @@ static box Phase2AccuracyTest {
         test_cases.push({input: "{}", expected: "{}"})
         
         local passed = 0
-        local total = test_cases.length()
+        local total = test_cases.size()
         
         local i = 0
         loop(i < total) {
@@ -91,7 +91,7 @@ static box Phase2AccuracyTest {
         // escape_cases.push({input: "\"\\u0041\\u0042\"", desc: "Unicode escaping"})
         
         local i = 0
-        loop(i < escape_cases.length()) {
+        loop(i < escape_cases.size()) {
             local test_case = escape_cases.get(i)
             local input = test_case.input
             local desc = test_case.desc
@@ -126,7 +126,7 @@ static box Phase2AccuracyTest {
         nesting_cases.push("[{\"type\": \"A\", \"data\": {\"x\": 1}}, {\"type\": \"B\", \"data\": {\"y\": 2}}]")
         
         local i = 0
-        loop(i < nesting_cases.length()) {
+        loop(i < nesting_cases.size()) {
             local input = nesting_cases.get(i)
             
             print("Testing complex nesting:")
@@ -160,7 +160,7 @@ static box Phase2AccuracyTest {
         boundary_cases.push({input: "{\"comma,inside\": \"value,with,commas\"}", desc: "Commas in strings"})
         
         local i = 0
-        loop(i < boundary_cases.length()) {
+        loop(i < boundary_cases.size()) {
             local test_case = boundary_cases.get(i)
             local input = test_case.input
             local desc = test_case.desc
@@ -198,7 +198,7 @@ static box Phase2AccuracyTest {
         error_cases.push({input: "{\"key\": -}", desc: "Incomplete number"})
         
         local i = 0
-        loop(i < error_cases.length()) {
+        loop(i < error_cases.size()) {
             local test_case = error_cases.get(i)
             local input = test_case.input
             local desc = test_case.desc

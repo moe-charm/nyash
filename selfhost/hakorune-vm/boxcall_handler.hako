@@ -1,0 +1,191 @@
+// BoxCallHandlerBox - Handle boxcall instruction (Box method calls)
+// Single Responsibility: Dispatch dynamic Box method calls
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/args_extractor.hako" as ArgsExtractorBox
+using "selfhost/hakorune-vm/args_guard.hako" as ArgsGuardBox
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/receiver_guard.hako" as ReceiverGuardBox
+
+static box BoxCallHandlerBox {
+  // Handle boxcall instruction
+  // inst_json: {"op":"boxcall","box":X,"method":"name","args":[...],"dst":Y}
+  // regs: register MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(inst_json, regs) {
+    // Extract box (receiver) ValueId
+    local box_id = JsonFieldExtractor.extract_int(inst_json, "box")
+    if box_id == null {
+      return Result.Err("boxcall: box field not found")
+    }
+
+    // Extract method name
+    local method_name = JsonFieldExtractor.extract_string(inst_json, "method")
+    if method_name == null {
+      return Result.Err("boxcall: method field not found")
+    }
+
+    // Extract arguments (construct fake mir_call JSON for ArgsExtractorBox)
+    // We need to extract args array from inst_json
+    local args_array = me._extract_args(inst_json, regs)
+
+    // Special-case: methodRef — tolerate missing/empty arity by defaulting to 0 and return early
+    if method_name == "methodRef" {
+      local name = args_array.get(0)
+      local arity = args_array.get(1)
+      if arity == null { arity = 0 }
+      local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
+      // Load receiver early for direct dispatch
+      local receiver = ValueManagerBox.get(regs, box_id)
+      if receiver == null {
+        return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(box_id) + " is unset (method=methodRef)")
+      }
+      local result_val = receiver.methodRef(name, arity)
+      if dst_reg != null { ValueManagerBox.set(regs, dst_reg, result_val) }
+      return Result.Ok(0)
+    }
+
+
+    // Guard arguments (no nulls)
+    local _g = ArgsGuardBox.ensure_no_nulls(args_array, method_name + "/" + args_array.size())
+    if _g.is_Err() { return _g }
+
+    // Extract destination register
+    local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
+
+    // Load receiver object
+    local receiver = ValueManagerBox.get(regs, box_id)
+    if receiver == null {
+      return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(box_id) + " is unset (method=" + method_name + ")")
+    }
+
+    // Prepare method signature for dispatch
+    local arg_count = args_array.size()
+    local method_sig = method_name + "/" + arg_count
+
+    // Known methods dispatch table
+    local result_val = null
+
+    // StringBox methods (using Rust VM available methods)
+    if method_sig == "upper/0" {
+      result_val = receiver.to_upper()
+    } else if method_sig == "lower/0" {
+      result_val = receiver.to_lower()
+    } else if method_sig == "size/0" {
+      result_val = receiver.size()
+    } else if method_sig == "length/0" {
+      result_val = receiver.size()
+    } else if method_sig == "isEmpty/0" {
+      result_val = receiver.isEmpty()
+    } else if method_sig == "substring/2" {
+      result_val = receiver.substring(args_array.get(0), args_array.get(1))
+    } else if method_sig == "charAt/1" {
+      result_val = receiver.charAt(args_array.get(0))
+    } else if method_sig == "indexOf/1" {
+      result_val = receiver.indexOf(args_array.get(0))
+    }
+
+    // ArrayBox methods
+    else if method_sig == "push/1" {
+      result_val = receiver.push(args_array.get(0))
+    } else if method_sig == "get/1" {
+      result_val = receiver.get(args_array.get(0))
+    } else if method_sig == "set/2" {
+      result_val = receiver.set(args_array.get(0), args_array.get(1))
+    } else if method_sig == "length/0" {
+      result_val = receiver.size()
+    } else if method_sig == "size/0" {
+      result_val = receiver.size()
+    } else if method_sig == "isEmpty/0" {
+      result_val = receiver.isEmpty()
+    }
+
+    // MapBox methods
+    else if method_sig == "get/1" {
+      result_val = receiver.get(args_array.get(0))
+    } else if method_sig == "set/2" {
+      result_val = receiver.set(args_array.get(0), args_array.get(1))
+    } else if method_sig == "has/1" {
+      result_val = receiver.has(args_array.get(0))
+    } else if method_sig == "size/0" {
+      result_val = receiver.size()
+    } else if method_sig == "isEmpty/0" {
+      result_val = receiver.isEmpty()
+    } else if method_sig == "delete/1" {
+      result_val = receiver.delete(args_array.get(0))
+    } else if method_sig == "keys/0" {
+      result_val = receiver.keys()
+    } else if method_sig == "values/0" {
+      result_val = receiver.values()
+    } else if method_sig == "methodRef/2" {
+      // slot 113: Array.methodRef(method_name, arity) -> CallableBox
+      result_val = receiver.methodRef(args_array.get(0), args_array.get(1))
+    } else if method_sig == "call/1" {
+      // slot 501: CallableBox.call(args_array) -> any
+      // Flatten: pass args_array.get(0) (the actual args ArrayBox) to CallableBox.call
+      // CallableBox.call will flatten the ArrayBox into individual arguments
+      result_val = receiver.call(args_array.get(0))
+    } else if method_sig == "arity/0" {
+      // slot 500: CallableBox.arity() -> Integer
+      result_val = receiver.arity()
+    } else if method_sig == "call/2" {
+      // slot 210: Map.call(key, args_array) -> any
+      result_val = receiver.call(args_array.get(0), args_array.get(1))
+    } else if method_sig == "callAsync/2" {
+      // slot 211: Map.callAsync(key, args_array) -> FutureBox
+      result_val = receiver.callAsync(args_array.get(0), args_array.get(1))
+    } else if method_sig == "callAsync/1" {
+      // slot 502: CallableBox.callAsync(args_array) -> FutureBox
+      // Flatten: pass args_array.get(0) (the actual args ArrayBox) to CallableBox.callAsync
+      // CallableBox.callAsync will flatten the ArrayBox into individual arguments
+      result_val = receiver.callAsync(args_array.get(0))
+    }
+
+    // Fallback: unknown method
+    // Note: Method resolution depends on Rust VM's plugin switching mechanism
+    // (NYASH_VM_DISABLE_STRING_HANDLERS, NYASH_USE_PLUGIN_BUILTINS, etc.)
+    // Future: Add Selfhost VM's own plugin resolution here
+    else {
+      return Result.Err("boxcall: unknown method: " + method_sig)
+    }
+
+    // Store result in destination register
+    if dst_reg != null {
+      ValueManagerBox.set(regs, dst_reg, result_val)
+    }
+
+    return Result.Ok(0)
+  }
+
+  // Extract args array from boxcall inst_json
+  // inst_json: {"op":"boxcall","args":[...],...}
+  // Returns: ArrayBox of argument values
+  _extract_args(inst_json, regs) {
+    // Find "args" field
+    local args_key = "\"args\":["
+    local args_start = inst_json.indexOf(args_key)
+    if args_start < 0 {
+      // No args field, return empty array
+      return new ArrayBox()
+    }
+    args_start = args_start + args_key.size()
+
+    // Find array end
+    local args_end = StringOps.index_of_from(inst_json, "]", args_start)
+    if args_end < 0 {
+      return new ArrayBox()
+    }
+
+    // Extract args array content
+    local args_content = inst_json.substring(args_start, args_end)
+
+    // Create fake mir_call JSON for ArgsExtractorBox
+    local fake_mir_call = "{\"args\":[" + args_content + "]}"
+
+    // Use ArgsExtractorBox to parse and load args
+    return ArgsExtractorBox.extract_and_load(fake_mir_call, regs)
+  }
+}

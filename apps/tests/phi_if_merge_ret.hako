@@ -1,0 +1,13 @@
+// If/else diamond; value merges via PHI and is used after merge.
+static box Main {
+  main() {
+    local x = 0
+    if 1 == 1 {
+      x = 10
+    } else {
+      x = 5
+    }
+    print("Result: " + x)
+    return 0
+  }
+}

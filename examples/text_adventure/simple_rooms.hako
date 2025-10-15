@@ -1,0 +1,190 @@
+// Text Adventure Game - Simple Rooms Module (without MapBox)
+// ルームシステムの簡単実装
+
+using "text_adventure/items.nyash"
+
+// 基本ルームBox（MapBoxなしのシンプル版）
+box Room {
+    init { name, description, visited, locked, item1, item2, item3, hasItems }
+    
+    Room(name, description) {
+        me.name = name
+        me.description = description
+        me.visited = false
+        me.locked = false
+        me.item1 = false
+        me.item2 = false
+        me.item3 = false
+        me.hasItems = 0
+    }
+    
+    // Getter methods to work around field access bug
+    getName() {
+        return me.name
+    }
+    
+    getDescription() {
+        return me.description
+    }
+    
+    isVisited() {
+        return me.visited
+    }
+    
+    setVisited(v) {
+        me.visited = v
+    }
+    
+    getItemCount() {
+        return me.hasItems
+    }
+    
+    getItem1() {
+        return me.item1
+    }
+    
+    getItem2() {
+        return me.item2
+    }
+    
+    getItem3() {
+        return me.item3
+    }
+    
+    // ルームの表示
+    look() {
+        result = ""
+        if me.isVisited() {
+            result = me.getName() + "\n"
+        } else {
+            result = me.getName() + " (First time here!)\n"
+            me.setVisited(true)
+        }
+        
+        result = result + me.getDescription() + "\n"
+        
+        // アイテムの表示
+        if me.getItemCount() > 0 {
+            result = result + "\nItems here:\n"
+            
+            item1 = me.getItem1()
+            if item1 {
+                itemDisplay = item1.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+            item2 = me.getItem2()
+            if item2 {
+                itemDisplay = item2.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+            item3 = me.getItem3()
+            if item3 {
+                itemDisplay = item3.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+        }
+        
+        return result
+    }
+    
+    // アイテムを追加
+    addItem(item) {
+        if me.hasItems == 0 {
+            me.item1 = item
+            me.hasItems = 1
+        } else {
+            if me.hasItems == 1 {
+                me.item2 = item
+                me.hasItems = 2
+            } else {
+                if me.hasItems == 2 {
+                    me.item3 = item
+                    me.hasItems = 3
+                }
+            }
+        }
+    }
+    
+    // アイテムを取得（削除）
+    takeItem(itemName) {
+        item1 = me.getItem1()
+        if item1 {
+            if item1.getName() == itemName {
+                result = item1
+                me.item1 = false
+                me.hasItems = me.hasItems - 1
+                return result
+            }
+        }
+        
+        item2 = me.getItem2()
+        if item2 {
+            if item2.getName() == itemName {
+                result = item2
+                me.item2 = false
+                me.hasItems = me.hasItems - 1
+                return result
+            }
+        }
+        
+        item3 = me.getItem3()
+        if item3 {
+            if item3.getName() == itemName {
+                result = item3
+                me.item3 = false
+                me.hasItems = me.hasItems - 1
+                return result
+            }
+        }
+        
+        return false
+    }
+    
+    // アイテムの存在確認
+    hasItem(itemName) {
+        item1 = me.getItem1()
+        if item1 {
+            if item1.getName() == itemName {
+                return true
+            }
+        }
+        
+        item2 = me.getItem2()
+        if item2 {
+            if item2.getName() == itemName {
+                return true
+            }
+        }
+        
+        item3 = me.getItem3()
+        if item3 {
+            if item3.getName() == itemName {
+                return true
+            }
+        }
+        
+        return false
+    }
+}
+
+// シンプルワールド作成関数
+function createSimpleWorld() {
+    // アイテム作成
+    sword = createSword()
+    potion = createPotion()
+    key = createKey("treasure_room")
+    treasure = createTreasure()
+    
+    // ルーム作成
+    entrance = new Room("Entrance Hall", "A grand entrance with marble columns.")
+    armory = new Room("Old Armory", "A dusty armory with weapon racks.")
+    
+    // アイテム配置
+    armory.addItem(sword)
+    entrance.addItem(potion)
+    entrance.addItem(key)
+    
+    return entrance  // スタート地点
+}
+
+print("🏰 Simple Rooms module loaded successfully!")

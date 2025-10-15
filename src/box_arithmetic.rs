@@ -6,6 +6,5 @@
  */
 
 // Re-export all arithmetic operations from the dedicated arithmetic module
-pub use crate::boxes::arithmetic::{
-    AddBox, SubtractBox, MultiplyBox, DivideBox, ModuloBox, CompareBox,
-};
+#[cfg(feature = "legacy-boxes")]
+pub use crate::boxes::arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, ModuloBox, CompareBox};

@@ -1,0 +1,22 @@
+// dep_tree_main.nyash — entry script to print JSON tree
+
+using selfhost.tools.dep_tree as DepTree
+
+using selfhost.tools.dep_tree_summary as DepTreeSummaryBox
+
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local path = null
+    if args != null && args.size() >= 1 { path = args.get(0) }
+    if path == null || path == "" {
+      // default sample
+      path = "apps/selfhost/ny-parser-nyash/main.nyash"
+    }
+    local tree = DepTree.build(path)
+    local want_summary = 0
+    if args != null && args.size() >= 2 { local f = args.get(1) if f == "--summary" || f == "summary" || f == ":summary" { want_summary = 1 } }
+    if want_summary == 1 { local s = DepTreeSummaryBox.summarize_node(tree)  console.println(s.toJson()) } else { console.println(tree.toJson()) }
+    return 0
+  }
+}

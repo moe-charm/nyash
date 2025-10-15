@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 # Build (release) if not already built
 cargo build --release >/dev/null
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 export NYASH_USING_AST=1
 

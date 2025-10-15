@@ -15,7 +15,7 @@ static box MiniVmPrints {
     local k_val = "\"value\":\""
     local s = scan.index_of_from(json, k_val, print_pos)
     if s < 0 || s >= end { return -1 }
-    local i = s + k_val.length()
+    local i = s + k_val.size()
     local j = scan.index_of_from(json, "\"", i)
     if j <= 0 || j > end { return -1 }
     print(json.substring(i, j))
@@ -39,7 +39,7 @@ static box MiniVmPrints {
     local k_val2 = "\"value\":"
     local v2 = scan.index_of_from(json, k_val2, tpos)
     if v2 <= 0 || v2 >= obj_end { return -1 }
-    local digits = scan.read_digits(json, v2 + k_val2.length())
+    local digits = scan.read_digits(json, v2 + k_val2.size())
     if digits == "" { return -1 }
     print(digits)
     return obj_end + 1
@@ -54,7 +54,7 @@ static box MiniVmPrints {
     local k_name = "\"name\":\""
     local npos = scan.index_of_from(json, k_name, fcp)
     if npos <= 0 || npos >= end { return -1 }
-    local ni = npos + k_name.length()
+    local ni = npos + k_name.size()
     local nj = scan.index_of_from(json, "\"", ni)
     if nj <= 0 || nj > end { return -1 }
     local fname = json.substring(ni, nj)
@@ -81,7 +81,7 @@ static box MiniVmPrints {
       if fname == "itoa" { print("0")  return arr_end + 1 }
       return -1
     }
-    atpos = atpos + k_t.length()
+    atpos = atpos + k_t.size()
     local at_end = scan.index_of_from(json, "\"", atpos)
     if at_end <= 0 || at_end > arr_end { return -1 }
     local aty = json.substring(atpos, at_end)
@@ -89,7 +89,7 @@ static box MiniVmPrints {
       local k_sval = "\"value\":\""
       local svalp = scan.index_of_from(json, k_sval, at_end)
       if svalp <= 0 || svalp >= arr_end { return -1 }
-      local si = svalp + k_sval.length()
+      local si = svalp + k_sval.size()
       local sj = scan.index_of_from(json, "\"", si)
       if sj <= 0 || sj > arr_end { return -1 }
       local sval = json.substring(si, sj)
@@ -100,8 +100,8 @@ static box MiniVmPrints {
       local k_ival = "\"value\":"
       local ivalp = scan.index_of_from(json, k_ival, at_end)
       if ivalp <= 0 || ivalp >= arr_end { return -1 }
-      local digits = scan.read_digits(json, ivalp + k_ival.length())
-      if fname == "itoa" || fname == "echo" { print(digits)  return ivalp + k_ival.length() }
+      local digits = scan.read_digits(json, ivalp + k_ival.size())
+      if fname == "itoa" || fname == "echo" { print(digits)  return ivalp + k_ival.size() }
       return -1
     }
     return -1
@@ -124,9 +124,9 @@ static box MiniVmPrints {
       // bound current Print object
       local p_obj_start = scan.index_of_from(json, "{", p)
       local p_obj_end = scan.find_balanced_object_end(json, p_obj_start)
-      if p_obj_start <= 0 || p_obj_end <= 0 { p_obj_end = p + k_print.length() }
+      if p_obj_start <= 0 || p_obj_end <= 0 { p_obj_end = p + k_print.size() }
       // also compute coarse slice end by next Print marker to guard when object balance is not reliable
-      local next_p = scan.index_of_from(json, k_print, p + k_print.length())
+      local next_p = scan.index_of_from(json, k_print, p + k_print.size())
       local p_slice_end = end
       if next_p > 0 { p_slice_end = next_p }
       // 1) BinaryOp fallbacks（開発用トグル。既定OFF）
@@ -150,11 +150,11 @@ static box MiniVmPrints {
                 local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
                 local lp = scan.index_of_from(json, k_l, epos)
                 if lp > 0 { if lp < p_obj_end {
-                  local ld = scan.read_digits(json, lp + k_l.length())
+                  local ld = scan.read_digits(json, lp + k_l.size())
                   if ld != "" {
-                    local rp = scan.index_of_from(json, k_r, lp + k_l.length())
+                    local rp = scan.index_of_from(json, k_r, lp + k_l.size())
                     if rp > 0 { if rp < p_obj_end {
-                      local rd = scan.read_digits(json, rp + k_r.length())
+                      local rd = scan.read_digits(json, rp + k_r.size())
                       if rd != "" { print(new MiniVmScan()._int_to_str(new MiniVmScan()._str_to_int(ld) + new MiniVmScan()._str_to_int(rd)))  printed = printed + 1  pos = p_obj_end + 1  continue }
                     }}
                   }
@@ -181,15 +181,15 @@ static box MiniVmPrints {
       local ki = "\"type\":\"int\",\"value\":"
       local pi = scan.index_of_from(json, ki, p)
       if pi > 0 { if pi < p_slice_end {
-        local digits = scan.read_digits(json, pi + ki.length())
+        local digits = scan.read_digits(json, pi + ki.size())
         if digits != "" { print(digits)  printed = printed + 1  pos = p_slice_end  continue }
       }}
       // Unknown shape: skip this Print object entirely to avoid stalls
       pos = p_obj_end + 1
-      if pos <= p { pos = p + k_print.length() }
+      if pos <= p { pos = p + k_print.size() }
     } else {
       // 既定は最小前進（次の探索へ）
-      pos = p + k_print.length()
+      pos = p + k_print.size()
     }
     }
     return printed
@@ -207,7 +207,7 @@ static box MiniVmPrints {
     local k_val = "\"value\":"
     local vpos = scan.index_of_from(json, k_val, cpos)
     if vpos < 0 { return 0 }
-    local val_digits = scan.read_digits(json, vpos + k_val.length())
+    local val_digits = scan.read_digits(json, vpos + k_val.size())
     local truthy = 0
     if val_digits { if val_digits != "0" { truthy = 1 } }
     local k_then = "\"then_body\""
@@ -225,6 +225,6 @@ static box MiniVmPrints {
 
   // Print all Print-Literal values in Program.statements (string/int only; MVP)
   print_all_print_literals(json) {
-    return new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+    return new MiniVmPrints().print_prints_in_slice(json, 0, json.size())
   }
 }

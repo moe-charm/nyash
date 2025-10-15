@@ -1,0 +1,36 @@
+// operator_box.hako — OperatorBox (debug/parity for Mini‑VM)
+// Responsibility: Provide Compare/Arithmetic/Unary helpers behind a clean API
+// for self‑hosted (Ny) components. Intended for debugging and parity checks.
+// Non‑responsibility: Being called from the Rust VM runtime (non‑reentry policy).
+
+using "selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
+using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+
+static box OperatorBox {
+  // Binary operators on integers (minimal set for Mini‑VM parity)
+  apply2(kind, a, b) {
+    if kind == "Add" { return ArithmeticBox.add_i64(a, b) }
+    if kind == "Sub" { return ArithmeticBox.sub_i64(a, b) }
+    if kind == "Mul" { return ArithmeticBox.mul_i64(a, b) }
+    if kind == "Div" { if b == 0 { return 0 } else { return a / b } }
+    if kind == "Mod" { if b == 0 { return 0 } else { return a % b } }
+    // Bit ops (optional)
+    if kind == "BitAnd" { return a & b }
+    if kind == "BitOr"  { return a | b }
+    if kind == "BitXor" { return a ^ b }
+    if kind == "Shl"    { return a << b }
+    if kind == "Shr"    { return a >> b }
+    return 0
+  }
+
+  // Unary operators on integers/bools (minimal set)
+  unary(kind, a) {
+    if kind == "Neg" { return 0 - a }
+    if kind == "Not" { return (a == 0) ? 1 : 0 }
+    if kind == "BitNot" { return ~a }
+    return a
+  }
+
+  // Compare returns 0/1
+  compare(kind, a, b) { return CompareOpsBox.eval(kind, a, b) }
+}

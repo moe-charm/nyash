@@ -11,7 +11,7 @@ Each test is **one phenomenon per file**, tiny and deterministic.
 bash run_spec_smoke.sh
 
 # 2) PURE mode (surface MIR violations):
-NYASH_MIR_CORE13_PURE=1 bash run_spec_smoke.sh
+[deprecated] Core-13 pure is removed; run without NYASH_MIR_CORE13_PURE.
 
 # 3) Extra logging when a case fails:
 NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 NYASH_VM_DEBUG_BOXCALL=1 bash run_spec_smoke.sh

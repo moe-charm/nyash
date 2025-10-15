@@ -1,0 +1,13 @@
+// Param-string JIT HostCall PoC (charCodeAt)
+box Utils {
+    codeAt(s, i) {
+        return s.charCodeAt(i)
+    }
+}
+
+u = new Utils()
+print(u.codeAt("ABC", 0))
+print(u.codeAt("ABC", 1))
+print(u.codeAt("ABC", 2))
+print(u.codeAt("ABC", 3)) // -1 (out of range)
+

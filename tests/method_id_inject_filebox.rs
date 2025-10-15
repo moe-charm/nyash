@@ -1,3 +1,4 @@
+#![cfg(feature = "plugins")]
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 use nyash_rust::runtime::box_registry::get_global_registry;
 use nyash_rust::runtime::plugin_loader_v2::{get_global_loader_v2, init_global_loader_v2};

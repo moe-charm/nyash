@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    local d = "1"
+    local dv = match d {
+      "0" => { print("found zero") 0 }
+      "1" => { print("found one") 1 }
+      _ => { print("other") 0 }
+    }
+    return dv
+  }
+}

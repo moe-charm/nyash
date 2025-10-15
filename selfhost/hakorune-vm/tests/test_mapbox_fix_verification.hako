@@ -1,0 +1,140 @@
+// test_mapbox_fix_verification.hako — Verify MapBox.has() fix works correctly
+// Comprehensive test of the fix for MapBox.get() null comparison bug
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== MapBox.has() Fix Verification ===")
+
+    local map = new MapBox()
+    local pass_count = 0
+    local fail_count = 0
+
+    // Test 1: Empty map - has() returns false
+    print("\nTest 1: Empty map check")
+    if map.has("key1") {
+      print("[FAIL] Empty map should not have key1")
+      fail_count = fail_count + 1
+    } else {
+      print("[PASS] Empty map correctly returns false")
+      pass_count = pass_count + 1
+    }
+
+    // Test 2: Correct pattern - has() then get()
+    print("\nTest 2: Correct pattern (has() then get())")
+    local value1 = 0
+    if map.has("key1") {
+      value1 = map.get("key1")
+    }
+
+    if value1 != 0 {
+      print("[FAIL] value1 should be 0")
+      fail_count = fail_count + 1
+    } else {
+      print("[PASS] value1 correctly defaults to 0")
+      pass_count = pass_count + 1
+    }
+
+    // Test 3: Store and retrieve
+    print("\nTest 3: Store and retrieve")
+    map.set("key2", 42)
+
+    local value2 = 0
+    if map.has("key2") {
+      value2 = map.get("key2")
+    }
+
+    if value2 != 42 {
+      print("[FAIL] value2 should be 42, got " + StringHelpers.int_to_str(value2))
+      fail_count = fail_count + 1
+    } else {
+      print("[PASS] value2 correctly retrieved as 42")
+      pass_count = pass_count + 1
+    }
+
+    // Test 4: Store 0 and retrieve (edge case)
+    print("\nTest 4: Store 0 and retrieve")
+    map.set("key3", 0)
+
+    local value3 = -1
+    if map.has("key3") {
+      value3 = map.get("key3")
+    }
+
+    if value3 != 0 {
+      print("[FAIL] value3 should be 0, got " + StringHelpers.int_to_str(value3))
+      fail_count = fail_count + 1
+    } else {
+      print("[PASS] value3 correctly retrieved as 0")
+      pass_count = pass_count + 1
+    }
+
+    // Test 5: Distinguish between missing and stored 0
+    print("\nTest 5: Distinguish missing vs stored 0")
+    local found_key3 = 0
+    local found_key4 = 0
+
+    if map.has("key3") {
+      found_key3 = 1
+    }
+
+    if map.has("key4") {
+      found_key4 = 1
+    }
+
+    if found_key3 == 0 {
+      print("[FAIL] key3 should exist")
+      fail_count = fail_count + 1
+    }
+    if found_key4 != 0 {
+      print("[FAIL] key4 should not exist")
+      fail_count = fail_count + 1
+    }
+    if found_key3 != 0 && found_key4 == 0 {
+      print("[PASS] Correctly distinguished stored 0 vs missing")
+      pass_count = pass_count + 1
+    }
+
+    // Test 6: Multiple operations
+    print("\nTest 6: Multiple set/get operations")
+    map.set("a", 1)
+    map.set("b", 2)
+    map.set("c", 3)
+
+    local sum = 0
+    if map.has("a") {
+      sum = sum + map.get("a")
+    }
+    if map.has("b") {
+      sum = sum + map.get("b")
+    }
+    if map.has("c") {
+      sum = sum + map.get("c")
+    }
+    if map.has("d") {
+      sum = sum + map.get("d")
+    }
+
+    if sum != 6 {
+      print("[FAIL] sum should be 6, got " + StringHelpers.int_to_str(sum))
+      fail_count = fail_count + 1
+    } else {
+      print("[PASS] Multiple operations sum = 6")
+      pass_count = pass_count + 1
+    }
+
+    // Summary
+    print("\n=== Summary ===")
+    print("Passed: " + StringHelpers.int_to_str(pass_count))
+    print("Failed: " + StringHelpers.int_to_str(fail_count))
+
+    if fail_count == 0 {
+      print("✅ All MapBox fix verification tests PASSED!")
+      return 0
+    }
+
+    print("❌ Some tests FAILED")
+    return 1
+  }
+}

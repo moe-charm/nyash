@@ -1,0 +1,15 @@
+// pipeline_emit_box.hako — PipelineEmitBox
+// Responsibility: small wrappers that emit MIR(JSON v0) and apply LocalSSA ensures
+
+using "selfhost/compiler/pipeline_v2/emit_call_box.hako" as EmitCallBox
+using "selfhost/compiler/pipeline_v2/local_ssa_box.hako" as LocalSSA
+
+static box PipelineEmitBox {
+  // Emit Call(name, int-args) → JSON v0, wrapped with LocalSSA ensures
+  emit_call_int_args_v0(name, args) {
+    local j = EmitCallBox.emit_call_int_args(name, args)
+    return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j))
+  }
+}
+
+static box PipelineEmitMain { main(args) { return 0 } }

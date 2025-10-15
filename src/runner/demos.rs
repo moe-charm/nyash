@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 //! Runner demo helpers (moved out of mod.rs to reduce file size)
 use nyash_rust::ast::ASTNode;
 use nyash_rust::box_trait::{AddBox, BoolBox, BoxCore, IntegerBox, NyashBox, StringBox, VoidBox};
@@ -7,7 +8,7 @@ use nyash_rust::tokenizer::NyashTokenizer;
 
 pub(super) fn demo_basic_boxes() {
     println!("\n📦 1. Basic Box Creation:");
-    let string_box = StringBox::new("Hello, Nyash!".to_string());
+    let string_box = StringBox::new("Hello, Hakorune!".to_string());
     let int_box = IntegerBox::new(42);
     let bool_box = BoolBox::new(true);
     let void_box = VoidBox::new();
@@ -75,7 +76,14 @@ pub(super) fn demo_parser_system() {
         }
     }
     "#;
-    match NyashParser::parse_from_string(simple_code) {
+    let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+    let parsed = if use_facade {
+        nyash_rust::front::parser_layer::facade::parse_source_to_ast(simple_code)
+            .map_err(|e| e.message)
+    } else {
+        NyashParser::parse_from_string(simple_code).map_err(|e| e.to_string())
+    };
+    match parsed {
         Ok(ast) => {
             println!("    Input: {}", simple_code.trim());
             println!("    AST: {}", ast);
@@ -90,16 +98,9 @@ pub(super) fn demo_parser_system() {
     }
 }
 
-pub(super) fn demo_interpreter_system() {
-    println!("\n🎭 7. Interpreter System:");
-    println!("  ⚠️  Legacy interpreter removed - use VM or LLVM backends instead");
-    println!("  💡 Try: ./target/release/nyash --backend vm program.nyash");
-    println!("  💡 Try: ./target/release/nyash --backend llvm program.nyash");
-}
-
 /// Run all demo sections (moved from runner/mod.rs)
 pub(super) fn run_all_demos() {
-    println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
+    println!("🦀 Hakorune Runtime Demos - Everything is Box! 🦀");
     println!("====================================================");
     demo_basic_boxes();
     demo_box_operations();

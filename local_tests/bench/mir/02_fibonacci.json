@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.1.0",
+  "capabilities": ["unified_call", "phi", "effects", "callee_typing"],
+  "metadata": {},
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 0}},
+            {"op": "const", "dst": 2, "value": {"type": "i64", "value": 1}},
+            {"op": "const", "dst": 3, "value": {"type": "i64", "value": 0}},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {"op": "phi", "dst": 4, "incoming": [
+              {"block": 0, "value": 1},
+              {"block": 1, "value": 8}
+            ]},
+            {"op": "phi", "dst": 5, "incoming": [
+              {"block": 0, "value": 2},
+              {"block": 1, "value": 9}
+            ]},
+            {"op": "phi", "dst": 6, "incoming": [
+              {"block": 0, "value": 3},
+              {"block": 1, "value": 11}
+            ]},
+            {"op": "binop", "operation": "+", "lhs": 4, "rhs": 5, "dst": 7},
+            {"op": "copy", "src": 5, "dst": 8},
+            {"op": "copy", "src": 7, "dst": 9},
+            {"op": "const", "dst": 10, "value": {"type": "i64", "value": 1}},
+            {"op": "binop", "operation": "+", "lhs": 6, "rhs": 10, "dst": 11},
+            {"op": "const", "dst": 12, "value": {"type": "i64", "value": 10}},
+            {"op": "compare", "operation": "<", "lhs": 6, "rhs": 12, "dst": 13},
+            {"op": "branch", "cond": 13, "then": 1, "else": 2}
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {"op": "phi", "dst": 14, "incoming": [
+              {"block": 1, "value": 9}
+            ]},
+            {"op": "ret", "value": 14}
+          ]
+        }
+      ]
+    }
+  ]
+}

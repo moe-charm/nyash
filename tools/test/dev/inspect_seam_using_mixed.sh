@@ -8,7 +8,7 @@ pushd "$ROOT_DIR" >/dev/null
 
 cargo build --release -q
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_VM_USE_PY=1
 export NYASH_PYVM_DUMP_CODE=1
 # optional seam logs for the target run

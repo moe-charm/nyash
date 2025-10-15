@@ -16,7 +16,7 @@ static box Main { main(args) { return 0 } }
 NY
 
 set +e
-NYASH_ENABLE_USING=1 NYASH_PLUGIN_REQUIRE_PREFIX=1 "$BIN" --backend interpreter "$SRC" >/tmp/nyash-using-prefix-strict.out 2>&1
+NYASH_USING=1 NYASH_PLUGIN_REQUIRE_PREFIX=1 "$BIN" --backend interpreter "$SRC" >/tmp/nyash-using-prefix-strict.out 2>&1
 rc=$?
 set -e
 

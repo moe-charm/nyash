@@ -5,7 +5,7 @@ Status: Adopted for Phase 15.3+; parser implementation is staged.
 Policy
 - Newline as primary statement separator.
 - Semicolons are optional and only needed when multiple statements appear on one physical line.
-- Minimal ASI (auto semicolon insertion) rules to avoid surprises.
+- Minimal ASI (auto semicolon insertion) rules to avoid surprises. Semicolons are accepted by default.
 
 Rules (minimal and predictable)
 - Newline ends a statement when:
@@ -20,8 +20,8 @@ Rules (minimal and predictable)
 - Method chains can break across lines after a dot: `obj\n  .method()` (newline treated as whitespace).
 
 Style guidance
-- Prefer newline separation (no semicolons) for readability.
-- Use semicolons only when placing multiple statements on a single line.
+- Prefer newline separation for readability.
+- Use semicolons for multiple statements on a single line; both separators are valid.
 
 Examples
 ```nyash
@@ -60,6 +60,7 @@ local v = obj
 Implementation notes (parser)
 - Tokenizer keeps track of grouping depth.
 - At newline, attempt ASI only when depth==0 and previous token is not a continuation.
+- To disable parsing of semicolons (dev/testing), set `NYASH_PARSER_ALLOW_SEMICOLON=0`.
 - Error messages should suggest adding a continuation token or grouping when a newline unexpectedly ends a statement.
 
 Parser dev notes (Stage‑1/2)

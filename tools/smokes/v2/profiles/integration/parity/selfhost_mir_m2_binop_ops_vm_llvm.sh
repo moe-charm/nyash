@@ -2,13 +2,12 @@
 # selfhost_mir_m2_binop_ops_vm_llvm.sh — parity for minimal binops (Add/Sub/Mul/Div/Mod)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability
 
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
@@ -20,7 +19,7 @@ ops=(Add Sub Mul Div Mod)
 
 for op in "${ops[@]}"; do
   cat > "$TMP_DIR/driver.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -30,8 +29,8 @@ static box Main {
     j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":2,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":3}},"
     j = j + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"${op}\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
     j = j + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}] }]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }
@@ -44,4 +43,3 @@ done
 
 rm -rf "$TMP_DIR"
 exit 0
-

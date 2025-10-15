@@ -55,11 +55,8 @@ mod tests {
         let person = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: person,
-                box_type: "Person".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: person, box_type: "Person".into(), args: vec![],
+                auto_birth: None });
 
         // person.setField("name", "Alice")
         let k_name = f.next_value_id();
@@ -159,7 +156,7 @@ mod tests {
 
         // VM (VTABLE on)
         std::env::set_var("NYASH_ABI_VTABLE", "1");
-        let mut vm = VM::with_runtime(runtime);
+        let mut vm = VM::new();
         let vm_out = vm.execute_module(&module).expect("VM exec");
         let vm_s = vm_out.to_string_box().value;
 

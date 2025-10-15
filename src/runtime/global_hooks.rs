@@ -11,9 +11,12 @@ struct GlobalHooksState {
     gc: Option<Arc<dyn GcHooks>>,
     sched: Option<Arc<dyn Scheduler>>,
     cur_token: Option<CancellationToken>,
+    #[cfg(feature = "legacy-boxes")]
     futures: Vec<crate::boxes::future::FutureWeak>,
+    #[cfg(feature = "legacy-boxes")]
     strong: Vec<crate::boxes::future::FutureBox>,
     scope_depth: usize,
+    #[cfg(feature = "legacy-boxes")]
     group_stack: Vec<std::sync::Arc<crate::boxes::task_group_box::TaskGroupInner>>,
 }
 
@@ -23,9 +26,12 @@ impl GlobalHooksState {
             gc: None,
             sched: None,
             cur_token: None,
+            #[cfg(feature = "legacy-boxes")]
             futures: Vec::new(),
+            #[cfg(feature = "legacy-boxes")]
             strong: Vec::new(),
             scope_depth: 0,
+            #[cfg(feature = "legacy-boxes")]
             group_stack: Vec::new(),
         }
     }
@@ -44,10 +50,11 @@ pub fn set_from_runtime(rt: &crate::runtime::nyash_runtime::NyashRuntime) {
         if st.cur_token.is_none() {
             st.cur_token = Some(CancellationToken::new());
         }
-        st.futures.clear();
-        st.strong.clear();
+        #[cfg(feature = "legacy-boxes")]
+        { st.futures.clear(); st.strong.clear(); }
         st.scope_depth = 0;
-        st.group_stack.clear();
+        #[cfg(feature = "legacy-boxes")]
+        { st.group_stack.clear(); }
     }
 }
 
@@ -79,6 +86,7 @@ pub fn current_group_token() -> CancellationToken {
 }
 
 /// Register a Future into the current group's registry (best-effort; clones share state)
+#[cfg(feature = "legacy-boxes")]
 pub fn register_future_to_current_group(fut: &crate::boxes::future::FutureBox) {
     if let Ok(mut st) = state().write() {
         // Prefer explicit current TaskGroup at top of stack
@@ -94,7 +102,11 @@ pub fn register_future_to_current_group(fut: &crate::boxes::future::FutureBox) {
     }
 }
 
+#[cfg(not(feature = "legacy-boxes"))]
+pub fn register_future_to_current_group(_fut: &dyn crate::box_trait::NyashBox) { /* no-op in plugin-only */ }
+
 /// Join all currently registered futures with a coarse timeout guard.
+#[cfg(feature = "legacy-boxes")]
 pub fn join_all_registered_futures(timeout_ms: u64) {
     use std::time::{Duration, Instant};
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
@@ -129,15 +141,17 @@ pub fn join_all_registered_futures(timeout_ms: u64) {
     }
 }
 
+#[cfg(not(feature = "legacy-boxes"))]
+pub fn join_all_registered_futures(_timeout_ms: u64) { /* no-op */ }
+
 /// Push a task scope (footing). On pop of the outermost scope, perform a best-effort join.
 pub fn push_task_scope() {
     if let Ok(mut st) = state().write() {
         st.scope_depth += 1;
         // Push a new explicit TaskGroup for this scope
+        #[cfg(feature = "legacy-boxes")]
         st.group_stack.push(std::sync::Arc::new(
-            crate::boxes::task_group_box::TaskGroupInner {
-                strong: std::sync::Mutex::new(Vec::new()),
-            },
+            crate::boxes::task_group_box::TaskGroupInner { strong: std::sync::Mutex::new(Vec::new()) }
         ));
     }
     // Set a fresh cancellation token for this scope (best-effort)
@@ -147,6 +161,7 @@ pub fn push_task_scope() {
 /// Pop a task scope. When depth reaches 0, join outstanding futures.
 pub fn pop_task_scope() {
     let mut do_join = false;
+    #[cfg(feature = "legacy-boxes")]
     let mut popped: Option<std::sync::Arc<crate::boxes::task_group_box::TaskGroupInner>> = None;
     if let Ok(mut st) = state().write() {
         if st.scope_depth > 0 {
@@ -154,14 +169,19 @@ pub fn pop_task_scope() {
         }
         if st.scope_depth == 0 { do_join = true; }
         // Pop explicit group for this scope
-        popped = st.group_stack.pop();
+        #[cfg(feature = "legacy-boxes")]
+        { popped = st.group_stack.pop(); }
     }
     if do_join {
-        let ms: u64 = std::env::var("NYASH_TASK_SCOPE_JOIN_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1000);
-        if let Some(inner) = popped {
+        let ms = crate::runtime::env_gate_box::string_alias_or(
+            "NYASH_TASK_SCOPE_JOIN_MS",
+            "HAKO_TASK_SCOPE_JOIN_MS",
+            "1000",
+        )
+        .parse::<u64>()
+        .unwrap_or(1000);
+        #[cfg(feature = "legacy-boxes")]
+        if let Some(ref inner) = popped {
             // Join this group's outstanding futures
             let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
             loop {
@@ -181,9 +201,17 @@ pub fn pop_task_scope() {
                 safepoint_and_poll();
                 std::thread::yield_now();
             }
-        } else {
+        }
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if popped.is_none() {
+                join_all_registered_futures(ms);
+            }
+        }
+        #[cfg(not(feature = "legacy-boxes"))]
+        {
             // Fallback to implicit global group
-            join_all_registered_futures(ms);
+            let _ = ms; // no-op in plugin-only
         }
     }
     // Reset token (best-effort)

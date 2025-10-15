@@ -1,0 +1,63 @@
+// json_scan_guard.hako — JsonScanGuardBox
+// Responsibility: escape-aware JSON scanning with step budget (Fail-Fast)
+
+using "selfhost/shared/json/core/string_scan.hako" as StringScanBox
+
+static box JsonScanGuardBox {
+  // Seek the end index (inclusive) of an object starting at `start` (must be '{').
+  // Returns: end index or -1 on failure/budget exceeded.
+  seek_obj_end(text, start, budget) {
+    if text == null { return -1 }
+    if start < 0 || start >= text.size() { return -1 }
+    if text.substring(start, start+1) != "{" { return -1 }
+    local n = text.size()
+    local depth = 0
+    local i = start
+    local steps = 0
+    loop (i < n) {
+      if steps >= budget { return -1 }
+      steps = steps + 1
+      local ch = StringScanBox.read_char(text, i)
+      if ch == "\\" { i = i + 2  continue }
+      if ch == "\"" {
+        // jump to end quote (escape-aware)
+        local j = StringScanBox.find_quote(text, i+1)
+        if j < 0 { return -1 }
+        i = j + 1
+        continue
+      }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // Seek the end index (inclusive) of an array starting at `start` (must be '[').
+  // Returns: end index or -1 on failure/budget exceeded.
+  seek_array_end(text, start, budget) {
+    if text == null { return -1 }
+    if start < 0 || start >= text.size() { return -1 }
+    if text.substring(start, start+1) != "[" { return -1 }
+    local n = text.size()
+    local depth = 0
+    local i = start
+    local steps = 0
+    loop (i < n) {
+      if steps >= budget { return -1 }
+      steps = steps + 1
+      local ch = StringScanBox.read_char(text, i)
+      if ch == "\\" { i = i + 2  continue }
+      if ch == "\"" {
+        local j = StringScanBox.find_quote(text, i+1)
+        if j < 0 { return -1 }
+        i = j + 1
+        continue
+      }
+      if ch == "[" { depth = depth + 1 }
+      if ch == "]" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+}

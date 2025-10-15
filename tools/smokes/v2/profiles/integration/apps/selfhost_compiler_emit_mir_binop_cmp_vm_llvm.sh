@@ -31,7 +31,7 @@ emit_and_embed() {
   local esc
   esc=$(printf '%s' "$json" | sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g')
   cat > "$TMP_DIR/driver_${mode}.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {

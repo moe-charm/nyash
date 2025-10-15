@@ -1,0 +1,197 @@
+// 📦 ConsBox - LISPのcons cell実装 v4
+// 🎉 コンストラクタ引数サポート版（改良版）
+
+// NilBox - null値の代替実装
+box NilBox {
+    init {}
+    
+    isNil() { return true }
+    toString() { return "nil" }
+    
+    // リスト終端チェック用
+    isNilBox() { return true }
+}
+
+// グローバルなnil値
+NIL = new NilBox()
+
+box ConsBox {
+    car
+    cdr
+    
+    init { car, cdr }
+    
+    // 🎉 NEW: コンストラクタ引数対応！
+    ConsBox(a, d) {
+        me.car = a
+        me.cdr = d
+    }
+    
+    // 引数なしコンストラクタ
+    ConsBox() {
+        me.car = NIL
+        me.cdr = NIL
+    }
+    
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    setCar(value) { me.car = value }
+    setCdr(value) { me.cdr = value }
+    
+    // ConsBoxかどうかを示すメソッド
+    isConsBox() { return true }
+    
+    // 適切なリスト形式の文字列表現
+    toString() {
+        // リストかドット対かを判定して適切に表示
+        if me.isList() {
+            return me.toListString()
+        } else {
+            return "(" + me.car + " . " + me.cdr + ")"
+        }
+    }
+    
+    // リストかどうかチェック（cdrがnil終端）
+    isList() {
+        current = me
+        loop(true) {
+            // cdrがNILならリスト
+            if current.cdr == NIL {
+                return true
+            }
+            // cdrがConsBoxでなければドット対
+            if not (current.cdr.isConsBox and current.cdr.isConsBox()) {
+                return false
+            }
+            current = current.cdr
+        }
+    }
+    
+    // リスト形式の文字列生成
+    toListString() {
+        result = "("
+        current = me
+        first = true
+        
+        loop(current != NIL) {
+            if not first {
+                result = result + " "
+            }
+            first = false
+            
+            // carの内容を追加
+            result = result + current.car
+            
+            // 次の要素へ
+            if current.cdr == NIL {
+                break
+            }
+            current = current.cdr
+        }
+        
+        result = result + ")"
+        return result
+    }
+}
+
+// ユーティリティ関数
+function cons(car, cdr) {
+    return new ConsBox(car, cdr)
+}
+
+function list1(a) {
+    return new ConsBox(a, NIL)
+}
+
+function list2(a, b) {
+    return new ConsBox(a, new ConsBox(b, NIL))
+}
+
+function list3(a, b, c) {
+    return new ConsBox(a, new ConsBox(b, new ConsBox(c, NIL)))
+}
+
+function car(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCar()
+}
+
+function cdr(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCdr()
+}
+
+// リスト操作関数
+function append(list1, list2) {
+    if list1 == NIL { return list2 }
+    return new ConsBox(car(list1), append(cdr(list1), list2))
+}
+
+function length(lst) {
+    count = 0
+    current = lst
+    loop(current != NIL) {
+        count = count + 1
+        current = cdr(current)
+    }
+    return count
+}
+
+// テストコード
+print("🎯 === ConsBox v4 Test (Improved!) ===")
+print("")
+
+// 基本的なペア
+print("1. Basic cons cells:")
+pair1 = new ConsBox(1, 2)
+print("   (cons 1 2) = " + pair1.toString())
+pair2 = cons("a", "b")
+print("   (cons 'a' 'b') = " + pair2.toString())
+
+// リスト作成
+print("")
+print("2. List creation:")
+list_a = list1("hello")
+print("   (list 'hello') = " + list_a.toString())
+
+list_b = list2(10, 20)
+print("   (list 10 20) = " + list_b.toString())
+
+list_c = list3("a", "b", "c")
+print("   (list 'a' 'b' 'c') = " + list_c.toString())
+
+// car/cdr操作
+print("")
+print("3. car/cdr operations:")
+test = list3(1, 2, 3)
+print("   test = " + test.toString())
+print("   (car test) = " + car(test))
+print("   (cdr test) = " + cdr(test).toString())
+print("   (car (cdr test)) = " + car(cdr(test)))
+
+// リスト操作
+print("")
+print("4. List operations:")
+lst1 = list3("x", "y", "z")
+lst2 = list2("a", "b")
+print("   lst1 = " + lst1.toString())
+print("   lst2 = " + lst2.toString())
+print("   (length lst1) = " + length(lst1))
+print("   (append lst1 lst2) = " + append(lst1, lst2).toString())
+
+// ネストしたリスト
+print("")
+print("5. Nested lists:")
+inner1 = list2(1, 2)
+inner2 = list2(3, 4)
+nested = list3(inner1, inner2, 5)
+print("   nested = " + nested.toString())
+
+// 空リスト
+print("")
+print("6. Empty list:")
+empty = NIL
+print("   '() = " + empty.toString())
+
+print("")
+print("✅ ConsBox v4 tests completed!")

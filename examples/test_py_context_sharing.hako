@@ -1,0 +1,18 @@
+// Test context sharing between import and eval
+static box Main {
+  main() {
+    local py, r
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Import math module
+    py.import("math")
+    
+    // Try to use math in eval
+    r = py.eval("math.sqrt(16)")
+    
+    // Return result (VM prints final result summary)
+    return r
+  }
+}

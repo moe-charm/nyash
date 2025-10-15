@@ -61,3 +61,15 @@ Expanded AST JSON v0:
 ```
 {"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"Literal","value":{"type":"string","value":"x"}}}]}
 ```
+
+## Canonicalization and CLI
+
+- Object keys are canonicalized (sorted lexicographically) to ensure deterministic output for testing and tooling.
+- Arrays preserve source order.
+- Numbers/booleans/null are emitted without extra whitespace.
+
+CLI usage (pre‑macro AST):
+- Dump to stdout: `hakorune --dump-ast-json <file.hako>`
+- Write to file: `hakorune --emit-ast-json <out.json> <file.hako>`
+
+The canonical form matches the schema above but with keys sorted within each object. This stabilizes golden tests across toolchains.

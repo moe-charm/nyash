@@ -1,0 +1,20 @@
+// mir-nested-branch - nested branches with returns
+
+static box Main {
+    main() {
+        if 1 < 2 {
+            if 3 < 4 {
+                return 1
+            } else {
+                return 2
+            }
+        } else {
+            if 5 < 6 {
+                return 3
+            } else {
+                return 4
+            }
+        }
+    }
+}
+

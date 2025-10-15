@@ -14,6 +14,11 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - 次の主タスク: Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了後に Ny Executor（最小命令）へ直行。
 - 既定挙動は不変。新経路はすべて env トグルで opt‑in。
 
+## 🔄 2025‑10‑02 Update（PyVM 撤退・LLVM本流）
+- 実行系の既定は Rust VM（MIR）と LLVM（llvmlite ハーネス）。
+- PyVM は撤退（既定OFF）。互換確認が必要な場合のみ `--features pyvm-bridge` を明示してビルドし、`NYASH_VM_USE_PY=1` で起動する。
+- パリティ検証は LLVM ハーネス基準に一本化。PyVM はローカル限定の互換用途に留める。
+
 推奨トグル
 - `NYASH_LLVM_USE_HARNESS=1`（LLVM Python ハーネス）
 - `NYASH_PARSER_TOKEN_CURSOR=1`（TokenCursor 経路）
@@ -37,12 +42,13 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
   - EXE化は任意の実験導線として維持（配布は Phase‑15 の外）。
   - PyVM は参照実行器として意味論検証に用い、パリティ監視を継続。
 
-### Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
+### [Historical] Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
+（注）2025‑10‑02 の撤退により PyVM は互換モードのみ。現行は LLVM/Rust VM を主経路に統一。
 - JIT/Cranelift は一時停止（古い/非対応）。Rust/inkwell は参照のみ。
 - 既定のコンパイル経路は **Python/llvmlite**（harness）のみ
   - MIR(JSON) → LLVM IR → .o → NyRTリンク → EXE
   - Resolver-only / Sealed SSA / 文字列ハンドル不変 を強化
-- 新規: **PyVM（Python MIR VM）** を導入し、2本目の実行経路を確保
+- 新規: **PyVM（Python MIR VM）** を導入し、2本目の実行経路を確保（現在は撤退済み・互換モードのみ）
   - 最小命令: const/binop/compare/phi/branch/jump/ret + 最小 boxcall（Console/File/Path/String）
   - ランナー統合: `NYASH_VM_USE_PY=1` で MIR(JSON) を PyVM に渡して実行
   - 代表スモーク（esc_dirname_smoke / dep_tree_min_string）で llvmlite とパリティ確認
@@ -133,7 +139,7 @@ Call { callee: Callee, args }
 
 #### Phase 15.3 — Detailed Plan（Ny compiler MVP）
 - Directory layout（selfhost compiler）
-  - `apps/selfhost-compiler/compiler.nyash`（CompilerBox entry; Ny→JSON v0 emit）
+  - `apps/selfhost-compiler/compiler.hako`（CompilerBox entry; Ny→JSON v0 emit）
   - `apps/selfhost-compiler/parser/{lexer.nyash,parser.nyash,ast.nyash}`（Stage‑2 へ段階拡張）
   - `apps/selfhost-compiler/emitter/json_v0.nyash`（将来: emit 分離。MVPは inline でも可）
   - `apps/selfhost-compiler/mir/{builder.nyash,optimizer.nyash}`（将来）
@@ -155,7 +161,7 @@ Call { callee: Callee, args }
   - 代表スモーク: nested if / loop 累積 / 短絡 and/or と if/loop の交錯
 
 - Acceptance（15.3）
-  - Stage‑1: 代表サンプルで JSON v0 emit → Bridge → PyVM/llvmlite で一致（差分なし）
+  - Stage‑1: 代表サンプルで JSON v0 emit → Bridge → VM/llvmlite で一致（差分なし）
   - Bootstrap: `tools/bootstrap_selfhost_smoke.sh` で c0→c1→c1' が PASS（フォールバックは許容）
   - Docs: 文分離ポリシー（改行＋最小ASI）を公開（link: reference/language/statements.md）
 
@@ -164,15 +170,15 @@ Call { callee: Callee, args }
   - `tools/build_compiler_exe.sh`（Selfhost Parser のEXE化）
   - `tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）
   - `tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流）
-  - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
+  - `tools/parity.sh --lhs vm --rhs llvmlite <test.nyash>`（常時）
 
 Imports/Namespace plan（15.3‑late）
-- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_ENABLE_USING=1`.
+- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_USING=1` (compat: `NYASH_ENABLE_USING=1`).
 
 - Operational switches
   - `NYASH_USE_NY_COMPILER=1`（selfhost compiler 経路ON）
   - `NYASH_JSON_ONLY=1`（子プロセスの余計な出力抑止）
-  - `NYASH_DISABLE_PLUGINS=1`（必要に応じて子のみ最小化）
+- `NYASH_PLUGIN_POLICY=off`（必要に応じて子のみ最小化; compat: `NYASH_DISABLE_PLUGINS=1`）
   - 文分離: 最小ASIルール（深さ0・直前が継続子でない改行のみ終端）
 
 - Risks / Rollback
@@ -182,7 +188,7 @@ Imports/Namespace plan（15.3‑late）
 
 【受入（MVP）】
 - `tools/ny_roundtrip_smoke.sh` 緑（Case A/B）。
-- `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.nyash` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
+- `apps/tests/esc_dirname_smoke.nyash` / `selfhost/tools/dep_tree_min_string.hako` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
 
 #### 予告: LoopForm（MIR18）での PHI 自動化（Phase‑15 後）
 - LoopForm を強化し、`loop.begin(loop_carried_values) / loop.iter / loop.branch / loop.end` の構造的情報から逆Loweringで PHI を合成。
@@ -434,7 +440,7 @@ ny_free_buf(buffer)
 
 ### ✅ クイックスモーク（現状）
 - PyVM↔llvmlite パリティ: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
-- dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.nyash -o app_dep && ./app_dep`
+- dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh selfhost/tools/dep_tree_min_string.hako -o app_dep && ./app_dep`
 - Selfhost Parser EXE: `tools/build_compiler_exe.sh && (cd dist/nyash_compiler && ./nyash_compiler tmp/sample.nyash > sample.json)`
 - JSON v0 bridge spec: `docs/reference/ir/json_v0.md`
 - Stage‑2 smokes: `tools/ny_stage2_bridge_smoke.sh`, `tools/ny_parser_stage2_phi_smoke.sh`, `tools/ny_me_dummy_smoke.sh`

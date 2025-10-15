@@ -1,2 +1,0 @@
-
-Running arithmetic_ops... [0;32mPASS[0m (2.584177378s)

@@ -19,7 +19,7 @@ pub(crate) fn annotate_me_origin(builder: &mut MirBuilder, me_id: ValueId) {
     }
     if let Some(c) = cls {
         // Record both origin class and a Box type hint for downstream passes（観測用）。
-        builder.value_origin_newbox.insert(me_id, c.clone());
+        builder.origin_register(me_id, c.clone());
         builder.value_types.insert(me_id, MirType::Box(c));
     }
 }

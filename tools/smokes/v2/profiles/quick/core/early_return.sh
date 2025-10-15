@@ -22,7 +22,7 @@ static box Main {
 }
 '
   local output
-  output=$(run_nyash_vm -c "$script" 2>&1)
+  output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "A" "$output" "early_return_then"
 }
 

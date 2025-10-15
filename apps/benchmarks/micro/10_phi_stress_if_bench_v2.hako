@@ -1,0 +1,49 @@
+// PHI Stress If — 5 seconds fixed-time benchmark
+static box Main {
+    main() {
+        print("PHI Stress If Benchmark - 5 seconds")
+        print("")
+
+        local start_time
+        local end_time
+        local iterations
+        local elapsed_ms
+        local ops_per_sec
+        local us_per_op
+        local x
+        local i
+
+        start_time = TimerBox.now_ms()
+        end_time = start_time + 5000
+        iterations = 0
+        x = 0
+        i = 0
+
+        loop(TimerBox.now_ms() < end_time) {
+            // 8-way branch to stress PHI merge
+            if i % 8 == 0 { x = x + 1 }
+            else if i % 8 == 1 { x = x + 2 }
+            else if i % 8 == 2 { x = x + 3 }
+            else if i % 8 == 3 { x = x + 4 }
+            else if i % 8 == 4 { x = x + 5 }
+            else if i % 8 == 5 { x = x + 6 }
+            else if i % 8 == 6 { x = x + 7 }
+            else { x = x + 8 }
+
+            i = i + 1
+            iterations = iterations + 1
+        }
+
+        elapsed_ms = TimerBox.now_ms() - start_time
+        ops_per_sec = iterations * 1000 / elapsed_ms
+        us_per_op = elapsed_ms * 1000 / iterations
+
+        print("Iterations: " + iterations)
+        print("Elapsed: " + elapsed_ms + " ms")
+        print("Ops/sec: " + ops_per_sec)
+        print("µs/op: " + us_per_op)
+        print("Last x: " + x)
+
+        return 0
+    }
+}

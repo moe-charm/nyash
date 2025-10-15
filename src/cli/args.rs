@@ -29,22 +29,36 @@ pub fn build_command() -> Command {
         .about("🦀 Nyash Programming Language - Everything is Box in Rust! 🦀")
         .arg(Arg::new("dev").long("dev").help("Enable development defaults (AST using ON; Operator Boxes observe; safe diagnostics)").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("file").help("Nyash file to execute").value_name("FILE").index(1))
+        .arg(Arg::new("entry")
+            .long("entry")
+            .value_name("MODULE.FUNC")
+            .help("Specify entry function (e.g., Main.main). Overrides resolver defaults when provided."))
         .arg(Arg::new("macro-expand-child").long("macro-expand-child").value_name("FILE").help("Macro sandbox child: read AST JSON v0 from stdin, expand using Nyash macro file, write AST JSON v0 to stdout (PoC)"))
         .arg(Arg::new("dump-ast").long("dump-ast").help("Dump parsed AST and exit").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("dump-ast-json").long("dump-ast-json").help("Dump parsed AST as canonical JSON v0 and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-preexpand").long("macro-preexpand").help("Enable selfhost macro pre-expand").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-preexpand-auto").long("macro-preexpand-auto").help("Auto enable selfhost macro pre-expand").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-top-level-allow").long("macro-top-level-allow").help("Allow top-level macro usage").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-profile").long("macro-profile").value_name("{dev|ci-fast|strict}").help("Select macro profile"))
         .arg(Arg::new("dump-expanded-ast-json").long("dump-expanded-ast-json").help("Dump AST after macro expansion as JSON v0 and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-ctx-json").long("macro-ctx-json").value_name("JSON").help("Provide MacroCtx as JSON string for macro child routes"))
+        .arg(Arg::new("list-modules").long("list-modules").help("List discovered modules (dry-run) and exit").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("modules-show").long("modules-show").value_name("NAMESPACE").help("Show the module path for a specific namespace (dev aid)"))
+        .arg(Arg::new("modules-resolve").long("modules-resolve").value_name("FILE").help("Resolve a file under apps/ to its Dir-as-NS namespace (dev aid)"))
         .arg(Arg::new("gc").long("gc").value_name("{auto,rc+cycle,minorgen,stw,rc,off}").help("Select GC mode (default: rc+cycle)"))
         .arg(Arg::new("parser").long("parser").value_name("{rust|ny}").help("Choose parser: 'rust' (default) or 'ny' (direct v0 bridge)"))
         .arg(Arg::new("ny-parser-pipe").long("ny-parser-pipe").help("Read Ny JSON IR v0 from stdin and execute via MIR Interpreter").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("json-file").long("json-file").value_name("FILE").help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter"))
+        // Gate C (NyVM direct) — execute MIR(JSON) via Hakorune VM Core
+        .arg(Arg::new("nyvm-pipe").long("nyvm-pipe").help("Read MIR JSON (v0) from stdin and execute via Hakorune VM").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("nyvm-json-file").long("nyvm-json-file").value_name("FILE").help("Read MIR JSON (v0) from a file and execute via Hakorune VM"))
         .arg(Arg::new("emit-mir-json").long("emit-mir-json").value_name("FILE").help("Emit MIR JSON v0 to file and exit"))
+        .arg(Arg::new("emit-ast-json").long("emit-ast-json").value_name("FILE").help("Emit parsed AST as canonical JSON v0 to file and exit"))
         .arg(Arg::new("emit-exe").long("emit-exe").value_name("FILE").help("Emit native executable via ny-llvmc and exit"))
-        .arg(Arg::new("emit-exe-nyrt").long("emit-exe-nyrt").value_name("DIR").help("Directory containing libnyash_kernel.a (used with --emit-exe)"))
+        .arg(Arg::new("emit-exe-nyrt").long("emit-exe-nyrt").value_name("DIR").help("Directory containing libhako_kernel.a (or legacy libhako_kernel.a) used with --emit-exe"))
         .arg(Arg::new("emit-exe-libs").long("emit-exe-libs").value_name("FLAGS").help("Extra linker flags for ny-llvmc when emitting executable"))
+        .arg(Arg::new("which").long("which").value_name("TOOL").help("Resolve tool path (e.g., plugin-tester, llvm-harness) and exit"))
+        .arg(Arg::new("doctor-tools").long("doctor").value_name("tools").help("Run minimal tools doctor and exit").num_args(0..=1))
         .arg(Arg::new("stage3").long("stage3").help("Enable Stage-3 syntax acceptance for selfhost parser").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("ny-compiler-args").long("ny-compiler-args").value_name("ARGS").help("Pass additional args to selfhost child compiler"))
         .arg(Arg::new("using").long("using").value_name("NAME").help("Add a using directive to current session; repeat").action(clap::ArgAction::Append))
@@ -53,12 +67,12 @@ pub fn build_command() -> Command {
         .arg(Arg::new("test-filter").long("test-filter").value_name("SUBSTR").help("Only run tests whose name contains SUBSTR (with --run-tests)"))
         .arg(Arg::new("test-entry").long("test-entry").value_name("{wrap|override}").help("When --run-tests and a main exists: wrap or override") )
         .arg(Arg::new("test-return").long("test-return").value_name("{tests|original}").help("Harness return policy (tests or original)") )
-        .arg(Arg::new("dump-mir").long("dump-mir").help("Dump MIR instead of executing").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("dump-mir").long("dump-mir").help("Dump MIR (parser-only). Note: using statements are not resolved; prefer --emit-mir-json for files with using").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("verify").long("verify").help("Verify MIR integrity and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("mir-verbose").long("mir-verbose").help("Show verbose MIR output with statistics").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("mir-verbose-effects").long("mir-verbose-effects").help("Show per-instruction effect category").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("no-optimize").long("no-optimize").help("Disable MIR optimizer passes").action(clap::ArgAction::SetTrue))
-        .arg(Arg::new("backend").long("backend").value_name("BACKEND").help("Backend: vm (default), llvm, interpreter").default_value("vm"))
+        .arg(Arg::new("backend").long("backend").value_name("{nyvm|rust|llvm|vm|mir}")            .help("Select backend (aliases): nyvm→Hakorune VM (default), rust|vm→Rust VM, llvm→LLVM harness, mir→Mini‑VM")            .default_value("nyvm"))
         .arg(Arg::new("verbose").long("verbose").short('v').help("Verbose CLI output (sets NYASH_CLI_VERBOSE=1)").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("compile-wasm").long("compile-wasm").help("Compile to WebAssembly").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("compile-native").long("compile-native").help("Compile to native executable (AOT)").action(clap::ArgAction::SetTrue))
@@ -98,7 +112,7 @@ pub fn build_command() -> Command {
 pub fn from_matches(matches: &ArgMatches) -> CliConfig {
     if matches.get_flag("stage3") { std::env::set_var("NYASH_NY_COMPILER_STAGE3", "1"); }
     if let Some(a) = matches.get_one::<String>("ny-compiler-args") { std::env::set_var("NYASH_NY_COMPILER_CHILD_ARGS", a); }
-    let cfg = CliConfig {
+    let mut cfg = CliConfig {
         file: matches.get_one::<String>("file").cloned(),
         debug_fuel: parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap()),
         dump_ast: matches.get_flag("dump-ast"),
@@ -139,6 +153,8 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         parser_ny: matches.get_one::<String>("parser").map(|s| s == "ny").unwrap_or(false),
         ny_parser_pipe: matches.get_flag("ny-parser-pipe"),
         json_file: matches.get_one::<String>("json-file").cloned(),
+        nyvm_pipe: matches.get_flag("nyvm-pipe"),
+        nyvm_json_file: matches.get_one::<String>("nyvm-json-file").cloned(),
         build_path: matches.get_one::<String>("build").cloned(),
         build_app: matches.get_one::<String>("build-app").cloned(),
         build_out: matches.get_one::<String>("build-out").cloned(),
@@ -147,13 +163,39 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         build_target: matches.get_one::<String>("build-target").cloned(),
         cli_usings: matches.get_many::<String>("using").map(|v| v.cloned().collect()).unwrap_or_else(|| Vec::new()),
         emit_mir_json: matches.get_one::<String>("emit-mir-json").cloned(),
+        emit_ast_json: matches.get_one::<String>("emit-ast-json").cloned(),
         emit_exe: matches.get_one::<String>("emit-exe").cloned(),
         emit_exe_nyrt: matches.get_one::<String>("emit-exe-nyrt").cloned(),
         emit_exe_libs: matches.get_one::<String>("emit-exe-libs").cloned(),
         macro_expand_child: matches.get_one::<String>("macro-expand-child").cloned(),
         dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
+        dump_ast_json: matches.get_flag("dump-ast-json"),
         macro_ctx_json: matches.get_one::<String>("macro-ctx-json").cloned(),
+        entry: matches.get_one::<String>("entry").cloned(),
+        which_tool: matches.get_one::<String>("which").cloned(),
+        doctor_tools: matches.contains_id("doctor-tools"),
     };
+
+    // Backend normalization and env override (HAKO_BACKEND/NYASH_BACKEND)
+    let be_env = std::env::var("HAKO_BACKEND").ok().or_else(|| std::env::var("NYASH_BACKEND").ok());
+    if let Some(v) = be_env { cfg.backend = v; }
+    let backend_lc = cfg.backend.to_ascii_lowercase();
+    let norm = match backend_lc.as_str() {
+        // Selfhost Mini‑VM / MIR interpreter line
+        "nyvm" | "mini-vm" | "minivm" | "mir" | "interpreter" => "mir",
+        // Rust VM line (default practical backend)
+        "rust" | "vm" => "vm",
+        // LLVM harness / AOT line
+        "llvm" => "llvm",
+        other => {
+            // Keep unknown as-is; runner will Fail‑Fast with a clear message
+            other
+        }
+    };
+    cfg.backend = norm.to_string();
+    // Mirror normalized backend into NYASH_BACKEND (primary env used internally)
+    std::env::set_var("NYASH_BACKEND", &cfg.backend);
+
 
     if cfg.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
     if cfg.vm_stats { std::env::set_var("NYASH_VM_STATS", "1"); }
@@ -203,6 +245,16 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         }
     }
 
+    if matches.get_flag("list-modules") {
+        std::env::set_var("NYASH_LIST_MODULES", "1");
+    }
+    if let Some(ns) = matches.get_one::<String>("modules-show") {
+        std::env::set_var("NYASH_MODULES_SHOW_NS", ns);
+    }
+    if let Some(file) = matches.get_one::<String>("modules-resolve") {
+        std::env::set_var("NYASH_MODULES_RESOLVE_FILE", file);
+    }
+
     // --dev flag (or NYASH_DEV=1) enables safe development defaults
     // - AST using ON (NYASH_USING_AST=1)
     // - Operator Boxes observe ON (Stringify/Compare/Add) and prelude injection (NYASH_OPERATOR_BOX_ALL=1)
@@ -214,10 +266,8 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         // AST prelude merge
         std::env::set_var("NYASH_USING_AST", "1");
         // Using grammar is mainline; keep explicit enable for clarity (default is ON; this makes intent obvious in dev)
-        std::env::set_var("NYASH_ENABLE_USING", "1");
-        // Allow top-level main resolution in dev for convenience (prod default remains OFF)
-        std::env::set_var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN", "1");
-        // Ensure project root is available for prelude injection
+        std::env::set_var("NYASH_USING", "1");
+        // Allow top-level main resolution in dev for convenience (prod default remains OFF)                // Ensure project root is available for prelude injection
         if std::env::var("NYASH_ROOT").is_err() {
             if let Ok(cwd) = std::env::current_dir() {
                 std::env::set_var("NYASH_ROOT", cwd.display().to_string());
@@ -233,6 +283,19 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         std::env::set_var("NYASH_OPERATOR_BOX_ADD_ADOPT", "1");
         // VM: tolerate Void/BoxRef(VoidBox) in comparisons/binops (dev-only guard)
         std::env::set_var("NYASH_VM_TOLERATE_VOID", "1");
+        // Dev safety: cap VM instruction/block execution to prevent infinite loops
+        // Only set when unset so explicit env/CI remains authoritative.
+        let vm_fuel_missing_or_empty = std::env::var("NYASH_VM_MAX_INSTRUCTIONS").ok().map(|v| v.trim().is_empty()).unwrap_or(true);
+        if vm_fuel_missing_or_empty {
+            if let Some(fuel) = cfg.debug_fuel { std::env::set_var("NYASH_VM_MAX_INSTRUCTIONS", fuel.to_string()); }
+        }
+        let bb_fuel_missing_or_empty = std::env::var("NYASH_VM_MAX_BLOCK_EXEC").ok().map(|v| v.trim().is_empty()).unwrap_or(true);
+        if bb_fuel_missing_or_empty {
+            // Reasonable default aligned with smokes to detect tight loops per BB
+            std::env::set_var("NYASH_VM_MAX_BLOCK_EXEC", "200000");
+        }
+        // Bridge: JSON dev marker for Ny-side Diagnostics (FlowRunner/HakoruneVmMin)
+        std::env::set_var("NYASH_DEV_JSON_MARKER", "1");
         // Builder-call ALL is still OFF here to keep MIR shape stable.
     }
 

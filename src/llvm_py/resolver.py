@@ -93,6 +93,22 @@ class Resolver:
 
         # Do not trust global vmap across blocks unless we know it's defined in this block.
 
+        # Fast-path: if this block has an i64 plan for the value (precomputed from const/copy),
+        # return the constant immediately to prevent 0-fallback for out-of-order definitions.
+        try:
+            bid_fast = int(str(current_block.name).replace('bb',''))
+        except Exception:
+            bid_fast = None
+        try:
+            if bid_fast is not None and hasattr(self, 'block_i64_plan') and isinstance(self.block_i64_plan, dict):
+                plan = self.block_i64_plan.get(int(bid_fast), {}) or {}
+                if isinstance(plan, dict) and int(value_id) in plan:
+                    c = ir.Constant(self.i64, int(plan[int(value_id)]))
+                    self.i64_cache[cache_key] = c
+                    return c
+        except Exception:
+            pass
+
         # If this block has a declared MIR PHI for the value, prefer that placeholder
         # and avoid creating any PHI here. Incoming is wired by finalize_phis().
         try:
@@ -162,16 +178,27 @@ class Resolver:
             # Entry block or no predecessors: prefer local vmap value (already dominating)
             base_val = vmap.get(value_id)
             if base_val is None:
-                result = ir.Constant(self.i64, 0)
+                # Try planned i64 value for this block (const/copy lookahead)
+                plan_val = None
+                try:
+                    if bid_fast is not None and hasattr(self, 'block_i64_plan') and isinstance(self.block_i64_plan, dict):
+                        _p = self.block_i64_plan.get(int(bid_fast), {}) or {}
+                        if isinstance(_p, dict) and int(value_id) in _p:
+                            plan_val = int(_p[int(value_id)])
+                except Exception:
+                    plan_val = None
+                result = ir.Constant(self.i64, int(plan_val)) if plan_val is not None else ir.Constant(self.i64, 0)
                 trace_phi(f"[resolve] bb{bid} v{value_id} entry/no-preds → 0")
             else:
-                # If pointer string, box to handle in current block (use local builder)
-                if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
-                    pb = ir.IRBuilder(current_block)
+                # Insert coercions at the current insertion point to preserve dominance
+                b = self.builder if getattr(self, 'builder', None) is not None else ir.IRBuilder(current_block)
+                if getattr(self, 'builder', None) is None:
                     try:
-                        pb.position_at_start(current_block)
+                        b.position_at_start(current_block)
                     except Exception:
                         pass
+                # If pointer string, box to handle in current block (use local builder)
+                if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
                     i8p = ir.IntType(8).as_pointer()
                     v = base_val
                     try:
@@ -181,15 +208,22 @@ class Resolver:
                     except Exception:
                         pass
                     # declare and call boxer
-                    for f in self.module.functions:
+                    box_from = None
+                    for f in getattr(self.module, 'functions', []):
                         if f.name == 'nyash.box.from_i8_string':
                             box_from = f
                             break
-                    else:
+                    if box_from is None:
                         box_from = ir.Function(self.module, ir.FunctionType(self.i64, [i8p]), name='nyash.box.from_i8_string')
                     result = pb.call(box_from, [v], name=f"res_ptr2h_{value_id}")
                 elif hasattr(base_val, 'type') and isinstance(base_val.type, ir.IntType):
-                    result = base_val if base_val.type.width == 64 else ir.Constant(self.i64, 0)
+                    # Coerce integer width to i64 (zext/trunc as needed)
+                    if int(getattr(base_val.type, 'width', 64)) < 64:
+                        result = b.zext(base_val, self.i64, name=f"res_zext_{value_id}")
+                    elif int(getattr(base_val.type, 'width', 64)) > 64:
+                        result = b.trunc(base_val, self.i64, name=f"res_trunc_{value_id}")
+                    else:
+                        result = base_val
                 else:
                     result = ir.Constant(self.i64, 0)
         elif len(pred_ids) == 1:
@@ -215,17 +249,103 @@ class Resolver:
             except Exception:
                 declared = False
             if declared:
-                # Return existing placeholder if present; do not create a new PHI here.
-                trace_phi(f"[resolve] use placeholder PHI: bb{cur_bid} v{value_id}")
-                placeholder = vmap.get(value_id)
+                # Prefer registry/vmap placeholder at the head of this block
+                trace_phi(f"[resolve] declared PHI preferred: bb{cur_bid} v{value_id}")
+                placeholder = None
+                try:
+                    from phi_wiring.registry import PhiRegistry
+                    owner = getattr(self, '_owner_builder', None)
+                    placeholder = PhiRegistry.get(owner, int(cur_bid), int(value_id)) if owner is not None else None
+                except Exception:
+                    placeholder = None
+                if placeholder is None:
+                    placeholder = vmap.get(value_id)
                 if (placeholder is None or not hasattr(placeholder, 'add_incoming')) and hasattr(self, 'global_vmap') and isinstance(self.global_vmap, dict):
                     cand = self.global_vmap.get(value_id)
                     if cand is not None and hasattr(cand, 'add_incoming'):
                         placeholder = cand
+                # If still missing, create a head PHI so finalize can wire it
+                if (placeholder is None or not hasattr(placeholder, 'add_incoming')) and bb_map is not None:
+                    try:
+                        from phi_wiring.registry import PhiRegistry
+                        bb = bb_map.get(int(cur_bid))
+                        owner = getattr(self, '_owner_builder', None)
+                        if bb is not None and owner is not None:
+                            placeholder = PhiRegistry.ensure(owner, int(cur_bid), int(value_id), bb)
+                    except Exception:
+                        placeholder = None
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
-                # No declared PHI and multi-pred: do not synthesize; fallback to zero
-                result = ir.Constant(self.i64, 0)
+                # 箱理論: vmapに既にPHIが存在する場合は、それを使用（PhiHandlerからの重複回避）
+                existing_phi = vmap.get(value_id)
+                if existing_phi is not None and hasattr(existing_phi, 'add_incoming'):
+                    trace_phi(f"[resolve] use existing PHI from vmap: bb{cur_bid} v{value_id}")
+                    result = existing_phi
+                    return result
+
+                # No declared PHI and multi-pred: optionally synthesize a local PHI at the head of the block
+                # using end-of-block snapshots from predecessors.
+                # Gate by NYASH_LLVM_SYNTH_LOCAL_PHI (default off when NYASH_LLVM_PHI_STRICT=1).
+                # 既定はOFF（PHIは PhiHandler/ensure_phi で先頭に作成）。
+                # 明示 `NYASH_LLVM_SYNTH_LOCAL_PHI=1` でのみ局所合成を許可。
+                allow_synth = False
+                try:
+                    allow_env = os.environ.get('NYASH_LLVM_SYNTH_LOCAL_PHI')
+                    allow_synth = (allow_env == '1')
+                except Exception:
+                    allow_synth = False
+                if not allow_synth:
+                    trace_phi(f"[resolve] skip synth local PHI (strict): bb{cur_bid} v{value_id}")
+                    # Best-effort: use first predecessor end value or zero
+                    try:
+                        if pred_ids:
+                            result = self._value_at_end_i64(value_id, pred_ids[0], preds, block_end_values, vmap, bb_map)
+                        else:
+                            result = ir.Constant(self.i64, 0)
+                    except Exception:
+                        result = ir.Constant(self.i64, 0)
+                    self.i64_cache[cache_key] = result
+                    return result
+                try:
+                    # Create PHI at block head
+                    head_builder = ir.IRBuilder(current_block)
+                    try:
+                        head_builder.position_at_start(current_block)
+                    except Exception:
+                        pass
+                    phi = head_builder.phi(self.i64, name=f"phi_loc_{value_id}")
+                    # Add incoming values from each predecessor
+                    incomings = []
+                    for p in pred_ids:
+                        v_end = self._value_at_end_i64(value_id, p, preds, block_end_values, vmap, bb_map)
+                        # Resolve predecessor basic block
+                        bbpred = None
+                        try:
+                            if bb_map is not None:
+                                bbpred = bb_map.get(int(p))
+                        except Exception:
+                            bbpred = None
+                        if bbpred is None:
+                            # Cannot resolve predecessor; coerce to zero to keep IR valid
+                            v_end = ir.Constant(self.i64, 0)
+                        incomings.append((v_end, bbpred))
+                    # Filter out any missing predecessor blocks (should be rare)
+                    incomings = [(v, b) for (v, b) in incomings if b is not None]
+                    if len(incomings) == 0:
+                        result = ir.Constant(self.i64, 0)
+                    else:
+                        for (v, b) in incomings:
+                            phi.add_incoming(v, b)
+                        trace_phi(f"[resolve] synth local PHI: bb{cur_bid} v{value_id} preds={pred_ids}")
+                        # Update local map to dominate subsequent users in this block
+                        try:
+                            vmap[value_id] = phi
+                        except Exception:
+                            pass
+                        result = phi
+                except Exception:
+                    # Fallback to zero on any error to keep IR generation robust in dev
+                    result = ir.Constant(self.i64, 0)
         
         # Cache and return
         self.i64_cache[cache_key] = result
@@ -303,6 +423,25 @@ class Resolver:
             coerced = self._coerce_in_block_to_i64(val, block_id, bb_map)
             self._end_i64_cache[key] = coerced
             return coerced
+
+        # Fallback: if snapshot not yet available (ordering) but a PHI or SSA for value_id
+        # is present in the global vmap and belongs to this predecessor block, reuse it.
+        try:
+            gv = vmap.get(value_id)
+        except Exception:
+            gv = None
+        if gv is not None:
+            try:
+                is_phi = hasattr(gv, 'add_incoming')
+                belongs_here = (
+                    getattr(getattr(gv, 'basic_block', None), 'name', None) == f"bb{block_id}"
+                )
+            except Exception:
+                is_phi = False
+                belongs_here = False
+            if is_phi and belongs_here:
+                self._end_i64_cache[key] = gv
+                return gv
 
         # Try recursively from predecessors
         pred_ids = [p for p in preds.get(block_id, []) if p != block_id]

@@ -350,6 +350,7 @@ impl NyashValue {
     /// Convert back to a legacy NyashBox for compatibility
     pub fn to_box(&self) -> Result<Arc<Mutex<dyn NyashBox>>, String> {
         use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::null_box::NullBox;
 
         match self {
@@ -360,7 +361,10 @@ impl NyashValue {
             }
             NyashValue::Bool(b) => Ok(Arc::new(Mutex::new(BoolBox::new(*b)))),
             NyashValue::String(s) => Ok(Arc::new(Mutex::new(StringBox::new(s.clone())))),
+            #[cfg(feature = "legacy-boxes")]
             NyashValue::Null => Ok(Arc::new(Mutex::new(NullBox::new()))),
+            #[cfg(not(feature = "legacy-boxes"))]
+            NyashValue::Null => Ok(Arc::new(Mutex::new(VoidBox::new()))),
             NyashValue::Void => Ok(Arc::new(Mutex::new(VoidBox::new()))),
             NyashValue::Box(b) => Ok(b.clone()),
             NyashValue::WeakBox(weak_ref) => {

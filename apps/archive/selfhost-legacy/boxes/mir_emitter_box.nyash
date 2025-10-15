@@ -1,0 +1,50 @@
+// MirEmitterBox — Minimal MIR JSON v0 emitter (M2 MVP)
+// Scope: Return(Int) only (const + ret). Safe default to 0 when not found.
+// Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
+
+static box MirEmitterBox {
+
+  // Build minimal MIR JSON v0: main with const -> ret
+  emit_mir_min(ast_json) {
+    // Inline minimal Return(Int) extraction
+    local retv = 0
+    if ast_json != null {
+      local p = ast_json.lastIndexOf("\"type\":\"Return\"")
+      if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
+      if p >= 0 {
+        local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
+        if q >= 0 {
+          q = q + 23
+          local n = ast_json.size()
+          local i = q
+          local s2 = ""
+          loop(i < n) {
+            local ch = ast_json.substring(i, i+1)
+            if ch >= "0" && ch <= "9" { s2 = s2 + ch i = i + 1 } else { break }
+          }
+          if s2.size() > 0 {
+            // fast int parse
+            local k = 0
+            local acc = 0
+            local m = s2.size()
+            loop(k < m) {
+              local d = s2.substring(k, k+1)
+              local dv = 0
+              if d == "1" { dv = 1 } else { if d == "2" { dv = 2 } else { if d == "3" { dv = 3 } else { if d == "4" { dv = 4 } else { if d == "5" { dv = 5 } else { if d == "6" { dv = 6 } else { if d == "7" { dv = 7 } else { if d == "8" { dv = 8 } else { if d == "9" { dv = 9 } } } } } } } } }
+              acc = acc * 10 + dv
+              k = k + 1
+            }
+            retv = acc
+          }
+        }
+      }
+    }
+    local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
+    s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + retv + "},\\\"dst\\\":1},"
+    s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":1}"
+    s = s + "]}]}]}"
+    return s
+  }
+}
+
+static box MirEmitterStub { main(args) { return 0 } }

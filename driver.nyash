@@ -1,0 +1,12 @@
+function fib(n) {
+  if (n < 2) { return n }
+  local a = fib(n - 1)
+  local b = fib(n - 2)
+  return a + b
+}
+
+function main() {
+  local v = fib(10)
+  if (v == 55) { print("ok") } else { print("ng") }
+  return 0
+}

@@ -1,32 +1,18 @@
-Minimal JSON Builder (selfhost-only)
+Mir JSON Builders (selfhost)
 
-Scope
-- This directory provides a tiny, selfhost-only JSON string builder focused on MIR(JSON v0) scaffolds.
-- Goal: eliminate fragile string concatenation and escaping issues in tests and selfhost drivers.
+Overview
+- `mir_builder_min.hako` (static API): 既存の最小 Builder（引数で状態 `st` を持ち回る）。
+- `mir_builder2.hako` (instance API): 新規の回避 Builder（内部に状態 `me.st` を保持）。
 
-Policy
-- Builder is minimal and local to selfhost; it does not change core runtime or public specs.
-- Fail-Fast: avoid silent fallbacks; prefer well-formed output or explicit early errors in the builder.
+Why two builders?
+- 現在、言語ランタイム側の不具合により「static box メソッドの第1引数が消失する」ケースを確認しています。
+- その影響で、`start_module(st)` のような「状態を第1引数に取る」API が失敗します。
+- 当面は instance API の `MirJsonBuilder2` を使用すると安全に動きます（内部状態のみで動作）。
 
-Usage (pipeline-friendly)
-- Enable syntax sugar if needed: NYASH_SYNTAX_SUGAR_LEVEL=basic|full
-- Example:
-  using selfhost.common.json.mir_builder_min as Mb
-  using selfhost.vm.mir_min as MirVmMin
+Migration
+- emit 系の Box からは `MirJsonBuilder2` を呼び出してください。
+- ランタイム側の修正が入り次第、`mir_builder_min.hako` へ段階的に戻す（あるいは一本化）予定です。
 
-  static box Main {
-    main() {
-      local j = Mb.new()
-        |> Mb.start_module()
-        |> Mb.start_function("main")
-        |> Mb.start_block(0)
-        |> Mb.add_const(1, 5)
-        |> Mb.add_const(2, 4)
-        |> Mb.add_compare("Gt", 1, 2, 3)
-        |> Mb.add_ret(3)
-        |> Mb.end_all()
-        |> Mb.to_string()
-      return MirVmMin.run(j)
-    }
-  }
+Notes
+- どちらの Builder も「構造配列（blocks/instructions）→文字列」の `to_string_rebuild()` を既定とし、逐次出力は開発用に留めます。
 

@@ -31,7 +31,7 @@ box MyBox {
 }
 EOF
 
-output=$(run_nyash_vm driver.nyash --dev)
+output=$(run_nyash_vm driver.nyash --dev | grep -v '^Result: ')
 output=$(echo "$output" | tail -n 2 | tr -d '\r' )
 expected=$'ok1\nok2'
 if compare_outputs "$expected" "$output" "userbox_birth_to_string_vm"; then

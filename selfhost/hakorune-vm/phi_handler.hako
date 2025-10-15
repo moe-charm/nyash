@@ -1,0 +1,234 @@
+// phi_handler.hako — Phase 1 Day 3: Phi命令処理
+// Strategy: 箱化モジュール化 - PHI merge を分離
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/vm/boxes/result_box.hako" as Result
+
+static box PhiHandlerBox {
+  // Execute PHI instructions at block start
+  // PHI instructions merge values from different predecessor blocks
+  // predecessor: block_id of the block we came from (or -1 if entry block)
+  handle_phi_instructions(block_json, regs, predecessor) {
+    // Find instructions array
+    local key_insts = "\"instructions\":["
+    local insts_start = block_json.indexOf(key_insts)
+    if insts_start < 0 {
+      // No instructions array (empty block)
+      return Result.Ok(0)
+    }
+    insts_start = insts_start + key_insts.size()
+
+    // Find instructions array end
+    local insts_end = JsonCursorBox.seek_array_end(block_json, insts_start - 1)
+    if insts_end < 0 {
+      return Result.Err("phi: instructions array end not found")
+    }
+
+    local insts_json = block_json.substring(insts_start, insts_end)
+
+    // Scan for PHI instructions
+    local pos = 0
+    local len = insts_json.size()
+
+    loop(pos < len) {
+      // Skip whitespace and comma
+      local ch = insts_json.substring(pos, pos + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" || ch == "," {
+        pos = pos + 1
+        continue
+      }
+
+      // Find instruction object
+      if ch == "{" {
+        local inst_end = JsonCursorBox.seek_obj_end(insts_json, pos)
+        if inst_end < 0 {
+          return Result.Err("phi: instruction object end not found")
+        }
+
+        local inst_json = insts_json.substring(pos, inst_end + 1)
+
+        // Check if this is a PHI instruction
+        if inst_json.indexOf("\"op\":\"phi\"") >= 0 {
+          local result = me._handle_single_phi(inst_json, regs, predecessor)
+          if result.is_Err() {
+            return result
+          }
+        }
+
+        pos = inst_end + 1
+        continue
+      }
+
+      // Skip other characters
+      pos = pos + 1
+    }
+
+    return Result.Ok(0)
+  }
+
+  // Handle a single PHI instruction
+  _handle_single_phi(inst_json, regs, predecessor) {
+    // Extract dst
+    local key_dst = "\"dst\":"
+    local dst_start = inst_json.indexOf(key_dst)
+    if dst_start < 0 {
+      return Result.Err("phi: dst not found")
+    }
+    dst_start = dst_start + key_dst.size()
+
+    local dst_digits = StringHelpers.read_digits(inst_json, dst_start)
+    if dst_digits == "" {
+      return Result.Err("phi: invalid dst")
+    }
+
+    local dst_id = StringHelpers.to_i64(dst_digits)
+
+    // Extract inputs array
+    local key_inputs = "\"inputs\":["
+    local inputs_start = inst_json.indexOf(key_inputs)
+    if inputs_start < 0 {
+      return Result.Err("phi: inputs not found")
+    }
+    inputs_start = inputs_start + key_inputs.size()
+
+    local inputs_end = JsonCursorBox.seek_array_end(inst_json, inputs_start - 1)
+    if inputs_end < 0 {
+      return Result.Err("phi: inputs array end not found")
+    }
+
+    local inputs_json = inst_json.substring(inputs_start, inputs_end)
+
+    // Find the value for the given predecessor
+    local value_id = me._find_phi_value(inputs_json, predecessor)
+    if value_id < 0 {
+      // Predecessor not found in inputs → use default value 0
+      // (This can happen for unreachable blocks)
+      regs.set(StringHelpers.int_to_str(dst_id), 0)
+      return Result.Ok(0)
+    }
+
+    // Load value from register (get() -> null if missing)
+    local value_key = StringHelpers.int_to_str(value_id)
+    local value = regs.get(value_key)
+    if value == null {
+      value = 0
+    }
+
+    // Store in dst register
+    regs.set(StringHelpers.int_to_str(dst_id), value)
+
+    return Result.Ok(0)
+  }
+
+  // Find value_id for the given predecessor in PHI inputs
+  // inputs_json: "[[0, 1], [2, 3]]" format
+  // Returns: value_id or -1 if not found
+  _find_phi_value(inputs_json, predecessor) {
+    local pos = 0
+    local len = inputs_json.size()
+
+    loop(pos < len) {
+      // Skip whitespace and comma
+      local ch = inputs_json.substring(pos, pos + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" || ch == "," {
+        pos = pos + 1
+        continue
+      }
+
+      // Find pair array
+      if ch == "[" {
+        local pair_end = me._find_array_end(inputs_json, pos)
+        if pair_end < 0 {
+          return -1
+        }
+
+        local pair_json = inputs_json.substring(pos + 1, pair_end)
+
+        // Parse [block_id, value_id]
+        local comma_pos = pair_json.indexOf(",")
+        if comma_pos < 0 {
+          pos = pair_end + 1
+          continue
+        }
+
+        local block_str = pair_json.substring(0, comma_pos)
+        local value_str = pair_json.substring(comma_pos + 1, pair_json.size())
+
+        // Trim whitespace
+        block_str = me._trim(block_str)
+        value_str = me._trim(value_str)
+
+        local block_id = StringHelpers.to_i64(block_str)
+
+        if block_id == predecessor {
+          return StringHelpers.to_i64(value_str)
+        }
+
+        pos = pair_end + 1
+        continue
+      }
+
+      // Skip other characters
+      pos = pos + 1
+    }
+
+    return -1
+  }
+
+  // Helper: find array end
+  _find_array_end(json, start) {
+    local depth = 0
+    local pos = start
+    local len = json.size()
+
+    loop(pos < len) {
+      local ch = json.substring(pos, pos + 1)
+
+      if ch == "[" {
+        depth = depth + 1
+      }
+
+      if ch == "]" {
+        depth = depth - 1
+        if depth == 0 {
+          return pos
+        }
+      }
+
+      pos = pos + 1
+    }
+
+    return -1
+  }
+
+  // Helper: trim whitespace
+  _trim(str) {
+    local start = 0
+    local len = str.size()
+
+    // Trim start
+    loop(start < len) {
+      local ch = str.substring(start, start + 1)
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" {
+        start = start + 1
+        continue
+      }
+      break
+    }
+
+    // Trim end
+    local end = len
+    loop(end > start) {
+      local ch = str.substring(end - 1, end)
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" {
+        end = end - 1
+        continue
+      }
+      break
+    }
+
+    return str.substring(start, end)
+  }
+}

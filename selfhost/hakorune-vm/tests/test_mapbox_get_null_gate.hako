@@ -1,0 +1,14 @@
+// Purpose: MapBox.get(missing) must return null (default behavior)
+
+static box Main {
+  main() {
+    local m = new MapBox()
+    local v = m.get("missing")
+    if v == null {
+      print("OK: get(missing) -> null")
+      return 0
+    }
+    print("FAIL: expected null; got: " + v)
+    return 1
+  }
+}

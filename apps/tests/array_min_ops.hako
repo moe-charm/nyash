@@ -1,0 +1,15 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local a = new ArrayBox()
+    a.push(10)
+    a.push(20)
+    console.println("alen=" + a.size())
+    console.println("g0=" + a.get(0))
+    console.println("g1=" + a.get(1))
+    a.set(1, 30)
+    console.println("g1b=" + a.get(1))
+    return 0
+  }
+}
+

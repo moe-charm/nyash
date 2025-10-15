@@ -4,16 +4,14 @@
  * SSA-form instructions with effect tracking for optimization
  */
 
-use super::{Effect, EffectMask, ValueId};
+use super::{EffectMask, ValueId};
 use crate::mir::definitions::Callee;  // Import Callee from unified definitions
 use crate::mir::types::{
     BarrierOp, BinaryOp, CompareOp, ConstValue, MirType, TypeOpKind, UnaryOp, WeakRefOp,
 };
 
-use std::fmt;
 
 // Kind-specific metadata (non-functional refactor scaffolding)
-use crate::mir::instruction_kinds as inst_meta;
 
 /// MIR instruction types - limited to 20 core instructions
 #[derive(Debug, Clone, PartialEq)]
@@ -67,7 +65,7 @@ pub enum MirInstruction {
     ///
     /// Phase 1 Migration: Both func and callee fields present
     /// - callee: Some(_) -> Use new type-safe resolution (preferred)
-    /// - callee: None -> Fall back to legacy string-based resolution
+    /// Note: `callee` is set for all builder-emitted calls. The deprecated legacy mode with `callee: None` is no longer used in the builder.
     Call {
         dst: Option<ValueId>,
         func: ValueId,              // Legacy: string-based resolution (deprecated)
@@ -102,15 +100,6 @@ pub enum MirInstruction {
         effects: EffectMask,
     },
 
-    /// Plugin invocation (forces plugin path; no builtin fallback)
-    /// `%dst = plugin_invoke %box.method(%args...)`
-    PluginInvoke {
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: String,
-        args: Vec<ValueId>,
-        effects: EffectMask,
-    },
 
     // === Control Flow ===
     /// Conditional branch
@@ -144,6 +133,10 @@ pub enum MirInstruction {
         dst: ValueId,
         box_type: String,
         args: Vec<ValueId>,
+        /// Optional fully-qualified birth name (e.g., "Class.birth/N").
+        /// When present, backends may invoke birth immediately after allocation
+        /// (C++-style constructor semantics).
+        auto_birth: Option<String>,
     },
 
     /// Check Box type
@@ -174,21 +167,6 @@ pub enum MirInstruction {
     },
 
     // === Array Operations ===
-    /// Get array element
-    /// `%dst = %array[%index]`
-    ArrayGet {
-        dst: ValueId,
-        array: ValueId,
-        index: ValueId,
-    },
-
-    /// Set array element
-    /// `%array[%index] = %value`
-    ArraySet {
-        array: ValueId,
-        index: ValueId,
-        value: ValueId,
-    },
 
     // === Special Operations ===
     /// Copy a value (for optimization passes)
@@ -231,21 +209,6 @@ pub enum MirInstruction {
     /// `%dst = ref_new %box`
     RefNew { dst: ValueId, box_val: ValueId },
 
-    /// Get/dereference a Box field through reference
-    /// `%dst = ref_get %ref.field`
-    RefGet {
-        dst: ValueId,
-        reference: ValueId,
-        field: String,
-    },
-
-    /// Set/assign Box field through reference
-    /// `ref_set %ref.field = %value`
-    RefSet {
-        reference: ValueId,
-        field: String,
-        value: ValueId,
-    },
 
     /// Create a weak reference to a Box
     /// `%dst = weak_new %box`
@@ -289,16 +252,7 @@ pub enum MirInstruction {
     /// `%dst = await %future`
     Await { dst: ValueId, future: ValueId },
 
-    // === Phase 9.7: External Function Calls (Box FFI/ABI) ===
-    /// External function call through Box FFI/ABI
-    /// `%dst = extern_call interface.method(%args...)`
-    ExternCall {
-        dst: Option<ValueId>,
-        iface_name: String,  // e.g., "env.console"
-        method_name: String, // e.g., "log"
-        args: Vec<ValueId>,
-        effects: EffectMask,
-    },
+    // (ExternCall retired) — use Call with callee=Extern("iface.method")
 }
 
 

@@ -1,0 +1,7 @@
+static box Main {
+    main() {
+        local s = new StringBox("12")
+        print("x = " + s)
+        return 0
+    }
+}

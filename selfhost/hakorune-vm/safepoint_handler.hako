@@ -1,0 +1,14 @@
+// SafepointHandlerBox - GC Safepoint instruction handler
+// Handles: safepoint (GC coordination point, no-op in Phase 1)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+
+static box SafepointHandlerBox {
+  // Handle safepoint instruction
+  // inst_json: {"op":"safepoint"}
+  // Returns: Result.Ok(0) always
+  // Phase 1: No-op (GC not implemented yet)
+  handle(inst_json, regs, mem) {
+    return Result.Ok(0)
+  }
+}

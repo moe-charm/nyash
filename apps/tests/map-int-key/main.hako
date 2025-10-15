@@ -1,0 +1,11 @@
+// MapBox int-key support smoke
+static box Main {
+  main() {
+    local m = new MapBox()
+    m.set(1, 42)
+    local v = m.get(1)
+    if v == 42 { return 0 }
+    return 1
+  }
+}
+

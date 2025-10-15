@@ -1,0 +1,52 @@
+#!/bin/bash
+# selfhost_mir_m2_multi_compare_gt_last_ret_vm.sh — Multi-compare (v0/v1 mix); last Gt decides (expect 1)
+# tags: selfhost
+
+source "$(dirname "$0")/../../../lib/test_runner.sh"
+export SMOKES_USE_PYVM=0
+export SMOKES_DISABLE_PLUGIN_CHECKS=1
+export NYASH_DISABLE_PLUGINS=1
+export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-25}
+require_env || exit 2
+preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
+if [ "${SMOKES_SELFHOST_M2M3_ENABLE:-0}" != "1" ]; then test_skip "selfhost M2/M3 gated (set SMOKES_SELFHOST_M2M3_ENABLE=1)"; exit 0; fi
+
+export NYASH_DEV=1
+export NYASH_ALLOW_USING_FILE=1
+
+TMP_DIR="/tmp/selfhost_mir_m2_multi_compare_gt_last_ret_vm_$$"
+mkdir -p "$TMP_DIR"
+
+cat > "$TMP_DIR/driver.nyash" << 'EOF'
+using selfhost.vm.entry as MiniVmEntryBox
+
+static box Main {
+  main() {
+    // Block 0: const 3 -> r1, const 3 -> r2, Eq(r1,r2)->r3 (1)
+    //          compare v1 Ne(1,2)->r4 (1), compare v0 Lt(2,1)->r5 (0)
+    //          final compare Gt(5,4)->r6 (1); ret r6 => 1
+    local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
+    j = j + "{\"id\":0,\"instructions\":["
+    j = j + "{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":3}},"
+    j = j + "{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":3}},"
+    j = j + "{\"op\":\"compare\",\"dst\":3,\"cmp\":\"Eq\",\"lhs\":1,\"rhs\":2},"
+    j = j + "{\"op\":\"compare\",\"dst\":4,\"operation\":\"!=\",\"lhs\":1,\"rhs\":2},"
+    j = j + "{\"op\":\"compare\",\"dst\":5,\"cmp\":\"Lt\",\"lhs\":2,\"rhs\":1},"
+    j = j + "{\"op\":\"const\",\"dst\":7,\"value\":{\"type\":\"i64\",\"value\":5}},"
+    j = j + "{\"op\":\"const\",\"dst\":8,\"value\":{\"type\":\"i64\",\"value\":4}},"
+    j = j + "{\"op\":\"compare\",\"dst\":6,\"cmp\":\"Gt\",\"lhs\":7,\"rhs\":8},"
+    j = j + "{\"op\":\"ret\",\"value\":6}]}]}]}"
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
+    return 0
+  }
+}
+EOF
+
+out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
+expected="1"
+compare_outputs "$expected" "$out" "selfhost_mir_m2_multi_compare_gt_last_ret_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
+
+rm -rf "$TMP_DIR"
+exit 0

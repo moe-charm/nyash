@@ -1,6 +1,6 @@
 use crate::mir::builder::MirBuilder;
 use crate::mir::{ValueId, Callee};
-use std::collections::HashMap;
+use crate::common::trace_box::TraceBox;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum LocalKind {
@@ -30,25 +30,29 @@ impl LocalKind {
 /// Always emits a Copy in the current block when not cached.
 pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId {
     let bb_opt = builder.current_block;
+    TraceBox::local_ssa(|| format!("[local-ssa] ensure ENTRY bb_opt={:?} kind={:?} v=%{}", bb_opt, kind, v.0));
     if let Some(bb) = bb_opt {
-        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[local-ssa] ensure bb={:?} kind={:?} v=%{}", bb, kind, v.0);
-        }
+        TraceBox::local_ssa(|| format!("[local-ssa] ensure bb={:?} kind={:?} v=%{}", bb, kind, v.0));
         let key = (bb, v, kind.tag());
         if let Some(&loc) = builder.local_ssa_map.get(&key) {
             return loc;
         }
         let loc = builder.value_gen.next();
-        // Best-effort: errors are propagated by caller; we ignore here to keep helper infallible
-        let _ = builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: v });
-        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[local-ssa] copy  bb={:?} kind={:?} %{} -> %{}", bb, kind, v.0, loc.0);
+        // Best-effort: errors are propagated by caller; we log but ignore to keep helper infallible
+        TraceBox::local_ssa(|| {
+            let fn_name = builder.current_function.as_ref().map(|f| f.signature.name.as_str()).unwrap_or("<none>");
+            format!("[local-ssa] BEFORE emit_instruction fn={} current_block={:?} target_bb={:?}", fn_name, builder.current_block, bb)
+        });
+        if let Err(e) = builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: v }) {
+            TraceBox::local_ssa(|| format!("[local-ssa] FAILED copy bb={:?} kind={:?} %{} -> %{} error={}", bb, kind, v.0, loc.0, e));
+        } else {
+            TraceBox::local_ssa(|| format!("[local-ssa] copy  bb={:?} kind={:?} %{} -> %{}", bb, kind, v.0, loc.0));
         }
         if let Some(t) = builder.value_types.get(&v).cloned() {
             builder.value_types.insert(loc, t);
         }
-        if let Some(cls) = builder.value_origin_newbox.get(&v).cloned() {
-            builder.value_origin_newbox.insert(loc, cls);
+        if let Some(cls) = builder.origin_get(v).map(|s| s.to_string()) {
+            builder.origin_register(loc, cls);
         }
         builder.local_ssa_map.insert(key, loc);
         loc
@@ -88,8 +92,10 @@ pub fn finalize_callee_and_args(builder: &mut MirBuilder, callee: &mut Callee, a
                 }
             }
         }
-        let r_local = recv(builder, r);
-        *callee = Callee::Method { box_name, method, receiver: Some(r_local), certainty };
+        // FIX: Materialize receiver in current block (was missing!)
+        // This ensures literal.method() has the receiver const emitted.
+        r = recv(builder, r);
+        *callee = Callee::Method { box_name, method, receiver: Some(r), certainty };
     }
     for a in args.iter_mut() {
         *a = arg(builder, *a);
@@ -107,8 +113,8 @@ pub fn finalize_args(builder: &mut MirBuilder, args: &mut Vec<ValueId>) {
 /// Ensures the condition has a definition in the current block.
 pub fn finalize_branch_cond(builder: &mut MirBuilder, condition_v: &mut ValueId) {
     *condition_v = cond(builder, *condition_v);
-    if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-        if let Some(bb) = builder.current_block { eprintln!("[local-ssa] finalize-branch bb={:?} cond=%{}", bb, condition_v.0); }
+    if let Some(bb) = builder.current_block {
+        TraceBox::local_ssa(|| format!("[local-ssa] finalize-branch bb={:?} cond=%{}", bb, condition_v.0));
     }
 }
 
@@ -117,8 +123,8 @@ pub fn finalize_branch_cond(builder: &mut MirBuilder, condition_v: &mut ValueId)
 pub fn finalize_compare(builder: &mut MirBuilder, lhs: &mut ValueId, rhs: &mut ValueId) {
     *lhs = cmp_operand(builder, *lhs);
     *rhs = cmp_operand(builder, *rhs);
-    if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-        if let Some(bb) = builder.current_block { eprintln!("[local-ssa] finalize-compare bb={:?} lhs=%{} rhs=%{}", bb, lhs.0, rhs.0); }
+    if let Some(bb) = builder.current_block {
+        TraceBox::local_ssa(|| format!("[local-ssa] finalize-compare bb={:?} lhs=%{} rhs=%{}", bb, lhs.0, rhs.0));
         // Optional varmap mapping lines for compare operands (dev-only)
         crate::mir::builder::observe::varmap::emit_recv_names(builder, *lhs, "cmp-lhs");
         crate::mir::builder::observe::varmap::emit_recv_names(builder, *rhs, "cmp-rhs");
@@ -129,7 +135,7 @@ pub fn finalize_compare(builder: &mut MirBuilder, lhs: &mut ValueId, rhs: &mut V
 pub fn finalize_field_base_and_args(builder: &mut MirBuilder, base: &mut ValueId, args: &mut Vec<ValueId>) {
     *base = field_base(builder, *base);
     for a in args.iter_mut() { *a = arg(builder, *a); }
-    if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-        if let Some(bb) = builder.current_block { eprintln!("[local-ssa] finalize-field bb={:?} base=%{} argc={}", bb, base.0, args.len()); }
+    if let Some(bb) = builder.current_block {
+        TraceBox::local_ssa(|| format!("[local-ssa] finalize-field bb={:?} base=%{} argc={}", bb, base.0, args.len()));
     }
 }

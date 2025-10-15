@@ -1,0 +1,22 @@
+// ParserIdentScanBox — scan identifier [A-Za-z_][A-Za-z0-9_]* starting at i
+// Returns: "<name>@<pos>"; when not starting with alpha/_ returns "@<i>"
+
+using "apps/selfhost-compiler/boxes/parser/scan/parser_common_utils_box.hako" as Utils
+
+static box ParserIdentScanBox {
+  scan_ident(src, i) {
+    if src == null { return "@" + Utils.i2s(i) }
+    local n = src.size()
+    local j = i
+    if j >= n { return "@" + Utils.i2s(i) }
+    local ch = src.substring(j, j+1)
+    if Utils.is_alpha(ch) == 0 { return "@" + Utils.i2s(i) }
+    j = j + 1
+    loop(j < n) {
+      local c = src.substring(j, j+1)
+      if Utils.is_alpha(c) || Utils.is_digit(c) { j = j + 1 } else { break }
+    }
+    local name = src.substring(i, j)
+    return name + "@" + Utils.i2s(j)
+  }
+}

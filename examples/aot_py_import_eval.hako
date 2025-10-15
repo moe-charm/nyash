@@ -1,0 +1,19 @@
+// Import then eval
+static box Main {
+  main() {
+    local py, math_name, math, code, result
+    
+    // Create Python runtime  
+    py = new PyRuntimeBox()
+    
+    // Import math module
+    math_name = new StringBox("math")
+    math = py.import(math_name)
+    
+    // Then use eval to call sqrt
+    code = new StringBox("math.sqrt(16)")
+    result = py.eval(code)
+    
+    return result
+  }
+}

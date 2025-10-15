@@ -1,0 +1,20 @@
+// LlvmBackendBox — Hako ABI (stub)
+// File-handoff only: compile MIR(JSON v0) to object, then link to EXE.
+// This is a stub for call-site wiring; current implementation is provided by external tools (ny-llvmc).
+
+static box LlvmBackendBox {
+  // Returns object path on success, or throws (Err) on failure.
+  compile_obj(json_path) {
+    // Stub only (dev): return a deterministic obj path to guide call sites.
+    // Real implementation should shell out to ny-llvmc / harness.
+    if json_path == null { throw "LlvmBackend.compile_obj: json_path is null" }
+    local stem = json_path + ".o"  // naive; callers should pass preferred path later
+    return stem
+  }
+
+  // Links an exe. Returns true on success (stub always false to prevent accidental use).
+  link_exe(obj_path, out_path, libs) {
+    if obj_path == null || out_path == null { throw "LlvmBackend.link_exe: path is null" }
+    return false  // stub
+  }
+}

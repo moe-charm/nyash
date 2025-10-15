@@ -8,7 +8,7 @@ pub(crate) fn emit_phi(builder: &MirBuilder, dst: ValueId, inputs: &Vec<(BasicBl
         .iter()
         .map(|(bb, v)| {
             let t = builder.value_types.get(v).cloned();
-            let o = builder.value_origin_newbox.get(v).cloned();
+            let o = builder.origin_get(*v).map(|s| s.to_string());
             serde_json::json!({
                 "bb": bb.0,
                 "v": v.0,
@@ -23,11 +23,7 @@ pub(crate) fn emit_phi(builder: &MirBuilder, dst: ValueId, inputs: &Vec<(BasicBl
         .cloned()
         .map(|tt| format!("{:?}", tt))
         .unwrap_or_default();
-    let decided_o = builder
-        .value_origin_newbox
-        .get(&dst)
-        .cloned()
-        .unwrap_or_default();
+    let decided_o = builder.origin_get(dst).unwrap_or_default().to_string();
     let meta = serde_json::json!({
         "dst": dst.0,
         "preds": preds,

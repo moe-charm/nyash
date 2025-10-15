@@ -48,7 +48,7 @@ Scope（Phase 15）
 - 最小命令: Const/BinOp/Compare/Branch/Jump/Return（PHI は LLVM 側で合成）
 - 文字列: NyRT Shim（`nyash.string.len_h`, `charCodeAt_h`, `concat_hh`, `eq_hh`）を declare → call
 - NewBox/ExternCall/BoxCall: まずは固定シンボル／by-id を優先（段階導入）
-- 目標: `apps/selfhost/tools/dep_tree_min_string.nyash` の `.ll verify green → .o` 安定化
+- 目標: `selfhost/tools/dep_tree_min_string.hako` の `.ll verify green → .o` 安定化
 
 Acceptance
 - Harness ON/OFF で機能同値（戻り値/検証）。代表ケースで `.ll verify green` と `.o` 生成成功。

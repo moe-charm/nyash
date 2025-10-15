@@ -1,0 +1,218 @@
+// 🎲 サイコロRPGバトル - RandomBoxとDebugBoxを活用した戦闘システム！
+
+print("⚔️ === Dice RPG Battle ===" )
+print("RandomBoxを使ったダイスバトルシステム\n")
+
+// デバッグトラッキング開始
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 戦闘ログ記録用
+battleLog = new ArrayBox()
+
+// キャラクターBox定義
+box Character {
+    init {
+        name,
+        hp,
+        maxHp,
+        attack,
+        defense,
+        dice,
+        math
+    }
+    
+    // ダメージを受ける
+    func takeDamage(damage) {
+        me.hp = me.hp - damage
+        if (me.hp < 0) {
+            me.hp = 0
+        }
+    }
+    
+    // 生存確認
+    func isAlive() {
+        return me.hp > 0
+    }
+    
+    // HP表示（整数演算のみ）
+    func getHpBar() {
+        // HP比率を10倍して計算 (HP * 10) / maxHP
+        hpx10 = me.hp * 10
+        
+        // 整数除算を手動実装
+        filled = 0
+        temp = hpx10
+        loop(temp >= me.maxHp) {
+            temp = temp - me.maxHp
+            filled = filled + 1
+        }
+        
+        // filledが10を超えないように制限
+        if (filled > 10) {
+            filled = 10
+        }
+        
+        bar = "["
+        i = 0
+        loop(i < 10) {
+            if (i < filled) {
+                bar = bar + "■"
+            } else {
+                bar = bar + "□"
+            }
+            i = i + 1
+        }
+        bar = bar + "]"
+        return bar
+    }
+    
+    // ステータス表示
+    func showStatus() {
+        print(me.name + " HP: " + me.hp + "/" + me.maxHp + " " + me.getHpBar())
+        print("  ATK: " + me.attack + " DEF: " + me.defense)
+    }
+}
+
+// キャラクター作成関数
+function createCharacter(name, hp, attack, defense) {
+    char = new Character()
+    char.name = name
+    char.hp = hp
+    char.maxHp = hp
+    char.attack = attack
+    char.defense = defense
+    char.dice = new RandomBox()
+    char.math = new MathBox()
+    DEBUG.trackBox(char, "Character-" + name)
+    return char
+}
+
+// バトル実行関数
+function performAttack(attacker, defender) {
+    print("\n⚔️ " + attacker.name + " の攻撃！")
+    
+    // 攻撃ダイスロール (1-6)
+    attackRoll = attacker.dice.randInt(1, 6)
+    print("🎲 攻撃ダイス: " + attackRoll)
+    
+    // 防御ダイスロール (1-6)
+    defenseRoll = defender.dice.randInt(1, 6)
+    print("🛡️ " + defender.name + " の防御ダイス: " + defenseRoll)
+    
+    // ダメージ計算
+    baseDamage = attacker.attack + attackRoll
+    defense = defender.defense + defenseRoll
+    damage = baseDamage - defense
+    
+    if (damage < 0) {
+        damage = 0
+    }
+    
+    // クリティカル判定 (6が出たら2倍)
+    if (attackRoll == 6) {
+        print("💥 クリティカルヒット！")
+        damage = damage * 2
+    }
+    
+    // ダメージ適用
+    defender.takeDamage(damage)
+    
+    if (damage > 0) {
+        print("💢 " + defender.name + " に " + damage + " ダメージ！")
+    } else {
+        print("🛡️ " + defender.name + " は攻撃を完全に防いだ！")
+    }
+    
+    // バトルログに記録
+    logEntry = attacker.name + " → " + defender.name + ": " + damage + " damage"
+    battleLog.push(logEntry)
+    
+    return damage
+}
+
+// メインゲーム
+print("\n🎮 ゲーム開始！\n")
+
+// プレイヤーとエネミー作成
+player = createCharacter("勇者", 50, 10, 5)
+enemy = createCharacter("ゴブリン", 30, 8, 3)
+
+// 初期ステータス表示
+print("📊 初期ステータス:")
+player.showStatus()
+enemy.showStatus()
+
+// バトルループ
+turn = 1
+battleContinue = true
+loop(battleContinue) {
+    print("\n========== ターン " + turn + " ==========")
+    
+    // プレイヤーのターン
+    if (player.isAlive()) {
+        performAttack(player, enemy)
+    }
+    
+    // エネミーのターン
+    if (enemy.isAlive()) {
+        performAttack(enemy, player)
+    }
+    
+    // 現在のステータス表示
+    print("\n📊 現在のステータス:")
+    player.showStatus()
+    enemy.showStatus()
+    
+    // 終了条件チェック
+    playerAlive = player.isAlive()
+    enemyAlive = enemy.isAlive()
+    
+    if (not playerAlive) {
+        battleContinue = false
+    }
+    if (not enemyAlive) {
+        battleContinue = false
+    }
+    
+    turn = turn + 1
+    
+    // 安全装置（無限ループ防止）
+    if (turn > 50) {
+        print("\n⏱️ タイムアップ！引き分け！")
+        break
+    }
+}
+
+// 勝敗判定
+print("\n🏁 === バトル終了！ ===")
+playerAlive = player.isAlive()
+enemyAlive = enemy.isAlive()
+
+if (playerAlive) {
+    if (not enemyAlive) {
+        print("🎉 勇者の勝利！")
+    } else {
+        print("🤝 引き分け！")
+    }
+} else {
+    if (enemyAlive) {
+        print("💀 ゴブリンの勝利...")
+    } else {
+        print("🤝 引き分け！")
+    }
+}
+
+// バトルログ表示
+print("\n📜 === バトルログ ===")
+i = 0
+loop(i < battleLog.length()) {
+    print("[" + (i + 1) + "] " + battleLog.get(i))
+    i = i + 1
+}
+
+// デバッグ情報
+print("\n💾 === メモリレポート ===")
+print(DEBUG.memoryReport())
+
+print("\n✅ Dice RPG Battle completed!")

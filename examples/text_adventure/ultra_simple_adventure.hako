@@ -1,0 +1,156 @@
+// Ultra Simple Text Adventure Game
+// Creates all objects directly at the top level to avoid the bug
+
+// Simple Room
+box SimpleRoom {
+    init { name, description, hasPotion, hasSword }
+    
+    SimpleRoom(name, desc) {
+        me.name = name
+        me.description = desc
+        me.hasPotion = true
+        me.hasSword = true
+    }
+    
+    look() {
+        print("=== " + me.name + " ===")
+        print(me.description)
+        print("")
+        
+        if me.hasPotion {
+            print("You see a Health Potion here.")
+        }
+        if me.hasSword {
+            print("You see an Iron Sword here.")
+        }
+    }
+    
+    takePotion() {
+        if me.hasPotion {
+            me.hasPotion = false
+            return true
+        }
+        return false
+    }
+    
+    takeSword() {
+        if me.hasSword {
+            me.hasSword = false
+            return true
+        }
+        return false
+    }
+}
+
+// Simple Player
+box SimplePlayer {
+    init { name, health, hasPotion, hasSword }
+    
+    SimplePlayer(name) {
+        me.name = name
+        me.health = 100
+        me.hasPotion = false
+        me.hasSword = false
+    }
+    
+    status() {
+        print("=== " + me.name + " ===")
+        print("Health: " + me.health)
+        
+        inv = "Inventory: "
+        if me.hasPotion {
+            inv = inv + "Health Potion "
+        }
+        if me.hasSword {
+            inv = inv + "Iron Sword "
+        }
+        if me.hasPotion == false && me.hasSword == false {
+            inv = inv + "Empty"
+        }
+        print(inv)
+    }
+    
+    heal() {
+        if me.hasPotion {
+            me.health = 100
+            me.hasPotion = false
+            print("You use the Health Potion and restore your health to 100!")
+        } else {
+            print("You don't have a potion.")
+        }
+    }
+    
+    attack() {
+        if me.hasSword {
+            print("You swing your sword! *SWOOSH*")
+        } else {
+            print("You have no weapon to attack with.")
+        }
+    }
+    
+    takeDamage(amount) {
+        me.health = me.health - amount
+        print("Ouch! You take " + amount + " damage.")
+        if me.health <= 0 {
+            print("💀 You have died! Game Over.")
+        }
+    }
+}
+
+// Create game objects directly (not in functions!)
+print("🎮 Ultra Simple Adventure Game")
+print("==============================")
+print("")
+
+// Direct creation works!
+room = new SimpleRoom("Entrance Hall", "A dusty room with stone walls.")
+player = new SimplePlayer("Hero")
+
+print("Game initialized!")
+print("")
+
+// Test the game
+print("--- Look around ---")
+room.look()
+print("")
+
+print("--- Check status ---")
+player.status()
+print("")
+
+print("--- Take items ---")
+if room.takePotion() {
+    player.hasPotion = true
+    print("You take the Health Potion.")
+}
+if room.takeSword() {
+    player.hasSword = true
+    print("You take the Iron Sword.")
+}
+print("")
+
+print("--- Status after taking items ---")
+player.status()
+print("")
+
+print("--- Take damage ---")
+player.takeDamage(50)
+player.status()
+print("")
+
+print("--- Heal ---")
+player.heal()
+player.status()
+print("")
+
+print("--- Attack ---")
+player.attack()
+print("")
+
+print("✅ Game test completed!")
+print("")
+print("This ultra-simple version works because all instances are created")
+print("directly at the top level, not inside functions.")
+print("")
+print("⚠️  CRITICAL BUG: Instances created inside functions or returned")
+print("from functions lose their field access capability!")

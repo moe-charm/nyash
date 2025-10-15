@@ -1,0 +1,44 @@
+// stage1_args_parser_box.hako — Stage1ArgsParserBox
+// Responsibility: Parse Stage‑1 args JSON text into integers (MVP: Int only).
+// Non‑Responsibility: MIR emit or namespace.
+
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box Stage1ArgsParserBox {
+  // Count Int occurrences in Stage‑1 args JSON text.
+  count_ints(args_text) {
+    if args_text == null { return 0 }
+    local s = "" + args_text
+    local pos = 0
+    local n = 0
+    loop(true) {
+      local ds = RegexFlow.digits_from(s, pos)
+      if ds == "" { pos = pos + 1 } else { n = n + 1  pos = pos + ds.size() }
+      if pos >= s.size() { break }
+    }
+    return n
+  }
+  // Parse ints from args_text and return ArrayBox [i64,...].
+  parse_ints(args_text) {
+    if args_text == null { return [] }
+    local s = "" + args_text
+    local pos = 0
+    local out = []
+    loop(true) {
+      local ds = RegexFlow.digits_from(s, pos)
+      if ds == "" {
+        pos = pos + 1
+      } else {
+        out.push(RegexFlow.to_int(ds))
+        // advance to end of this token to avoid re-matching
+        local p2 = RegexFlow.find_from(s, ds, pos)
+        if p2 < 0 { pos = pos + ds.size() } else { pos = p2 + ds.size() }
+      }
+      if pos >= s.size() { break }
+    }
+    return out
+  }
+}
+
+static box Stage1ArgsParserMain { main(args) { return 0 } }
+

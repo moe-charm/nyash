@@ -1,0 +1,21 @@
+// Integration Test 2: Option-like @enum with unit variant
+//
+// Purpose: Verify zero-field (unit) variants parse correctly
+// Expected: No parse errors
+
+@enum Option {
+  Some(value)
+  None
+}
+
+// Test: Mix of tuple variant (Some) and unit variant (None)
+
+static box Main {
+  console: ConsoleBox
+
+  main() {
+    me.console = new ConsoleBox()
+    me.console.log("[ENUM_OPTION] Unit variant 'None' parsed successfully!")
+    return 0
+  }
+}

@@ -27,7 +27,7 @@ mod tests {
     #[test]
     #[ignore]
     fn vm_vtable_map_set_get_has() {
-        use crate::backend::vm::VM;
+        use crate::backend::VM;
         use crate::mir::{
             BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
             MirModule, MirType, ValueId,
@@ -50,11 +50,8 @@ mod tests {
         let mapv = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: mapv,
-                box_type: "MapBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![],
+                auto_birth: None });
 
         let k = f.next_value_id();
         f.get_block_mut(bb)
@@ -129,10 +126,12 @@ mod tests {
         assert_eq!(out.to_string_box().value, "v");
     }
 
+    #[cfg(feature = "legacy-boxes")]
     #[test]
     fn mapbox_keys_values_return_arrays() {
         // Direct Box-level test (not via VM): keys()/values() should return ArrayBox
         use crate::box_trait::{IntegerBox, NyashBox, StringBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::map_box::MapBox;
 
         let map = MapBox::new();

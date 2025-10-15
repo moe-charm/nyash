@@ -65,20 +65,10 @@ def lower_phi(
         vid = incoming_map.get(block_id)
         if block is None:
             continue
-        # Prefer resolver-driven localization per predecessor block to satisfy dominance
-        if vid is not None and resolver is not None and bb_map is not None:
-            try:
-                pred_block_obj = bb_map.get(block_id)
-                if pred_block_obj is not None and hasattr(resolver, 'resolve_i64'):
-                    val = resolver.resolve_i64(vid, pred_block_obj, preds_map or {}, block_end_values or {}, vmap, bb_map)
-                else:
-                    val = None
-            except Exception:
-                val = None
-            if val is None:
-                # Missing incoming for this predecessor → default 0
-                val = ir.Constant(phi_type, 0)
-                used_default_zero = True
+        # Use snapshot fallback: get value from block_end_values
+        # This avoids issues with vmap scope (vmap is for current block, not predecessor)
+        if False:  # Disable resolver path - it has vmap scope issues
+            pass
         else:
             # Snapshot fallback
             if block_end_values is not None:

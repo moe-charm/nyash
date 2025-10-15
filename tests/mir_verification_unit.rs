@@ -34,7 +34,7 @@ fn test_undefined_value_detection() {
     let entry_block = BasicBlockId::new(0);
     let function = MirFunction::new(signature, entry_block);
     let mut verifier = MirVerifier::new();
-    let _ = verifier.verify_function(&function).unwrap();
+    verifier.verify_function(&function).unwrap();
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_if_merge_uses_phi_not_predecessor() {
     assert!(res.is_ok(), "MIR should pass merge-phi verification");
 
     // Optional: ensure printer shows a phi in merge and ret returns a defined value
-    let mut printer = MirPrinter::verbose();
+    let printer = MirPrinter::verbose();
     let mir_text = printer.print_module(&module);
     assert!(
         mir_text.contains("phi"),
@@ -102,6 +102,7 @@ fn test_if_merge_uses_phi_not_predecessor() {
     );
 }
 
+#[cfg(feature = "phi-legacy")]
 #[test]
 fn test_merge_use_before_phi_detected() {
     // Construct a function with a bad merge use (no phi)

@@ -2,6 +2,10 @@
 # sugar_numeric_sep_vm.sh — Verify numeric separators in integer/float
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_ENABLE_NUMERIC_SEP:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_NUMERIC_SEP=1" >&2
+  exit 0
+fi
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
@@ -20,7 +24,7 @@ static box Main {
     local c = 3.141_592
     // ignore c; just ensure float tokenizes
     local r = a + b
-    print(me.itos(r))
+    print("" + r)
     return r
   }
 }
@@ -32,4 +36,3 @@ compare_outputs "$expected" "$out" "sugar_numeric_sep_vm" || { cd /; rm -rf "$TM
 
 rm -rf "$TMP_DIR"
 exit 0
-

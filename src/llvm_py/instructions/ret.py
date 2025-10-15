@@ -5,6 +5,7 @@ Handles void and value returns
 
 import llvmlite.ir as ir
 from typing import Dict, Optional, Any
+from dispatch.type_coercion import TypeCoercion
 
 def lower_return(
     builder: ir.IRBuilder,
@@ -45,14 +46,10 @@ def lower_return(
     else:
         # Get return value (prefer resolver)
         ret_val = None
-        # Fast path: if vmap has a concrete non-PHI value defined in this block, use it directly
+        # Fast path: if vmap has a value (including PHI), use it directly
         if isinstance(value_id, int):
             tmp0 = vmap.get(value_id)
-            try:
-                is_phi0 = hasattr(tmp0, 'add_incoming')
-            except Exception:
-                is_phi0 = False
-            if tmp0 is not None and not is_phi0:
+            if tmp0 is not None:
                 ret_val = tmp0
         if ret_val is None:
             if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
@@ -99,21 +96,7 @@ def lower_return(
                 # Pointer type - null
                 ret_val = ir.Constant(return_type, None)
         
-        # Type adjustment if needed
-        if hasattr(ret_val, 'type') and ret_val.type != return_type:
-            if isinstance(return_type, ir.IntType) and ret_val.type.is_pointer:
-                # ptr to int
-                ret_val = builder.ptrtoint(ret_val, return_type, name="ret_p2i")
-            elif isinstance(return_type, ir.PointerType) and isinstance(ret_val.type, ir.IntType):
-                # int to ptr
-                ret_val = builder.inttoptr(ret_val, return_type, name="ret_i2p")
-            elif isinstance(return_type, ir.IntType) and isinstance(ret_val.type, ir.IntType):
-                # int to int conversion
-                if return_type.width < ret_val.type.width:
-                    # Truncate
-                    ret_val = builder.trunc(ret_val, return_type)
-                elif return_type.width > ret_val.type.width:
-                    # Zero extend
-                    ret_val = builder.zext(ret_val, return_type)
+        # Type adjustment if needed - delegate to TypeCoercion
+        ret_val = TypeCoercion.to_type(builder, ret_val, return_type, "ret")
         
         builder.ret(ret_val)

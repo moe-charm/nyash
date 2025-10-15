@@ -3,12 +3,6 @@
 use crate::mir::{MirType, ValueId};
 use crate::mir::builder::MirBuilder;
 
-/// 直接的に MirType を設定する（仕様不変）。
-#[inline]
-pub fn set_type(builder: &mut MirBuilder, dst: ValueId, ty: MirType) {
-    builder.value_types.insert(dst, ty);
-}
-
 /// 関数名から既知の戻り型を注釈する（最小ハードコード）。
 /// 例: "StringBox.str/0" → MirType::String
 #[inline]

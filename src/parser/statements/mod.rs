@@ -10,6 +10,9 @@ pub mod helpers;
 
 // Control flow statements
 pub mod control_flow;
+pub mod for_macro;
+pub mod repeat_macro;
+pub mod assert_macro;
 
 // Declaration statements
 pub mod declarations;
@@ -126,7 +129,7 @@ impl NyashParser {
         let mut statements = Vec::new();
 
         // Helper: lookahead for `ident '(' ... ')' [NEWLINE*] '{'`
-        let mut looks_like_method_head = |this: &Self| -> bool {
+        let looks_like_method_head = |this: &Self| -> bool {
             // Only meaningful when starting at a new statement head
             match &this.current_token().token_type {
                 TokenType::IDENTIFIER(_) => {
@@ -193,7 +196,33 @@ impl NyashParser {
             | TokenType::INTERFACE
             | TokenType::GLOBAL
             | TokenType::FUNCTION
-            | TokenType::STATIC => self.parse_declaration_statement(),
+            | TokenType::STATIC
+            | TokenType::AT => {
+                // Distinguish @for (statement) from declaration macros
+                if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "for") {
+                    // Gate by macro enable
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_for_macro()
+                    } else {
+                        // Fall back to declaration parser to get a proper error message
+                        self.parse_declaration_statement()
+                    }
+                } else if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "repeat") {
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_repeat_macro()
+                    } else {
+                        self.parse_declaration_statement()
+                    }
+                } else if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "assert") {
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_assert_macro()
+                    } else {
+                        self.parse_declaration_statement()
+                    }
+                } else {
+                    self.parse_declaration_statement()
+                }
+            },
 
             // Control flow
             TokenType::IF
@@ -216,6 +245,10 @@ impl NyashParser {
             TokenType::USING => self.parse_using(),
             TokenType::FROM => self.parse_from_call_statement(),
 
+            // Flow declaration (staged) — treat 'flow Name { ... }' as a declaration when enabled
+            TokenType::IDENTIFIER(s) if s == "flow" && crate::config::env::parser_flow_enabled() => {
+                self.parse_flow_declaration()
+            }
             // Assignment or function call
             TokenType::IDENTIFIER(_) | TokenType::THIS | TokenType::ME => {
                 self.parse_assignment_or_function_call()

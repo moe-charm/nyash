@@ -39,7 +39,7 @@ pub struct MethodHandle {
 pub struct PluginHost {
     loader: Arc<RwLock<PluginLoaderV2>>, // delegate
     config: Option<NyashConfigV2>,       // cached config for resolution
-    config_path: Option<String>,
+    config_path: Option<crate::runtime::types::verified_path::VerifiedPath>,
 }
 
 impl PluginHost {
@@ -64,7 +64,7 @@ impl PluginHost {
             .unwrap_or_else(|_| config_path.to_string());
         self.config =
             Some(NyashConfigV2::from_file(&canonical).map_err(|_| BidError::PluginError)?);
-        self.config_path = Some(canonical);
+        self.config_path = Some(crate::runtime::types::verified_path::VerifiedPath::new_ok(canonical));
 
         // Delegate actual library loads + pre-birth singletons to v2
         let l = self.loader.read().unwrap();
@@ -76,10 +76,36 @@ impl PluginHost {
         Ok(())
     }
 
+
+    /// Register a static (in-process) spec for a plugin box.
+    /// This records type_id/method ids/invoke pointer without requiring nyash.toml or dlopen.
+    pub fn register_static_box(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        _invoke_any: Option<*const ()>,
+    ) {
+        if let Ok(l) = self.loader.read() {
+            l.register_static_box(lib_name, box_type, type_id, capabilities, fini_method_id, methods, None);
+        }
+    }
+
     /// Expose read-only view of loaded config for callers migrating from v2 paths.
     pub fn config_ref(&self) -> Option<&NyashConfigV2> {
         self.config.as_ref()
     }
+    /// Check whether a given library is currently loaded in the v2 loader.
+    pub fn has_loaded_lib(&self, lib_name: &str) -> bool {
+        if let Ok(l) = self.loader.read() {
+            return l.has_plugin(lib_name);
+        }
+        false
+    }
+
 
     /// Load a single library directly from path for `using kind="dylib"` autoload.
     /// Boxes list is best-effort (may be empty). When empty, TypeBox FFI is used to resolve metadata.
@@ -92,6 +118,12 @@ impl PluginHost {
         {
             let mut l = self.loader.write().unwrap();
             if l.config.is_none() {
+                // Seed full config when available to enable type_id→invoke mapping
+                if std::path::Path::new("nyash.toml").exists() {
+                    let _ = l.load_config("nyash.toml");
+                } else if std::path::Path::new("hako.toml").exists() {
+                    let _ = l.load_config("hako.toml");
+                }
                 let mut cfg = NyashConfigV2 {
                     libraries: std::collections::HashMap::new(),
                     plugin_paths: crate::config::nyash_toml_v2::PluginPaths { search_paths: vec![] },
@@ -100,18 +132,42 @@ impl PluginHost {
                 };
                 cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
                 l.config = Some(cfg);
-                // No dedicated config file; keep config_path None and rely on box_specs fallback
             } else if let Some(cfg) = l.config.as_mut() {
                 cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
+                // Ensure config_path/cached_toml available for metadata resolution
+                if std::path::Path::new("nyash.toml").exists() {
+                    let _ = l.load_config("nyash.toml");
+                } else if std::path::Path::new("hako.toml").exists() {
+                    let _ = l.load_config("hako.toml");
+                }
             }
             // Load the library now
             l.load_plugin_direct(lib_name, &def)?;
-            // Ingest nyash_box.toml (if present) to populate box_specs: type_id/method ids
-            let nyb_path = std::path::Path::new(path)
+            // Ingest hako_box.toml / nyash_box.toml (if present) to populate box_specs: type_id/method ids
+            // Locate spec file near the library path; search up to two levels above to tolerate target/release layouts.
+            let mut base_dir = std::path::Path::new(path)
                 .parent()
                 .unwrap_or(std::path::Path::new("."))
-                .join("nyash_box.toml");
-            l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &nyb_path);
+                .to_path_buf();
+            let pick = {
+                let mut found: Option<std::path::PathBuf> = None;
+                // Search up to 5 parents for near-lib box spec
+                for _ in 0..5 {
+                    let hako_box = base_dir.join("hako_box.toml");
+                    let nyash_box = base_dir.join("nyash_box.toml");
+                    if hako_box.exists() { found = Some(hako_box); break; }
+                    if nyash_box.exists() { found = Some(nyash_box); break; }
+                    if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
+                }
+                if found.is_none() && crate::runtime::env_gate_box::debug_plugin() {
+                    eprintln!(
+                        "[PluginHost] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
+                        path
+                    );
+                }
+                found.unwrap_or_else(|| std::path::Path::new("nyash_box.toml").to_path_buf())
+            };
+            l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &pick);
             // Also register providers in the v2 BoxFactoryRegistry so `new BoxType()` works
             let registry = crate::runtime::get_global_registry();
             for bx in &def.boxes {
@@ -129,7 +185,7 @@ impl PluginHost {
         let (lib_name, _lib_def) = cfg
             .find_library_for_box(box_type)
             .ok_or(BidError::InvalidType)?;
-        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let cfg_path = self.config_path.as_ref().map(|v| v.as_str()).unwrap_or("nyash.toml");
         let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
         let toml_value: toml::Value =
             toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
@@ -153,6 +209,14 @@ impl PluginHost {
             method_id,
             returns_result,
         })
+    }
+
+    /// Retrieve capabilities of a plugin box type (if available via TypeBox FFI/specs)
+    pub fn get_box_capabilities(&self, box_type: &str) -> Option<u64> {
+        let cfg = self.config.as_ref()?;
+        let (lib_name, _lib_def) = cfg.find_library_for_box(box_type)?;
+        let l = self.loader.read().ok()?;
+        l.get_caps_for(lib_name, box_type)
     }
 
     // --- v2 adapter layer: allow gradual migration of callers ---
@@ -203,6 +267,7 @@ impl PluginHost {
         args: &[Box<dyn crate::box_trait::NyashBox>],
     ) -> BidResult<Option<Box<dyn crate::box_trait::NyashBox>>> {
         // Special-case env.future.await to avoid holding loader RwLock while polling scheduler
+        #[cfg(feature = "legacy-boxes")]
         if iface_name == "env.future" && method_name == "await" {
             use crate::boxes::result::NyashResultBox;
             if let Some(arg0) = args.get(0) {
@@ -256,4 +321,32 @@ pub fn init_global_plugin_host(config_path: &str) -> BidResult<()> {
     host.write().unwrap().load_libraries(config_path)?;
     host.read().unwrap().register_boxes()?;
     Ok(())
+}
+
+impl PluginHost {
+    /// Register a static spec with an invoke pointer (per-Box).
+    pub fn register_static_with_spec(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        invoke: Option<unsafe extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    ) {
+        if let Ok(l) = self.loader.read() {
+            // Convert to loader's BoxInvokeFn type; both layouts are identical.
+            let inv = invoke.map(|f| unsafe { std::mem::transmute::<_, crate::runtime::plugin_loader_v2::BoxInvokeFn>(f) });
+            l.register_static_with_invoke(
+                lib_name,
+                box_type,
+                type_id,
+                capabilities,
+                fini_method_id,
+                methods,
+                inv,
+            );
+        }
+    }
 }

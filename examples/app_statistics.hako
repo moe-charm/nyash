@@ -1,0 +1,218 @@
+// 📊 統計計算アプリ - MathBox新機能を活用！
+// Everything is Box哲学による統計ライブラリ
+
+print("📊 === Statistics Calculator ===")
+print("MathBox拡張機能を活用した統計計算デモ\n")
+
+// デバッグトラッキング開始
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 統計計算を行うBox
+box Statistics {
+    init {
+        data,
+        math
+    }
+    
+    // データ追加
+    func addData(value) {
+        me.data.push(value)
+    }
+    
+    // データ一括追加
+    func addMultiple(values) {
+        i = 0
+        loop(i < values.length()) {
+            me.addData(values.get(i))
+            i = i + 1
+        }
+    }
+    
+    // 平均値計算
+    func mean() {
+        if (me.data.length() == 0) {
+            return new NullBox()
+        }
+        
+        sum = 0
+        i = 0
+        loop(i < me.data.length()) {
+            sum = sum + me.data.get(i)
+            i = i + 1
+        }
+        
+        // 除算がないので掛け算で代用
+        count = me.data.length()
+        mean = sum * me.math.pow(count, -1)  // sum / count
+        return mean
+    }
+    
+    // 分散計算
+    func variance() {
+        if (me.data.length() == 0) {
+            return new NullBox()
+        }
+        
+        avg = me.mean()
+        sumSquaredDiff = 0
+        i = 0
+        
+        loop(i < me.data.length()) {
+            diff = me.data.get(i) - avg
+            sumSquaredDiff = sumSquaredDiff + (diff * diff)
+            i = i + 1
+        }
+        
+        count = me.data.length()
+        variance = sumSquaredDiff * me.math.pow(count, -1)
+        return variance
+    }
+    
+    // 標準偏差計算
+    func standardDeviation() {
+        var = me.variance()
+        // NullBoxかどうかチェック（型チェックで判定）
+        if (var.type_name() == "NullBox") {
+            return new NullBox()
+        }
+        return me.math.sqrt(var)
+    }
+    
+    // 最大値
+    func max() {
+        if (me.data.length() == 0) {
+            return new NullBox()
+        }
+        
+        maxVal = me.data.get(0)
+        i = 1
+        loop(i < me.data.length()) {
+            maxVal = me.math.max(maxVal, me.data.get(i))
+            i = i + 1
+        }
+        return maxVal
+    }
+    
+    // 最小値
+    func min() {
+        if (me.data.length() == 0) {
+            return new NullBox()
+        }
+        
+        minVal = me.data.get(0)
+        i = 1
+        loop(i < me.data.length()) {
+            minVal = me.math.min(minVal, me.data.get(i))
+            i = i + 1
+        }
+        return minVal
+    }
+    
+    // 範囲（レンジ）
+    func range() {
+        return me.max() - me.min()
+    }
+    
+    // データ表示
+    func showData() {
+        print("\n📈 Data points (" + me.data.length() + " items):")
+        i = 0
+        loop(i < me.data.length()) {
+            print("  [" + i + "] = " + me.data.get(i))
+            i = i + 1
+        }
+    }
+    
+    // 統計サマリー表示
+    func summary() {
+        print("\n📊 Statistical Summary:")
+        print("  Count: " + me.data.length())
+        print("  Mean: " + me.mean())
+        print("  Std Dev: " + me.standardDeviation())
+        print("  Min: " + me.min())
+        print("  Max: " + me.max())
+        print("  Range: " + me.range())
+    }
+}
+
+// 統計インスタンスを作成する関数
+function createStatistics() {
+    stats = new Statistics()
+    stats.data = new ArrayBox()
+    stats.math = new MathBox()
+    return stats
+}
+
+// テストデータで実行
+print("\n🧪 Test 1: 学生のテスト得点分析")
+stats = createStatistics()
+DEBUG.trackBox(stats, "Statistics-TestScores")
+
+// テストスコアを追加
+scores = new ArrayBox()
+scores.push(85)
+scores.push(92)
+scores.push(78)
+scores.push(95)
+scores.push(88)
+scores.push(73)
+scores.push(90)
+scores.push(82)
+
+stats.addMultiple(scores)
+stats.showData()
+stats.summary()
+
+// 新しい機能：三角関数を使った周期データ分析
+print("\n\n🌊 Test 2: 周期的データ分析（正弦波）")
+wave = createStatistics()
+DEBUG.trackBox(wave, "Statistics-WaveData")
+
+// 正弦波データを生成
+math = new MathBox()
+pi = math.getPi()
+i = 0
+loop(i < 20) {
+    // angle = i * π / 10
+    angle = i * pi * 0.1  // 除算の代わり
+    value = math.sin(angle) * 10 + 50  // 振幅10、中心50
+    wave.addData(math.round(value))
+    i = i + 1
+}
+
+wave.showData()
+wave.summary()
+
+// 対数正規分布風のデータ
+print("\n\n📈 Test 3: 成長データ分析（指数関数的）")
+growth = createStatistics()
+DEBUG.trackBox(growth, "Statistics-GrowthData")
+
+i = 1
+loop(i <= 10) {
+    // 指数関数的成長をシミュレート
+    value = math.exp(i * 0.3) * 10
+    growth.addData(math.round(value))
+    i = i + 1
+}
+
+growth.showData()
+growth.summary()
+
+// NullBox活用：欠損データの扱い
+print("\n\n🔍 Test 4: 欠損データの扱い")
+incomplete = createStatistics()
+incomplete.addData(10)
+incomplete.addData(20)
+// 空のデータセットの統計値
+empty = createStatistics()
+emptyMean = empty.mean()
+
+print("Empty dataset mean is null: " + emptyMean.is_null())
+
+// メモリ使用状況
+print("\n\n💾 Memory Report:")
+print(DEBUG.memoryReport())
+
+print("\n✅ Statistics Calculator completed!")

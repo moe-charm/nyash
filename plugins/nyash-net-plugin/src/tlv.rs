@@ -1,3 +1,8 @@
+// Import shared TLV functions from hako_abi_impl
+pub use hako_abi_impl::tlv::write_tlv_handle;
+pub use hako_abi_impl::tlv::write_tlv_string;
+// Note: write_tlv_i64 exists in hako_abi_impl but net plugin uses write_tlv_i32
+
 use crate::consts::{E_INV_ARGS, E_SHORT, OK};
 
 #[inline]
@@ -59,20 +64,11 @@ pub fn write_tlv_result(payloads: &[(u8, &[u8])], res: *mut u8, res_len: *mut us
 pub fn write_tlv_void(res: *mut u8, res_len: *mut usize) -> i32 {
     write_tlv_result(&[(9u8, &[])], res, res_len)
 }
-pub fn write_tlv_string(s: &str, res: *mut u8, res_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], res, res_len)
-}
 pub fn write_tlv_bytes(b: &[u8], res: *mut u8, res_len: *mut usize) -> i32 {
     write_tlv_result(&[(7u8, b)], res, res_len)
 }
 pub fn write_tlv_i32(v: i32, res: *mut u8, res_len: *mut usize) -> i32 {
     write_tlv_result(&[(2u8, &v.to_le_bytes())], res, res_len)
-}
-pub fn write_tlv_handle(t: u32, id: u32, res: *mut u8, res_len: *mut usize) -> i32 {
-    let mut payload = [0u8; 8];
-    payload[0..4].copy_from_slice(&t.to_le_bytes());
-    payload[4..8].copy_from_slice(&id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], res, res_len)
 }
 
 pub fn tlv_parse_header(data: &[u8]) -> Result<(u16, u16, usize), ()> {

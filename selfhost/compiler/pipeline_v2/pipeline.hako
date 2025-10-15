@@ -1,0 +1,504 @@
+using "selfhost/compiler/pipeline_v2/stage1_extract_flow.hako" as Stage1ExtractFlow
+using "selfhost/compiler/pipeline_v2/emit_return_box.hako" as EmitReturnBox
+using "selfhost/compiler/pipeline_v2/emit_binop_box.hako" as EmitBinopBox
+using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareBox
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA
+using "selfhost/compiler/pipeline_v2/emit_call_box.hako" as EmitCallBox
+using "selfhost/compiler/pipeline_v2/emit_method_box.hako" as EmitMethodBox
+using "selfhost/compiler/pipeline_v2/emit_newbox_box.hako" as EmitNewBoxBox
+using "selfhost/compiler/pipeline_v2/mir_call_box.hako" as MirCallBox
+using selfhost.common.json.mir_v1_adapter as MirJsonV1Adapter
+using "selfhost/compiler/pipeline_v2/compare_extract_box.hako" as CompareExtractBox
+using "selfhost/compiler/pipeline_v2/normalizer_box.hako" as NormalizerBox
+using "selfhost/compiler/pipeline_v2/map_helpers_box.hako" as MapHelpersBox
+using "selfhost/compiler/pipeline_v2/call_extract_box.hako" as CallExtractBox
+using "selfhost/compiler/pipeline_v2/method_extract_box.hako" as MethodExtractBox
+using "selfhost/compiler/pipeline_v2/new_extract_box.hako" as NewExtractBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/signature_verifier_box.hako" as SignatureVerifierBox
+using "selfhost/compiler/pipeline_v2/stage1_json_scanner_box.hako" as Stage1JsonScannerBox
+using "selfhost/compiler/pipeline_v2/stage1_name_args_normalizer_box.hako" as NameArgsNormBox
+using "selfhost/compiler/pipeline_v2/alias_preflight_box.hako" as AliasPreflightBox
+using "selfhost/compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "selfhost/compiler/pipeline_v2/pipeline_helpers_box.hako" as PipelineHelpersBox
+
+flow PipelineV2 {
+  lower_stage1_to_mir(ast_json, prefer_cfg) {
+    // Backward-compatible entry (trace=0)
+    return PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, 0)
+  }
+
+  // Experimental: emit JSON v1 (MirCall) directly (no adapter). Shape-only focus.
+  lower_stage1_to_mir_v1(ast_json, prefer_cfg) {
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, 0) }
+    local r = new UsingResolverBox()
+    // Call (prefer extract box)
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        // Strict preflight (scanner): read name and enforce using alias resolution
+        {
+          local scan = Stage1JsonScannerBox.extract_name_args(ast_json, kq)
+          if scan != null {
+            if AliasPreflightBox.check_head(scan.get("name"), r) != 1 { return null }
+          }
+        }
+
+        local kc = CallExtractBox.extract_return_call_ints(ast_json)
+        if kc != null {
+          // Normalize to fix key/types at entry
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          if SignatureVerifierBox.verify_call_name_arity(kn.get("name"), kn.get("args")) != 1 { return null }
+          return EmitCallBox.emit_call_int_args_v1(kn.get("name"), kn.get("args"))
+        }
+        // Tolerant scanner fallback → v1 emit (raw; no resolver context here)
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_name_args(ast_json, pos_body)
+          if pair != null {
+            return EmitCallBox.emit_call_int_args_v1(pair.get("name"), pair.get("args_text"))
+          }
+        }
+        // Fallback legacy
+        local k = Stage1ExtractFlow.extract_return_call(ast_json)
+        if k != null {
+          local kn2 = NormalizerBox.normalize_call_ints(k)
+          if kn2 == null { return null }
+          if SignatureVerifierBox.verify_call_name_arity(kn2.get("name"), kn2.get("args")) != 1 { return null }
+          return EmitCallBox.emit_call_int_args_v1(kn2.get("name"), kn2.get("args"))
+        }
+      }
+    }
+    // Method (recv:0 placeholder; prefer extract box)
+    {
+      local mq = RegexFlow.find_from(ast_json, "\"type\":\"Method\"", 0)
+      if mq >= 0 {
+        local mb = MethodExtractBox.extract_return_method_ints(ast_json)
+        if mb != null {
+          local mn = NormalizerBox.normalize_method_ints(mb)
+          if mn == null { return null }
+          return EmitMethodBox.emit_method_int_args_v1(mn.get("method"), 0, mn.get("args"))
+        }
+        // Tolerant scanner fallback (method/args only)
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_label_args(ast_json, "method", pos_body)
+          if pair != null {
+            return EmitMethodBox.emit_method_int_args_v1(pair.get("label"), 0, pair.get("args_text"))
+          }
+        }
+        local m = Stage1ExtractFlow.extract_return_method(ast_json)
+        if m != null {
+          local mn2 = NormalizerBox.normalize_method_ints(m)
+          if mn2 == null { return null }
+          return EmitMethodBox.emit_method_int_args_v1(mn2.get("method"), 0, mn2.get("args"))
+        }
+      }
+    }
+    // New (prefer extract box)
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local nb = NewExtractBox.extract_return_new_ints(ast_json)
+        if nb != null {
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          return EmitNewBoxBox.emit_newbox_int_args_v1(nn.get("class"), nn.get("args"))
+        }
+        // Tolerant scanner fallback (class/args only)
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_label_args(ast_json, "class", pos_body)
+          if pair != null {
+            return EmitNewBoxBox.emit_newbox_int_args_v1(pair.get("label"), pair.get("args_text"))
+          }
+        }
+        local n = Stage1ExtractFlow.extract_return_new(ast_json)
+        if n != null {
+          local nn2 = NormalizerBox.normalize_new_ints(n)
+          if nn2 == null { return null }
+          return EmitNewBoxBox.emit_newbox_int_args_v1(nn2.get("class"), nn2.get("args"))
+        }
+      }
+    }
+    // Fallback to v0 path for remaining cases
+    return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)
+  }
+
+  // Experimental helper: emit v1 then downgrade to v0 for Mini‑VM exec
+  lower_stage1_to_mir_v1_compat(ast_json, prefer_cfg) {
+    local j1 = PipelineV2.lower_stage1_to_mir_v1(ast_json, prefer_cfg)
+    return MirJsonV1Adapter.to_v0(j1)
+  }
+
+  lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
+    local prefer = PipelineHelpersBox.to_i64(prefer_cfg)
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
+    if trace == 1 { print("[pipe] prefer_cfg=" + prefer_cfg + " prefer=" + prefer) }
+    local r = new UsingResolverBox()
+    // Early fast-path: any Compare in program (Int-only)
+    {
+      local cq0 = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
+      if cq0 >= 0 {
+        local opk_pos0 = RegexFlow.find_from(ast_json, "\"op\":\"", cq0)
+        local cmp0 = ""
+        if opk_pos0 >= 0 {
+          local opk_end0 = RegexFlow.find_from(ast_json, "\"", opk_pos0 + 6)
+          if opk_end0 >= 0 { cmp0 = ast_json.substring(opk_pos0 + 6, opk_end0) }
+        }
+        local lhsp0 = RegexFlow.find_from(ast_json, "\"lhs\"", cq0)
+        local rhsp0 = RegexFlow.find_from(ast_json, "\"rhs\"", cq0)
+        if lhsp0 >= 0 && rhsp0 >= 0 {
+          local lv0 = 0
+          local rv0 = 0
+          local vpos0 = RegexFlow.find_from(ast_json, "\"value\":", lhsp0)
+          if vpos0 >= 0 {
+            local ds0 = RegexFlow.digits_from(ast_json, vpos0 + 8)
+            if ds0 != "" { lv0 = RegexFlow.to_int(ds0) }
+          }
+          local vpos02 = RegexFlow.find_from(ast_json, "\"value\":", rhsp0)
+          if vpos02 >= 0 {
+            local ds02 = RegexFlow.digits_from(ast_json, vpos02 + 8)
+            if ds02 != "" { rv0 = RegexFlow.to_int(ds02) }
+          }
+          if cmp0 == null || cmp0 == "" { cmp0 = "Gt" }
+          if prefer >= 1 {
+            local mat0 = 0
+            if prefer >= 2 { mat0 = 1 }
+            if trace == 1 { print("[pipe] any-fast cfg cmp=" + cmp0 + " lhs=" + (""+lv0) + " rhs=" + (""+rv0) + " mat=" + (""+mat0)) }
+            local jfast0 = EmitCompareBox.emit_compare_cfg3(lv0, rv0, cmp0, mat0, trace)
+            return LocalSSA.ensure_cond(jfast0)
+          } else {
+            if trace == 1 { print("[pipe] any-fast ret cmp=" + cmp0 + " lhs=" + (""+lv0) + " rhs=" + (""+rv0)) }
+            return EmitCompareBox.emit_compare_ret(lv0, rv0, cmp0, trace)
+          }
+        }
+      }
+    }
+    // If(...) pattern (prefer CFG form)
+    {
+      local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
+      if iq >= 0 {
+        // Fast-path: directly parse Compare within If for primitives (Int-only)
+        {
+          local cv = PipelineHelpersBox.parse_compare_values(ast_json, iq)
+          if cv != null {
+            local mat = 1
+            local lfast = cv.get(0)
+            local rfast = cv.get(1)
+            local cmpfast = cv.get(2)
+            if cmpfast == null || cmpfast == "" { cmpfast = "Gt" }
+            if trace == 1 { print("[pipe] if-fast cmp=" + cmpfast + " lhs=" + (""+lfast) + " rhs=" + (""+rfast) + " mat=" + (""+mat)) }
+            local jfast = EmitCompareBox.emit_compare_cfg3(lfast, rfast, cmpfast, mat, trace)
+            return LocalSSA.ensure_cond(jfast)
+          }
+        }
+        // Prefer robust extractor box
+        local icb = CompareExtractBox.extract_if_compare_ints(ast_json)
+        if icb != null {
+          local mat = 0
+          if prefer >= 2 { mat = 1 }
+          local l = icb.get(0)
+          local r = icb.get(1)
+          local c = icb.get(2)
+          local j0 = EmitCompareBox.emit_compare_cfg3(l, r, c, mat, trace)
+          return LocalSSA.ensure_cond(j0)
+        }
+        // Fallback legacy extractor
+        local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
+        if ic != null {
+          local mat = 0
+          if prefer >= 2 { mat = 1 }
+          local l2 = ic.get("lhs") + 0
+          local r2 = ic.get("rhs") + 0
+          local c2 = "" + ic.get("cmp")
+          if c2 == null || c2 == "" { c2 = "Gt" }
+          local j0 = EmitCompareBox.emit_compare_cfg3(l2, r2, c2, mat, trace)
+          return LocalSSA.ensure_cond(j0)
+        }
+      }
+    }
+    // Next Call (Return(Call ...)) — prefer extract box
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        // Strict preflight via tolerant scanner: read raw name and enforce using alias resolution
+        {
+          local scan0 = Stage1JsonScannerBox.extract_name_args(ast_json, kq)
+          if scan0 != null {
+            if AliasPreflightBox.check_head(scan0.get("name"), r) != 1 { return null }
+          }
+        }
+
+        local kc = CallExtractBox.extract_return_call_ints(ast_json)
+        if kc != null {
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          if SignatureVerifierBox.verify_call_name_arity(kn.get("name"), kn.get("args")) != 1 { return null }
+          local j4 = EmitCallBox.emit_call_int_args(kn.get("name"), kn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
+        }
+        // Fallback: scanner → normalizer → emit
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_name_args(ast_json, pos_body)
+          if pair != null {
+            local norm = NameArgsNormBox.normalize_call(pair, r)
+            if norm != null {
+              local j4b = EmitCallBox.emit_call_int_args(norm.get("name"), norm.get("args_text"))
+              return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4b))
+            }
+          }
+        }
+
+        local k = Stage1ExtractFlow.extract_return_call(ast_json)
+        if k != null {
+          local kn2 = NormalizerBox.normalize_call_ints(k)
+          if kn2 == null { return null }
+          if SignatureVerifierBox.verify_call_name_arity(kn2.get("name"), kn2.get("args")) != 1 { return null }
+          local j4 = EmitCallBox.emit_call_int_args(kn2.get("name"), kn2.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
+        }
+        // (scanner fallback handled above)
+
+      }
+    }
+    // Next Method (Return(Method ...)) — prefer extract box; recv is 0 (placeholder)
+    {
+      local mq = RegexFlow.find_from(ast_json, "\"type\":\"Method\"", 0)
+      if mq >= 0 {
+        local mb = MethodExtractBox.extract_return_method_ints(ast_json)
+        if mb != null {
+          local mn = NormalizerBox.normalize_method_ints(mb)
+          if mn == null { return null }
+          // Compile-time arity check (best-effort by method name)
+          if SignatureVerifierBox.verify_from_args(mn.get("method"), mn.get("args")) != 1 { return null }
+          local j5 = EmitMethodBox.emit_method_int_args(mn.get("method"), 0, mn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
+        }
+        // Lightweight Stage1 scanner as tolerant fallback (method/args only)
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_label_args(ast_json, "method", pos_body)
+          if pair != null {
+            local raw2 = pair.get("label")
+            local args2 = pair.get("args_text")
+            local fq2 = NamespaceBox.normalize_global_name(raw2, r)
+            if fq2 != null {
+              if SignatureVerifierBox.verify_from_args(fq2, args2) == 1 {
+                local j5b = EmitMethodBox.emit_method_int_args(fq2, 0, args2)
+                return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5b))
+              }
+            }
+          }
+        }
+        local m = Stage1ExtractFlow.extract_return_method(ast_json)
+        if m != null {
+          local mn2 = NormalizerBox.normalize_method_ints(m)
+          if mn2 == null { return null }
+          if SignatureVerifierBox.verify_from_args(mn2.get("method"), mn2.get("args")) != 1 { return null }
+          local j5 = EmitMethodBox.emit_method_int_args(mn2.get("method"), 0, mn2.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
+        }
+      }
+    }
+    // Next New (Return(New ...)) — prefer extract box
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local nb = NewExtractBox.extract_return_new_ints(ast_json)
+        if nb != null {
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(nn.get("class"), nn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
+        }
+        local n = Stage1ExtractFlow.extract_return_new(ast_json)
+        if n != null {
+          local nn2 = NormalizerBox.normalize_new_ints(n)
+          if nn2 == null { return null }
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(nn2.get("class"), nn2.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
+        }
+        // Tolerant scanner for New: class/args only
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pairN = Stage1JsonScannerBox.extract_label_args(ast_json, "class", pos_body)
+          if pairN != null {
+            local rawC = pairN.get("label")
+            local argsN = pairN.get("args_text")
+            // No namespace resolution here (non-using path): emit directly
+            local j6b = EmitNewBoxBox.emit_newbox_int_args(rawC, argsN)
+            return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6b))
+          }
+        }
+      }
+    }
+    // Try Compare first (avoid mis-detection by 'op' field inside Compare)
+    // Guard by raw scan to avoid calling methods on null-like values
+    {
+      local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
+      if cq >= 0 {
+        // Prefer robust extractor box (returns ArrayBox [lv, rv, cmp])
+        local ce = CompareExtractBox.extract_return_compare_ints(ast_json)
+        if ce != null {
+          local final_lhs = ce.get(0)  // ArrayBox: lhs at index 0
+          local final_rhs = ce.get(1)  // ArrayBox: rhs at index 1
+          local cmp = ce.get(2)        // ArrayBox: cmp at index 2
+          if trace == 1 { print("[trace] compare via box lhs=" + final_lhs + " rhs=" + final_rhs + " cmp=" + cmp) }
+          if prefer_cfg >= 1 {
+            local mat = 0
+            if prefer >= 2 { mat = 1 }
+            // Direct emit (no MapBox/Normalizer needed - values already normalized)
+            local j1 = EmitCompareBox.emit_compare_cfg3(final_lhs, final_rhs, cmp, mat, trace)
+            return LocalSSA.ensure_cond(j1)
+          } else {
+            // Direct emit (no MapBox/Normalizer needed - values already normalized)
+            local j0 = EmitCompareBox.emit_compare_ret(final_lhs, final_rhs, cmp, trace)
+            return LocalSSA.ensure_cond(j0)
+          }
+        }
+        // Fallback to legacy extractor (should rarely be used)
+        local c = Stage1ExtractFlow.extract_return_compare(ast_json)
+        if c != null {
+          local lhs = c.get("lhs")
+          local rhs = c.get("rhs")
+          local cmp2 = c.get("cmp")
+          if trace == 1 { print("[trace] compare via legacy lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp2) }
+          if prefer_cfg >= 1 {
+          local mat = 0
+          if prefer >= 2 { mat = 1 }
+            local raw3 = {cmp: cmp2, lhs: lhs, rhs: rhs}
+            local nn3 = NormalizerBox.normalize_cmp(raw3)
+            if nn3 == null { return null }
+            local j1 = EmitCompareBox.emit_compare_cfg3(nn3.get("lhs"), nn3.get("rhs"), nn3.get("cmp"), mat, trace)
+            return LocalSSA.ensure_cond(j1)
+          } else {
+            local raw4 = {cmp: cmp2, lhs: lhs, rhs: rhs}
+            local nn4 = NormalizerBox.normalize_cmp(raw4)
+            if nn4 == null { return null }
+            local j0 = EmitCompareBox.emit_compare_ret(nn4.get("lhs"), nn4.get("rhs"), nn4.get("cmp"), trace)
+            return LocalSSA.ensure_cond(j0)
+          }
+        }
+      }
+    }
+    // Then BinOp (guard by raw scan)
+    {
+      local bq = RegexFlow.find_from(ast_json, "\"type\":\"BinOp\"", 0)
+      if bq >= 0 {
+        local b = Stage1ExtractFlow.extract_return_binop(ast_json)
+        local lhs = b.get("lhs")
+        local rhs = b.get("rhs")
+        local kind = b.get("kind")
+        local j2 = EmitBinopBox.emit_binop2(lhs, rhs, kind, trace)
+        return LocalSSA.ensure_cond(j2)
+      }
+    }
+    // Fallback Return(Int)
+    local v = Stage1ExtractFlow.extract_return_int(ast_json)
+    local j3 = EmitReturnBox.emit_return_int2(v, trace)
+    return LocalSSA.ensure_cond(j3)
+  }
+  // Overload: resolve names via UsingResolverBox before emit
+  lower_stage1_to_mir_with_usings(ast_json, prefer_cfg, usings_json, modules_json) {
+    if ast_json == null { return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg) }
+    // Build resolver context
+    local r = new UsingResolverBox()
+    if usings_json != null { r.load_usings_json(usings_json) }
+    if modules_json != null { r.load_modules_json(modules_json) }
+    // Upgrade alias→namespace mapping now that modules are loaded (Module‑First)
+    r.upgrade_aliases()
+
+    // Prefer Call/Method/New branches with name normalization; otherwise fallback to default
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        // Strict preflight via tolerant scanner: read raw name and enforce using alias resolution
+        {
+          local scan0 = Stage1JsonScannerBox.extract_name_args(ast_json, kq)
+          if scan0 != null {
+            local raw_head = scan0.get("name")
+            local dot = RegexFlow.find_from(raw_head, ".", 0)
+            if dot >= 0 {
+              local head = raw_head.substring(0, dot)
+              if r.resolve_namespace_alias(head) == null {
+                print("[ERROR] Unresolved using alias: " + head)
+                return null
+              }
+            }
+          }
+        }
+
+        local kc = CallExtractBox.extract_return_call_ints(ast_json)
+        if kc != null {
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          local raw_name = kn.get("name")
+          if SignatureVerifierBox.verify_call_name_arity(raw_name, kn.get("args")) != 1 { return null }
+          local fq_name = NamespaceBox.normalize_global_name(raw_name, r)
+          if fq_name == null { return null }
+          local j4 = EmitCallBox.emit_call_int_args(fq_name, kn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
+        }
+        // Fallback: lightweight Stage1 scanner (tolerant to minor JSON variants)
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local pair = Stage1JsonScannerBox.extract_name_args(ast_json, pos_body)
+          if pair != null {
+            local raw2 = pair.get("name")
+            local args2 = pair.get("args_text")
+            local fq2 = NamespaceBox.normalize_global_name(raw2, r)
+            if fq2 != null {
+              local j4b = EmitCallBox.emit_call_int_args(fq2, args2)
+              return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4b))
+            }
+          }
+        }
+
+      }
+    }
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local nb = NewExtractBox.extract_return_new_ints(ast_json)
+        if nb != null {
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          local raw_c = nn.get("class")
+          local fq_c = NamespaceBox.normalize_class_name(raw_c, r)
+          if fq_c == null { return null }
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(fq_c, nn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
+        }
+        // Scanner fallback: class + args → normalizer → emit
+        {
+          local pos_body = Stage1JsonScannerBox.find_body_start(ast_json)
+          if pos_body < 0 { pos_body = 0 }
+          local nscan = Stage1JsonScannerBox.extract_label_args(ast_json, "class", pos_body)
+          if nscan != null {
+            local normN = NameArgsNormBox.normalize_class(nscan, r)
+            if normN != null {
+              local j6b = EmitNewBoxBox.emit_newbox_int_args(normN.get("class"), normN.get("args_text"))
+              return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6b))
+            }
+          }
+        }
+      }
+    }
+    // Fallback to default lowering (includes Compare/Method and other forms)
+    return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)
+  }
+
+}

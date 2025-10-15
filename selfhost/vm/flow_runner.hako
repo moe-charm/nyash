@@ -1,0 +1,53 @@
+// flow_runner.hako — Selfhost VM runner thin box（exec allowed under selfhost/vm/）
+
+using "selfhost/compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
+using hakorune.vm.mir_min as MirVmMin
+using "selfhost/shared/common/string_ops.hako" as StringOps
+
+static box FlowRunner {
+  _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
+  _parse_return_int(ast_json) {
+    if ast_json == null { return null }
+    local rt = StringOps.index_of_from(ast_json, "\"type\":\"Return\"", 0)
+    if rt < 0 { return null }
+    local it = StringOps.index_of_from(ast_json, "\"type\":\"Int\"", rt)
+    if it < 0 { return null }
+    local vp = StringOps.index_of_from(ast_json, "\"value\":", it)
+    if vp < 0 { return null }
+    local ds = me._read_digits(ast_json, vp + 8)
+    if ds == "" { return null }
+    local acc = 0
+    local i = 0
+    loop(i < ds.size()) { acc = acc * 10 + ("0123456789".indexOf(ds.substring(i,i+1)))  i = i + 1 }
+    return acc
+  }
+
+  // Execute on Mini‑VM from Stage‑1 JSON. compat=1 で v1→v0 経路。
+  run_vm_min_from_ast(ast_json, prefer_cfg, compat) {
+    // Fast-path Return(Int v)
+    local fast = me._parse_return_int(ast_json)
+    if fast != null { return fast }
+    local j = null
+    if compat == 1 { j = FlowEntryBox.emit_v1_compat_from_ast(ast_json, prefer_cfg) }
+    else { j = FlowEntryBox.emit_v0_from_ast(ast_json, prefer_cfg) }
+    // DEV marker injection is delegated to the CLI (Rust) bridge.
+    // 将来の切替用トグル: CLI が __cli_dev__ を埋めた場合のみ __dev__ に正規化（現状は未使用・既定OFF）
+    j = me._maybe_inject_dev_marker(j, ast_json)
+    return MirVmMin.run(j)
+  }
+
+  _maybe_inject_dev_marker(j, ast_json) {
+    if j == null { return j }
+    if j.indexOf("\"__dev__\":1") >= 0 { return j }
+    if ast_json != null && ast_json.indexOf("\"__cli_dev__\":1") >= 0 {
+      if j.substring(0,1) == "{" {
+        local payload = j.substring(1, j.size())
+        return "{\"__dev__\":1," + payload
+      }
+    }
+    return j
+  }
+
+  main(args) { return 0 }
+}
+

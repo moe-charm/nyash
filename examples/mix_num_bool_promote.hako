@@ -1,0 +1,16 @@
+// Mixed numeric/boolean promote demo
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1
+
+static box Main {
+    main() {
+        local a, f
+        a = 7
+        f = 7.5
+        // mixed compare (i64 < f64) should promote to f64 compare and yield b1
+        if (a < f) {
+            return 1
+        } else {
+            return 0
+        }
+    }
+}

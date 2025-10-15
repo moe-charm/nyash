@@ -32,7 +32,7 @@ struct Args {
     #[arg(long, value_name = "{obj|exe}", default_value = "obj")]
     emit: String,
 
-    /// Path to directory containing libnyash_kernel.a when emitting an executable. If omitted, searches target/release then crates/nyash_kernel/target/release.
+    /// Path to directory containing libhako_kernel.a (legacy libhako_kernel.a) when emitting an executable. If omitted, searches target/release then crates/hako_kernel/target/release.
     #[arg(long, value_name = "DIR")]
     nyrt: Option<PathBuf>,
 
@@ -186,23 +186,31 @@ fn link_executable(
     nyrt_dir_opt: Option<&PathBuf>,
     extra_libs: Option<&str>,
 ) -> Result<()> {
-    // Resolve nyRT static lib
+    // Resolve NyKernel static lib directory (support legacy/new names)
     let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
         dir.clone()
     } else {
-        // try target/release then crates/nyash_kernel/target/release
+        // try target/release then crates/hako_kernel/target/release
         let a = PathBuf::from("target/release");
-        let b = PathBuf::from("crates/nyash_kernel/target/release");
-        if a.join("libnyash_kernel.a").exists() {
+        let b = PathBuf::from("crates/hako_kernel/target/release");
+        if a.join("libhako_kernel.a").exists() || a.join("libnyash_kernel.a").exists() {
             a
-        } else {
+        } else if b.join("libhako_kernel.a").exists() || b.join("libnyash_kernel.a").exists() {
             b
+        } else {
+            a
         }
     };
-    let libnyrt = nyrt_dir.join("libnyash_kernel.a");
+    let lib_hako = nyrt_dir.join("libhako_kernel.a");
+    let lib_legacy = nyrt_dir.join("libnyash_kernel.a");
+    let libnyrt = if lib_hako.exists() {
+        &lib_hako
+    } else {
+        &lib_legacy
+    };
     if !libnyrt.exists() {
         bail!(
-            "libnyash_kernel.a not found in {} (use --nyrt to specify)",
+            "Kernel archive not found in {} (looked for libhako_kernel.a or legacy libnyash_kernel.a). Use --nyrt to specify directory",
             nyrt_dir.display()
         );
     }
@@ -222,9 +230,9 @@ fn link_executable(
     let mut cmd = Command::new(linker);
     cmd.arg("-o").arg(out_exe);
     cmd.arg(obj);
-    // Whole-archive libnyash_kernel to ensure all objects are linked
+    // Whole-archive NyKernel to ensure all objects are linked
     cmd.arg("-Wl,--whole-archive")
-        .arg(&libnyrt)
+        .arg(libnyrt)
         .arg("-Wl,--no-whole-archive");
     // Common libs on Linux
     cmd.arg("-ldl").arg("-lpthread").arg("-lm");

@@ -90,7 +90,12 @@ impl BinOpInst {
 }
 
 impl InstructionMeta for BinOpInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
+    fn effects(&self) -> EffectMask {
+        match self.op {
+            MirBinOp::Div | MirBinOp::Mod => EffectMask::PURE.add(Effect::Panic),
+            _ => EffectMask::PURE,
+        }
+    }
     fn dst(&self) -> Option<ValueId> { Some(self.dst) }
     fn used(&self) -> Vec<ValueId> { vec![self.lhs, self.rhs] }
 }
@@ -105,11 +110,10 @@ pub fn effects_via_meta(i: &MirInstruction) -> Option<EffectMask> {
     if let Some(k) = LoadInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = CastInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = TypeOpInst::from_mir(i) { return Some(k.effects()); }
-    if let Some(k) = ArrayGetInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = PhiInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = NewBoxInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = StoreInst::from_mir(i) { return Some(k.effects()); }
-    if let Some(k) = ArraySetInst::from_mir(i) { return Some(k.effects()); }
+    
     if let Some(k) = ReturnInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = BranchInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = JumpInst::from_mir(i) { return Some(k.effects()); }
@@ -133,11 +137,10 @@ pub fn dst_via_meta(i: &MirInstruction) -> Option<ValueId> {
     if let Some(k) = LoadInst::from_mir(i) { return k.dst(); }
     if let Some(k) = CastInst::from_mir(i) { return k.dst(); }
     if let Some(k) = TypeOpInst::from_mir(i) { return k.dst(); }
-    if let Some(k) = ArrayGetInst::from_mir(i) { return k.dst(); }
     if let Some(k) = PhiInst::from_mir(i) { return k.dst(); }
     if let Some(k) = NewBoxInst::from_mir(i) { return k.dst(); }
     if let Some(_k) = StoreInst::from_mir(i) { return None; }
-    if let Some(_k) = ArraySetInst::from_mir(i) { return None; }
+    
     if let Some(_k) = ReturnInst::from_mir(i) { return None; }
     if let Some(_k) = BranchInst::from_mir(i) { return None; }
     if let Some(_k) = JumpInst::from_mir(i) { return None; }
@@ -162,11 +165,10 @@ pub fn used_via_meta(i: &MirInstruction) -> Option<Vec<ValueId>> {
     if let Some(k) = LoadInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = CastInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = TypeOpInst::from_mir(i) { return Some(k.used()); }
-    if let Some(k) = ArrayGetInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = PhiInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = NewBoxInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = StoreInst::from_mir(i) { return Some(k.used()); }
-    if let Some(k) = ArraySetInst::from_mir(i) { return Some(k.used()); }
+    
     if let Some(k) = ReturnInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = BranchInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = JumpInst::from_mir(i) { return Some(k.used()); }
@@ -226,10 +228,11 @@ inst_meta! {
         used = |s: &Self| vec![s.box_val];
     }
 }
+// RefGet/RefSet retired: keep structs for meta API stability but never match
 inst_meta! {
     pub struct RefGetInst { dst: ValueId, reference: ValueId }
     => {
-        from_mir = |i| match i { MirInstruction::RefGet { dst, reference, .. } => Some(RefGetInst { dst: *dst, reference: *reference }), _ => None };
+        from_mir = |i| { let _=i; None };
         effects = |_: &Self| EffectMask::READ;
         dst = |s: &Self| Some(s.dst);
         used = |s: &Self| vec![s.reference];
@@ -238,7 +241,7 @@ inst_meta! {
 inst_meta! {
     pub struct RefSetInst { reference: ValueId, value: ValueId }
     => {
-        from_mir = |i| match i { MirInstruction::RefSet { reference, value, .. } => Some(RefSetInst { reference: *reference, value: *value }), _ => None };
+        from_mir = |i| { let _=i; None };
         effects = |_: &Self| EffectMask::WRITE;
         dst = |_: &Self| None;
         used = |s: &Self| vec![s.reference, s.value];
@@ -308,7 +311,9 @@ inst_meta! {
     pub struct UnaryOpInst { dst: ValueId, operand: ValueId }
     => {
         from_mir = |i| match i { MirInstruction::UnaryOp { dst, operand, .. } => Some(UnaryOpInst { dst: *dst, operand: *operand }), _ => None };
-        effects = |_: &Self| EffectMask::PURE;
+        // Unary ops may raise type errors at runtime (e.g., neg on non-number).
+        // Mark as potential Panic to prevent DCE from eliminating them when results are unused.
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Panic);
         dst = |s: &Self| Some(s.dst);
         used = |s: &Self| vec![s.operand];
     }
@@ -362,7 +367,7 @@ inst_meta! {
 inst_meta! {
     pub struct ArrayGetInst { dst: ValueId, array: ValueId, index: ValueId }
     => {
-        from_mir = |i| match i { MirInstruction::ArrayGet { dst, array, index } => Some(ArrayGetInst { dst: *dst, array: *array, index: *index }), _ => None };
+        from_mir = |i| { let _=i; None };
         effects = |_: &Self| EffectMask::READ;
         dst = |s: &Self| Some(s.dst);
         used = |s: &Self| vec![s.array, s.index];
@@ -417,7 +422,7 @@ inst_meta! {
 inst_meta! {
     pub struct ArraySetInst { array: ValueId, index: ValueId, value: ValueId }
     => {
-        from_mir = |i| match i { MirInstruction::ArraySet { array, index, value } => Some(ArraySetInst { array: *array, index: *index, value: *value }), _ => None };
+        from_mir = |i| { let _=i; None };
         effects = |_: &Self| EffectMask::WRITE;
         dst = |_: &Self| None;
         used = |s: &Self| vec![s.array, s.index, s.value];
@@ -550,8 +555,6 @@ inst_meta! {
 pub enum CallLikeInst {
     Call { dst: Option<ValueId>, func: ValueId, args: Vec<ValueId> },
     BoxCall { dst: Option<ValueId>, box_val: ValueId, args: Vec<ValueId> },
-    PluginInvoke { dst: Option<ValueId>, box_val: ValueId, args: Vec<ValueId> },
-    ExternCall { dst: Option<ValueId>, args: Vec<ValueId> },
 }
 
 impl CallLikeInst {
@@ -561,10 +564,6 @@ impl CallLikeInst {
                 Some(CallLikeInst::Call { dst: *dst, func: *func, args: args.clone() }),
             MirInstruction::BoxCall { dst, box_val, args, .. } =>
                 Some(CallLikeInst::BoxCall { dst: *dst, box_val: *box_val, args: args.clone() }),
-            MirInstruction::PluginInvoke { dst, box_val, args, .. } =>
-                Some(CallLikeInst::PluginInvoke { dst: *dst, box_val: *box_val, args: args.clone() }),
-            MirInstruction::ExternCall { dst, args, .. } =>
-                Some(CallLikeInst::ExternCall { dst: *dst, args: args.clone() }),
             _ => None,
         }
     }
@@ -572,9 +571,7 @@ impl CallLikeInst {
     pub fn dst(&self) -> Option<ValueId> {
         match self {
             CallLikeInst::Call { dst, .. }
-            | CallLikeInst::BoxCall { dst, .. }
-            | CallLikeInst::PluginInvoke { dst, .. }
-            | CallLikeInst::ExternCall { dst, .. } => *dst,
+            | CallLikeInst::BoxCall { dst, .. } => *dst,
         }
     }
 
@@ -583,11 +580,9 @@ impl CallLikeInst {
             CallLikeInst::Call { func, args, .. } => {
                 let mut v = vec![*func]; v.extend(args.iter().copied()); v
             }
-            CallLikeInst::BoxCall { box_val, args, .. }
-            | CallLikeInst::PluginInvoke { box_val, args, .. } => {
+            CallLikeInst::BoxCall { box_val, args, .. } => {
                 let mut v = vec![*box_val]; v.extend(args.iter().copied()); v
             }
-            CallLikeInst::ExternCall { args, .. } => args.clone(),
         }
     }
 }

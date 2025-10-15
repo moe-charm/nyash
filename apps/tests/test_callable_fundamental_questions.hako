@@ -1,0 +1,130 @@
+// Test: Fundamental Questions about CallableBox and methodRef
+// Purpose: Answer user's 3 core questions
+
+static box Main {
+  main() {
+    print("=== CallableBox Fundamental Questions ===")
+    print("")
+
+    // Question 1: Can I just store CallableBox in ArrayBox?
+    print("Q1: Can I just store CallableBox in ArrayBox.set()?")
+    print("    (Why need methodRef?)")
+    print("")
+
+    local arr1 = new ArrayBox()
+    arr1.push(10)
+    arr1.push(20)
+
+    // Create CallableBox using methodRef
+    local cb1 = arr1.methodRef("size", 0)
+
+    // Store CallableBox in ArrayBox
+    local storage1 = new ArrayBox()
+    storage1.push(cb1)
+
+    // Retrieve and use
+    local retrieved1 = storage1.get(0)
+    local args1 = new ArrayBox()
+    local result1 = retrieved1.call(args1)
+
+    print("A1: YES! CallableBox can be stored in ArrayBox.set()!")
+    print("    - methodRef() CREATES the CallableBox")
+    print("    - ArrayBox.set() STORES it (like any other Box)")
+    print("    - Result: " + result1 + " (expected 2)")
+    print("")
+
+    if result1 != 2 {
+      print("[FAIL] Q1: expected 2, got " + result1)
+      return 1
+    }
+
+    // Question 2: What do `method` and `arity` fields mean?
+    print("Q2: What do `method` and `arity` fields mean?")
+    print("")
+
+    local arr2 = new ArrayBox()
+    arr2.push(100)
+    arr2.push(200)
+    arr2.push(300)
+
+    // Create CallableBox for get(index) method
+    local cb_get = arr2.methodRef("get", 1)
+    local arity_get = cb_get.arity()
+
+    print("A2: `method` = method name (String)")
+    print("    `arity` = number of arguments (Integer)")
+    print("")
+    print("    Example: arr.methodRef(\"get\", 1)")
+    print("      - method field = \"get\"")
+    print("      - arity field  = 1 (one argument: index)")
+    print("      - cb.arity() returns: " + arity_get)
+    print("")
+
+    // Test calling with correct arity
+    local args_get = new ArrayBox()
+    args_get.push(1)  // index = 1
+    local result_get = cb_get.call(args_get)
+    print("    cb.call([1]) returns: " + result_get + " (arr[1])")
+    print("")
+
+    if arity_get != 1 {
+      print("[FAIL] Q2: expected arity=1, got " + arity_get)
+      return 1
+    }
+    if result_get != 200 {
+      print("[FAIL] Q2: expected 200, got " + result_get)
+      return 1
+    }
+
+    // Question 3: Is it difficult to create CallableBox without methodRef?
+    print("Q3: Is it difficult to create CallableBox without methodRef?")
+    print("")
+
+    print("A3: methodRef IS THE WAY to create CallableBox!")
+    print("")
+    print("    Why methodRef exists:")
+    print("    1. Captures RECEIVER (the object)")
+    print("    2. Captures METHOD NAME (which method to call)")
+    print("    3. Captures ARITY (expected argument count)")
+    print("")
+    print("    Without methodRef, you would need:")
+    print("    - Manual CallableBox construction (complex)")
+    print("    - No compile-time checks")
+    print("    - Easy to make mistakes")
+    print("")
+    print("    methodRef = CONVENIENCE + SAFETY")
+    print("")
+
+    // Demonstrate the pattern
+    print("Pattern comparison:")
+    print("")
+    print("  WITH methodRef:")
+    print("    local cb = arr.methodRef(\"size\", 0)")
+    print("    local result = cb.call([])")
+    print("")
+    print("  WITHOUT methodRef (manual - NOT RECOMMENDED):")
+    print("    // Would need internal APIs, complex setup")
+    print("    // Easy to make mistakes with receiver/method/arity")
+    print("")
+
+    // Summary
+    print("=== Summary of Answers ===")
+    print("")
+    print("1. YES, CallableBox can be stored in ArrayBox")
+    print("   - methodRef() creates it")
+    print("   - ArrayBox.set() stores it")
+    print("")
+    print("2. `method` = method name (String)")
+    print("   `arity` = argument count (Integer)")
+    print("   - Used for runtime validation")
+    print("   - Retrieved via cb.arity()")
+    print("")
+    print("3. methodRef IS THE standard way")
+    print("   - Creating CallableBox manually is possible but NOT RECOMMENDED")
+    print("   - methodRef provides convenience + safety")
+    print("")
+
+    print("=== All questions answered! ===")
+    return 0
+  }
+}

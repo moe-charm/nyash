@@ -1,0 +1,35 @@
+// Test basic field access
+
+box SimpleBox {
+    init { x, y }
+    
+    SimpleBox(x, y) {
+        me.x = x
+        me.y = y
+    }
+    
+    getX() {
+        return me.x
+    }
+}
+
+print("Creating SimpleBox...")
+box1 = new SimpleBox(10, 20)
+
+print("Using method to get x: " + box1.getX())
+
+print("Direct field access x...")
+try {
+    print("box1.x = " + box1.x)
+} catch {
+    print("ERROR: Cannot access field x directly")
+}
+
+print("Direct field access y...")
+try {
+    print("box1.y = " + box1.y)  
+} catch {
+    print("ERROR: Cannot access field y directly")
+}
+
+print("\n✅ Field access test completed!")

@@ -1,0 +1,317 @@
+// mir_vm_min.hako — Ny製の最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
+using selfhost.vm.handlers as OpHandlersBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/vm/boxes/operator_box.hako" as OperatorBox
+using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "selfhost/vm/boxes/compare_scan_box.hako" as CompareScanBox
+using "selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
+using "selfhost/vm/boxes/guard_box.hako" as GuardBox
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
+using "selfhost/vm/boxes/ret_resolve_simple.hako" as RetResolveSimpleBox
+using selfhost.vm.scanner as InstructionScannerBox
+
+static box MirVmMin {
+  _tprint(msg) {
+    // Only emit hard errors by default; avoid env dependencies in Mini‑VM
+    // Coerce to string to avoid VoidBox receiver issues during early boot
+    msg = "" + msg
+    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
+  }
+  _d(msg, trace) { if trace == 1 { print(msg) } }
+  // Compatibility runner (prints and returns). Prefer run_min for quiet return-only.
+  run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
+  // New: quiet entry that returns the result without printing.
+  run_min(mjson) { return me._run_min(mjson) }
+  // Thin-mode runner (ret resolution simplified)
+  run_thin(mjson) {
+    // Inject a lightweight marker into JSON to toggle thin mode inside _run_min
+    if mjson.substring(0,1) == "{" {
+      local payload = mjson.substring(1, mjson.size())
+      local j2 = "{\"__thin__\":1," + payload
+      local v = me._run_min(j2)
+      print(me._int_to_str(v))
+      return v
+    }
+    // Fallback: no-op when input is unexpected
+    local v = me._run_min(mjson)
+    print(me._int_to_str(v))
+    return v
+  }
+
+  // helpers
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
+  _is_numeric_str(s){ if s==null {return 0} local n=s.size() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
+  _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
+
+  // block helpers
+  _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=StringOps.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+15 }
+
+  // local copy handler
+  _handle_copy(seg, regs){ local dst=JsonFragBox.get_int(seg,"dst") local src=JsonFragBox.get_int(seg,"src") if dst==null || src==null {return} local v=regs.get(""+src) regs.set(""+dst, v) }
+
+  _run_min(mjson) {
+    // Normalize input as string to guarantee String methods availability
+    mjson = "" + mjson
+    // thin_mode=0: legacy heuristics（互換）; thin_mode=1: simplified ret
+    local thin_mode = 0
+    if mjson.indexOf("\"__thin__\":1") >= 0 { thin_mode = 1 }
+    // trace mode for dev: prints [DEBUG] messages
+    local trace = 0
+    if mjson.indexOf("\"__trace__\":1") >= 0 { trace = 1 }
+
+    // Safety first: handle simple compare→ret or const→ret in Block 0
+    // without allocating any runtime boxes. This avoids interpreter-level
+    // recursion during early startup (observed as Rust stack overflow) and
+    // covers our selfhost M2 minimal cases.
+    local b0 = JsonFragBox.block0_segment(mjson)
+    if b0 != "" {
+      // 1) Pure const→ret (only when const appears before ret and no other ops present)
+      if b0.indexOf("\"op\":\"compare\"") < 0 && b0.indexOf("\"op\":\"binop\"") < 0 && b0.indexOf("\"op\":\"copy\"") < 0 && b0.indexOf("\"op\":\"jump\"") < 0 && b0.indexOf("\"op\":\"branch\"") < 0 {
+        local ret_pos = b0.indexOf("\"op\":\"ret\"")
+        local const_pos = b0.indexOf("\"op\":\"const\"")
+        if ret_pos >= 0 and const_pos >= 0 and const_pos < ret_pos {
+        // Grab the first typed const value and return it
+        local key = "\"value\":{\"type\":\"i64\",\"value\":"
+        local p = StringOps.index_of_from(b0, key, 0)
+        if p >= 0 {
+          local ds = b0.substring(p + key.size(), b0.size())
+          // read consecutive digits
+          local i = 0
+          local out = ""
+          loop(true) {
+            local ch = ds.substring(i, i+1)
+            if ch == "" { break }
+            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+          }
+          if out != "" { return JsonFragBox._str_to_int(out) }
+        }
+        }
+      }
+      // 2) compare→ret fast-path skipped (handled by main scanner)
+
+    local regs = new MapBox()
+    local last_cmp_dst = -1
+    local last_cmp_val = 0
+    // Optional: adopt OperatorBox for parity checks when JSON has a special marker
+    local op_adopt = 0
+    if mjson.indexOf("\"__op_adopt__\":1") >= 0 { op_adopt = 1 }
+    // Track last binop materialization within the current scan window
+    local last_binop_dst = -1
+    local last_binop_val = 0
+    local bb = 0
+    local prev_bb = -1
+    local steps = 0
+    local max_steps = 200000
+    loop(true){
+      steps = steps + 1
+      if steps > max_steps { return 0 }
+      local start = me._block_insts_start(mjson, bb)
+      me._d("[DEBUG] start="+me._int_to_str(start), trace)
+      if start < 0 { return 0 }
+      local endp = JsonCursorBox.seek_array_end(mjson, start)
+      me._d("[DEBUG] endp="+me._int_to_str(endp), trace)
+      if endp <= start { return 0 }
+      local inst_seg = mjson.substring(start, endp)
+      me._d("[DEBUG] seglen="+me._int_to_str(inst_seg.size()), trace)
+      // scan objects in this block
+      local scan_pos = 0
+      local inst_count = 0
+      local moved = 0
+      loop(true){
+        if scan_pos >= inst_seg.size() { break }
+        local nxt = InstructionScannerBox.next(inst_seg, scan_pos)
+        if nxt == null { break }
+        local obj_start = nxt.get("start")
+        local obj_end = nxt.get("end")
+        local op = nxt.get("op")
+        local seg = inst_seg.substring(obj_start, obj_end)
+        if op == null { op = "" } if op == "null" { op = "" } if op == 0 { op = "" }
+        if op == "" {
+          if seg.indexOf("op_kind") >= 0 { op = "binop" } else {
+            if seg.indexOf("lhs") >= 0 and seg.indexOf("rhs") >= 0 { op = "compare" } else {
+              if seg.indexOf("cond") >= 0 { op = "branch" } else {
+                if seg.indexOf("target") >= 0 { op = "jump" } else {
+                  if seg.indexOf("src") >= 0 and seg.indexOf("dst") >= 0 { op = "copy" } else { op = "const" }
+                }
+              }
+            }
+          }
+        }
+        if op == "const" { OpHandlersBox.handle_const(seg, regs) }
+        else if op == "copy" { me._handle_copy(seg, regs) }
+        else if op == "binop" {
+          OpHandlersBox.handle_binop(seg, regs)
+          local bdst = JsonFragBox.get_int(seg, "dst")
+          if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst) }
+        }
+        else if op == "compare" {
+          me._d("[DEBUG] compare seg=" + seg, trace)
+          // Safe fast-path: if this block later contains a ret of this dst,
+          // evaluate compare directly from current regs and return immediately.
+          // This avoids deeper handler chains that could recurse in edge cases.
+          local rec = CompareScanBox.parse(seg)
+          local kdst_fast = rec.get("dst")
+          local klhs_fast = rec.get("lhs")
+          local krhs_fast = rec.get("rhs")
+          local kcmp_fast = rec.get("kind")
+          // Determine if a ret exists after this compare in the same block
+          local tail = inst_seg.substring(obj_end, inst_seg.size())
+          local ridt = JsonFragBox.get_int(tail, "value")
+          if kdst_fast != null && klhs_fast != null && krhs_fast != null && ridt != null && ridt == kdst_fast {
+            local a = me._load_reg(regs, klhs_fast)
+            local b = me._load_reg(regs, krhs_fast)
+            local cv_fast = CompareOpsBox.eval(kcmp_fast, a, b)
+            // Store result to keep regs consistent for subsequent ops if any
+            regs.set("" + kdst_fast, "" + cv_fast)
+            last_cmp_dst = kdst_fast
+            last_cmp_val = cv_fast
+            me._d("[DEBUG] compare early return with val=" + me._int_to_str(cv_fast), trace)
+            return cv_fast
+          }
+
+          // Fallback to standard handler when early path is not applicable
+          OpHandlersBox.handle_compare(seg, regs)
+          local kdst = rec.get("dst")
+          me._d("[DEBUG] compare kdst=" + me._int_to_str(kdst), trace)
+          if kdst != null {
+            last_cmp_dst = kdst
+            last_cmp_val = me._load_reg(regs, kdst)
+            me._d("[DEBUG] compare last_cmp_dst=" + me._int_to_str(last_cmp_dst) + " last_cmp_val=" + me._int_to_str(last_cmp_val), trace)
+            me._d("[DEBUG] compare reg["+me._int_to_str(kdst)+"]=" + regs.get(""+kdst), trace)
+          }
+          // Secondary optimization: if a ret follows and targets this dst, return now
+          if ridt != null && kdst != null && ridt == kdst { return last_cmp_val }
+        }
+        else if op == "branch" {
+          local c = JsonFragBox.get_int(seg, "cond")
+          local t = JsonFragBox.get_int(seg, "then")
+          local e = JsonFragBox.get_int(seg, "else")
+          local cv = 0
+          if c != null {
+            if c == last_cmp_dst { cv = last_cmp_val } else { cv = me._load_reg(regs, c) }
+          }
+          prev_bb = bb
+          if cv != 0 { bb = t } else { bb = e }
+          moved = 1
+          scan_pos = obj_end
+          break
+        }
+        else if op == "jump" {
+          local tgt = JsonFragBox.get_int(seg, "target")
+          if tgt == null { return 0 }
+          prev_bb = bb
+          bb = tgt
+          moved = 1
+          scan_pos = obj_end
+          break
+        }
+        else if op == "phi" {
+          local res = PhiDecodeBox.decode_result(seg, prev_bb)
+          if res.is_Ok() == 1 {
+            local pair = res.as_Ok()
+            PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
+          }
+        }
+                else if op == "throw" {
+          me._tprint("[ERROR] Throw terminator encountered")
+          return -2
+        }
+else if op == "ret" {
+          local v = JsonFragBox.get_int(seg, "value")
+          if v == null { me._tprint("[ERROR] Undefined ret value field") return -1 }
+          if v == last_cmp_dst { return last_cmp_val }
+          local sval = "" + regs.get(""+v)
+          if me._is_numeric_str(sval) == 1 { return me._load_reg(regs, v) }
+          me._tprint("[ERROR] Undefined register ret: r"+me._int_to_str(v))
+          return -1
+        }
+        // advance
+        inst_count = inst_count + 1
+        scan_pos = obj_end
+      }
+      if moved == 1 { continue }
+      // Prefer recent compare result when a ret exists targeting it (no recompute)
+      if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
+        local rstartX = inst_seg.indexOf("\"op\":\"ret\"")
+        local rsegX = inst_seg.substring(rstartX, inst_seg.size())
+        local ridX = JsonFragBox.get_int(rsegX, "value")
+        if ridX != null { if ridX == last_cmp_dst { return last_cmp_val } }
+      }
+      // Fallbacks: prefer recent compare result, else resolve explicit/v1 ret if present, else first const
+      if last_cmp_dst >= 0 { return last_cmp_val }
+      // Detect explicit ret in this block and resolve
+      if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
+        local rstart = inst_seg.indexOf("\"op\":\"ret\"")
+        local rseg = inst_seg.substring(rstart, inst_seg.size())
+        local rid = JsonFragBox.get_int(rseg, "value")
+        if rid != null {
+          if rid == last_cmp_dst { return last_cmp_val }
+          local rv = me._load_reg(regs, rid)
+          return rv
+        }
+      }
+            # (typed const fallback moved above)
+      if false {
+        // Grab first two "value":{"type":"i64","value":X}
+        local first = ""
+        local second = ""
+        local search = inst_seg
+        local key = "\"value\":{\"type\":\"i64\",\"value\":"
+        local pos = 0
+        loop(true) {
+          local k = StringOps.index_of_from(search, key, pos)
+          if k < 0 { break }
+          local ds = search.substring(k + key.size(), search.size())
+          // read consecutive digits as number
+          local i = 0
+          local out = ""
+          loop(true) {
+            local ch = ds.substring(i, i+1)
+            if ch == "" { break }
+            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+          }
+          if out != "" { if first == "" { first = out } else { second = out } }
+          if second != "" { break }
+          pos = k + key.size() + i
+        }
+        if first != "" && second != "" {
+          local lv = 0
+          local rv = 0
+          // simple to_i64
+          local i0 = 0
+          loop(i0 < first.size()) { lv = lv * 10 + ("0123456789".indexOf(first.substring(i0,i0+1)))  i0 = i0 + 1 }
+          local i1 = 0
+          loop(i1 < second.size()) { rv = rv * 10 + ("0123456789".indexOf(second.substring(i1,i1+1)))  i1 = i1 + 1 }
+          // cmp: parse cmp op
+          local cmp_key = "\"cmp\":\""
+          local pk = inst_seg.indexOf(cmp_key)
+          local cmp = "Eq"
+          if pk >= 0 {
+            local i = pk + cmp_key.size()
+            local j = StringOps.index_of_from(inst_seg, "\"", i)
+            if j > i { cmp = inst_seg.substring(i, j) }
+          }
+          local cv = CompareOpsBox.eval(cmp, lv, rv)
+          // ret id
+          local rstart4 = inst_seg.indexOf("\"op\":\"ret\"")
+          local rseg4 = inst_seg.substring(rstart4, inst_seg.size())
+          local rid4 = JsonFragBox.get_int(rseg4, "value")
+          if rid4 != null { return cv }
+        }
+      }
+      {
+      local r = RetResolveSimpleBox.resolve(inst_seg, regs, last_cmp_dst, last_cmp_val)
+      if r != null { return r }
+      }
+      // Final fallback: return first const (dst=1) if present
+      local first = me._load_reg(regs, 1)
+      return first
+    }
+    return 0
+  }
+
+}

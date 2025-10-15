@@ -9,9 +9,10 @@ repository = "https://github.com/user/nyash"
 keywords = ["language", "interpreter", "box", "memory-safe", "rust"]
 categories = ["development-tools::parsing", "interpreters"]
 
+
 # Default features - minimal CLI only
 [features]
-default = ["cli", "plugins"]
+default = ["cli", "plugins", "host-anchors", "legacy-boxes"]
 # Legacy features removed - archive cleaned up
 e2e = []
 cli = []
@@ -30,6 +31,16 @@ dynamic-file = []
 wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
+host-anchors = []
+## Legacy built-in Boxes (src/boxes) — kept for transition; disable to test plugin-only builds
+legacy-boxes = []
+## Static plugin linkage (optional): when enabled, runtime registers
+## per-Box invoke pointers from statically linked plugin crates.
+static-array-plugin = ["dep:nyash-array-plugin"]
+static-map-plugin   = ["dep:nyash-map-plugin"]
+static-string-plugin= ["dep:nyash-string-plugin"]
+static-file-plugin  = ["dep:nyash-filebox-plugin"]
+static-json-plugin  = ["dep:nyash-json-plugin"]
 # MIR instruction diet PoC flags (scaffolding only; off by default)
 mir_typeop_poc = []
 mir_refbarrier_unify_poc = []
@@ -42,6 +53,11 @@ llvm-inkwell-legacy = ["dep:inkwell"]
 llvm = ["llvm-harness"]
 # Legacy AST interpreter (off by default). Gates NyashInterpreter usage in runner/tests.
 interpreter-legacy = []
+# PyVM bridge (off by default): gates Python VM runner integration paths
+pyvm-bridge = []
+# Stub historical feature to silence check-cfg warnings in archived code paths.
+# This feature is intentionally no-op and remains OFF by default.
+cranelift-jit = []
 # (removed) Optional modular MIR builder feature
 # cranelift-jit = [    # ARCHIVED: Moved to archive/jit-cranelift/ during Phase 15
 #   "dep:cranelift-codegen",
@@ -52,15 +68,29 @@ interpreter-legacy = []
 #   "dep:cranelift-native"
 # ]
 aot-plan-import = []
+parser-c-abi = []
 
 [lib]
 name = "nyash_rust"
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+# Build as rlib only to simplify cross-target static linking (Windows MinGW/MSVC).
+# Dynamic `cdylib` for this root crate is not required; plugin crates provide their own cdylibs.
+crate-type = ["rlib"]
+#doctest disabled by default for CI stability
+doctest = false
 
 # Main CLI binary - always available
 [[bin]]
 name = "nyash"
+path = "src/main.rs"
+[[bin]]
+name = "hako"
+path = "src/bin/hako.rs"
+
+
+# Brand aliases for CLI (same main entry)
+[[bin]]
+name = "hakorune"
 path = "src/main.rs"
 
 # Test binary for multi-box plugin loader
@@ -72,6 +102,12 @@ required-features = ["dynamic-file"]
 [[bin]]
 name = "ny_mir_builder"
 path = "src/bin/ny_mir_builder.rs"
+
+# Build only when C-ABI parser harness is enabled
+[[bin]]
+name = "parser_facade_both_min"
+path = "src/bin/parser_facade_both_min.rs"
+required-features = ["parser-c-abi"]
 
 # Examples for development - only available as examples, not bins
 [[example]]
@@ -143,6 +179,17 @@ env_logger = "0.11"
 libloading = { version = "0.8", optional = true }
 toml = "0.8"
 which = "6"
+tempfile = "3"
+hako_core_string = { path = "crates/hako_core_string" }
+hako_core_array = { path = "crates/hako_core_array" }
+hako_core_map = { path = "crates/hako_core_map" }
+hako_core_callable = { path = "crates/hako_core_callable" }
+nyash-array-plugin = { path = "plugins/nyash-array-plugin", optional = true }
+nyash-map-plugin   = { path = "plugins/nyash-map-plugin", optional = true }
+nyash-string-plugin= { path = "plugins/nyash-string-plugin", optional = true }
+nyash-filebox-plugin = { path = "plugins/nyash-filebox-plugin", optional = true }
+nyash-json-plugin    = { path = "plugins/nyash-json-plugin", optional = true }
+nyash-set-plugin     = { path = "plugins/nyash-set-plugin", optional = true }
 
 # 日時処理
 chrono = "0.4"
@@ -226,9 +273,11 @@ features = [
 [dev-dependencies]
 # テスト・ベンチマークツール
 criterion = "0.5"
-tempfile = "3"
 
 [build-dependencies]
+cc = { version = "1" }
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 once_cell = "1.20"
 
 # Benchmark configuration (will be added later)
@@ -240,10 +289,12 @@ once_cell = "1.20"
 members = [
   "crates/*",
   "plugins/*",
+  "libs/llvm_backend",
 ]
 exclude = [
   "plugins/nyash-file",
   "plugins/nyash-test-multibox",
+  "plugins/legacy",
 ]
 
 [profile.release]

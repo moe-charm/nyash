@@ -1,0 +1,21 @@
+// map_keys_values_bridge.hako — HostBridge path for Map.keys/values via keysS/valuesS + adapter
+// Stage wiring: demonstrate .hako side bridging; mainline fallback remains in Rust router for now.
+
+using "selfhost/shared/host_bridge/host_bridge_box.hako" as HostBridge
+using "selfhost/shared/adapters/map_kv_string_to_array.hako" as MapKvAdapter
+
+static box MapKeysValuesBridgeBox {
+  // Return Array of keys via HostBridge using keysS()
+  keys_array(map) {
+    if map == null { return new ArrayBox() }
+    local s = HostBridge.box_call(map, "keysS", new ArrayBox())
+    return MapKvAdapter.split_lines(s)
+  }
+
+  // Return Array of values via HostBridge using valuesS()
+  values_array(map) {
+    if map == null { return new ArrayBox() }
+    local s = HostBridge.box_call(map, "valuesS", new ArrayBox())
+    return MapKvAdapter.split_lines(s)
+  }
+}

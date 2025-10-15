@@ -18,11 +18,8 @@ pub fn check_no_legacy_ops(function: &MirFunction) -> Result<(), Vec<Verificatio
                 MirInstruction::BarrierRead { .. } => Some("BarrierRead"), // -> Barrier(Read)
                 MirInstruction::BarrierWrite { .. } => Some("BarrierWrite"), // -> Barrier(Write)
                 MirInstruction::Print { .. } => Some("Print"), // -> ExternCall(env.console.log)
-                MirInstruction::ArrayGet { .. } => Some("ArrayGet"), // -> BoxCall("get")
-                MirInstruction::ArraySet { .. } => Some("ArraySet"), // -> BoxCall("set")
-                MirInstruction::RefGet { .. } => Some("RefGet"), // -> BoxCall("getField")
-                MirInstruction::RefSet { .. } => Some("RefSet"), // -> BoxCall("setField")
-                MirInstruction::PluginInvoke { .. } => Some("PluginInvoke"), // -> BoxCall
+                
+                
                 _ => None,
             };
             if let Some(name) = legacy_name {

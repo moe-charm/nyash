@@ -1,0 +1,9 @@
+*.hako linguist-language=Nyash
+
+# Normalize line endings repo-wide (LF on checkout)
+* text=auto eol=lf
+
+# Keep Windows scripts with CRLF for compatibility when checked out on Windows
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

@@ -8,7 +8,7 @@ author = "Nyash Team"
 boxes = ["ArrayBox"]
 
 [ArrayBox]
-type_id = 10
+type_id = 12
 
 [ArrayBox.lifecycle]
 birth = { id = 0 }
@@ -28,6 +28,12 @@ returns = { type = "box" }
 id = 3
 args = [ { name = "value", type = "box" } ]
 returns = { type = "i64" }
+
+[ArrayBox.methods.slice]
+id = 5
+args = [ { name = "start", type = "i64" }, { name = "end", type = "i64" } ]
+returns = { type = "box" }
+
 
 [implementation]
 ffi_version = 1

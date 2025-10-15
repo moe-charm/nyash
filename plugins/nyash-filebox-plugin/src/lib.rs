@@ -19,6 +19,7 @@ use filebox_impl::{filebox_invoke_id, filebox_resolve};
 
 /// FileBox TypeBox export
 #[no_mangle]
+#[used]
 pub static nyash_typebox_FileBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     abi_tag: ABI_TAG_TYBX,
     version: ABI_VERSION,
@@ -26,7 +27,7 @@ pub static nyash_typebox_FileBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"FileBox\0".as_ptr() as *const c_char,
     resolve: Some(filebox_resolve),
     invoke_id: Some(filebox_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 0,
 };
 
 // ============ Plugin Metadata (optional) ============
@@ -44,6 +45,22 @@ pub extern "C" fn nyash_plugin_shutdown() {
 }
 
 // ============ Tests ============
+
+// ============ Library-level invoke shim (compat) ============
+// Provide a v1-style single entry point so hosts can dispatch via (type_id, method_id)
+// even when the per-Box TypeBox symbol is stripped by linker settings.
+#[no_mangle]
+pub extern "C" fn nyash_plugin_invoke(
+    _type_id: u32,
+    method_id: u32,
+    instance_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { filebox_invoke_id(instance_id, method_id, args, args_len, result, result_len) }
+}
 
 #[cfg(test)]
 mod tests {

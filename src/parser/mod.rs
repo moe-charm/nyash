@@ -120,7 +120,7 @@ pub enum ParseError {
     TransparencySystemRemoved { suggestion: String, line: usize },
 
     #[error(
-        "Unsupported namespace '{name}' at line {line}. Only 'nyashstd' is supported in Phase 0."
+        "Using statement requires runner-side resolution: namespace '{name}' at line {line}'.\nDump-only modes (e.g., --dump-mir) parse without resolution and will fail.\nUse --emit-mir-json to inspect MIR, or run without --dump-mir."
     )]
     UnsupportedNamespace { name: String, line: usize },
 
@@ -261,7 +261,7 @@ impl NyashParser {
         let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
             let lv = v.to_ascii_lowercase();
             lv == "1" || lv == "true" || lv == "on"
-        }).unwrap_or(false);
+        }).unwrap_or(true);
 
         while !self.is_at_end() {
             // EOF tokenはスキップ

@@ -1,0 +1,152 @@
+// block_mapper.hako — Phase 1 Day 3: MIR Block Map Builder
+// Strategy: 箱化モジュール化 - ブロック解析を分離（FunctionLocatorBox + BlocksLocatorBox 優先、手書きはフォールバック）
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/function_locator.hako" as FunctionLocatorBox
+using "selfhost/hakorune-vm/blocks_locator.hako" as BlocksLocatorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+
+static box BlockMapperBox {
+  // Build a map of block_id -> block_json
+  // Returns: Result.Ok(MapBox) or Result.Err(message)
+  build_map(mir_json) {
+    // Preferred path: locator boxesで堅牢に抽出
+    local loc_func = FunctionLocatorBox.locate(mir_json)
+    if loc_func.is_Err() { return me._fallback_build(mir_json) }
+    local func_meta = loc_func.as_Ok()
+    local func_json = func_meta.get("content")
+
+    local loc_blocks = BlocksLocatorBox.locate(func_json)
+    if loc_blocks.is_Err() { return me._fallback_build(mir_json) }
+    local blocks_meta = loc_blocks.as_Ok()
+    // content は配列の内側（先頭 '[' と末尾 ']' を除いた部分）
+    local blocks_content = blocks_meta.get("content")
+
+    local block_map = new MapBox()
+
+    // blocks_content から連続するオブジェクト { ... } を走査
+    local pos = 0
+    local n = blocks_content.size()
+    loop(pos < n) {
+      // 空白/カンマをスキップ
+      local ch = blocks_content.substring(pos, pos+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" || ch == "," { pos = pos + 1  continue }
+      if ch != "{" { pos = pos + 1  continue }
+
+      local end = JsonScanGuardBox.seek_obj_end(blocks_content, pos, 500000)
+      if end < 0 { return Result.Err("block object end not found") }
+      local block_json = blocks_content.substring(pos, end+1)
+
+      // id を抽出
+      local key_id = "\"id\":"
+      local id_start = block_json.indexOf(key_id)
+      if id_start < 0 { return Result.Err("block id not found") }
+      id_start = id_start + key_id.size()
+      // 空白スキップ
+      loop(id_start < block_json.size()) {
+        local c2 = block_json.substring(id_start, id_start+1)
+        if c2 == " " || c2 == "\n" || c2 == "\r" || c2 == "\t" { id_start = id_start + 1  continue }
+        break
+      }
+      local id_digits = StringHelpers.read_digits(block_json, id_start)
+      if id_digits == "" { return Result.Err("invalid block id") }
+      local block_id = StringHelpers.to_i64(id_digits)
+      block_map.set(StringHelpers.int_to_str(block_id), block_json)
+
+      pos = end + 1
+    }
+
+    return Result.Ok(block_map)
+  }
+
+  // Legacy fallback path: 手書きスキャンを維持（異常時の観測用）
+  _fallback_build(mir_json) {
+    local block_map = new MapBox()
+
+    // 関数オブジェクト検出
+    local obj_start = mir_json.indexOf("{")
+    if obj_start < 0 { return Result.Err("function object not found") }
+    local obj_end = JsonCursorBox.seek_obj_end(mir_json, obj_start)
+    if obj_end < 0 { return Result.Err("function object end not found") }
+    local func_json = mir_json.substring(obj_start, obj_end + 1)
+
+    // blocks 配列位置へ
+    local key_pos = JsonCursorBox.find_key_dual(func_json, "\"blocks\"", "\\\"blocks\\\"", 0)
+    if key_pos < 0 { return Result.Err("blocks key not found") }
+    local i = key_pos + "\"blocks\"".size()
+    loop(i < func_json.size()) {
+      local ch = func_json.substring(i, i+1)
+      if ch == ":" { i = i + 1  break }
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1  continue }
+      return Result.Err("invalid blocks key format")
+    }
+    loop(i < func_json.size()) {
+      local ch = func_json.substring(i, i+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1  continue }
+      if ch == "[" { break }
+      return Result.Err("blocks array missing after key")
+    }
+    local lbr = i
+    local blocks_end = JsonCursorBox.seek_array_end(func_json, lbr)
+    if blocks_end < 0 { return Result.Err("blocks array end not found") }
+    local blocks_json = func_json.substring(lbr, blocks_end)
+
+    // 各ブロックを解析
+    local pos = 0
+    local len = blocks_json.size()
+
+    loop(pos < len) {
+      // 空白とカンマをスキップ
+      local ch = blocks_json.substring(pos, pos + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" || ch == "," {
+        pos = pos + 1
+        continue
+      }
+
+      // ブロックオブジェクトを抽出
+      if ch == "{" {
+        local block_end = JsonCursorBox.seek_obj_end(blocks_json, pos)
+        if block_end < 0 {
+          return Result.Err("block object end not found")
+        }
+
+        local block_json = blocks_json.substring(pos, block_end + 1)
+
+        // ブロックID
+        local key_id = "\"id\":"
+        local id_start = block_json.indexOf(key_id)
+        if id_start < 0 {
+          return Result.Err("block id not found")
+        }
+        id_start = id_start + key_id.size()
+
+        // 数字直前の空白スキップ
+        loop(id_start < block_json.size()) {
+          local ch2 = block_json.substring(id_start, id_start+1)
+          if ch2 == " " || ch2 == "\n" || ch2 == "\r" || ch2 == "\t" { id_start = id_start + 1  continue }
+          break
+        }
+        local id_digits = StringHelpers.read_digits(block_json, id_start)
+        if id_digits == "" {
+          return Result.Err("invalid block id")
+        }
+
+        local block_id = StringHelpers.to_i64(id_digits)
+
+        // Map に保存
+        block_map.set(StringHelpers.int_to_str(block_id), block_json)
+
+        pos = block_end + 1
+        continue
+      }
+
+      // その他はスキップ
+      pos = pos + 1
+    }
+
+    return Result.Ok(block_map)
+  }
+}

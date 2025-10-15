@@ -1,0 +1,84 @@
+// mir_vm_m2.nyash — Ny製の最小MIR(JSON v0)実行器（M2: const/binop/ret）
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+
+static box MirVmM2 {
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
+  _find_int_in(seg, keypat) {
+    local p = seg.indexOf(keypat)
+    if p < 0 { return null }
+    p = p + keypat.size()
+    local i = p
+    local out = ""
+    loop(true) {
+      local ch = seg.substring(i, i+1)
+      if ch == "" { break }
+      if ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" { out = out + ch  i = i + 1 } else { break }
+    }
+    if out == "" { return null }
+    return me._str_to_int(out)
+  }
+  _find_str_in(seg, keypat) {
+    local p = seg.indexOf(keypat)
+    if p < 0 { return "" }
+    p = p + keypat.size()
+    local q = seg.indexOf(""", p)
+    if q < 0 { return "" }
+    return seg.substring(p, q)
+  }
+  _get(regs, id) { if regs.has(id) { return regs.get(id) } return 0 }
+  _set(regs, id, v) { regs.set(id, v) }
+  _bin(kind, a, b) {
+    if kind == "Add" { return a + b }
+    if kind == "Sub" { return a - b }
+    if kind == "Mul" { return a * b }
+    if kind == "Div" { if b == 0 { return 0 } else { return a / b } }
+    return 0
+  }
+  run(json) {
+    local regs = new MapBox()
+    local pos = StringOps.index_of_from(json, ""instructions":[", 0)
+    if pos < 0 {
+      print("0")
+      return 0
+    }
+    local cur = pos
+    loop(true) {
+      local op_pos = StringOps.index_of_from(json, ""op":"", cur)
+      if op_pos < 0 { break }
+      local name_start = op_pos + 6
+      local name_end = StringOps.index_of_from(json, """, name_start)
+      if name_end < 0 { break }
+      local opname = json.substring(name_start, name_end)
+      local next_pos = StringOps.index_of_from(json, ""op":"", name_end)
+      if next_pos < 0 { next_pos = json.size() }
+      local seg = json.substring(op_pos, next_pos)
+      if opname == "const" {
+        local dst = me._find_int_in(seg, ""dst":")
+        local val = me._find_int_in(seg, ""value":{"type":"i64","value":")
+        if dst != null and val != null { me._set(regs, "" + dst, val) }
+      } else { if opname == "binop" {
+        local dst = me._find_int_in(seg, ""dst":")
+        local kind = me._find_str_in(seg, ""op_kind":"")
+        local lhs = me._find_int_in(seg, ""lhs":")
+        local rhs = me._find_int_in(seg, ""rhs":")
+        if dst != null and lhs != null and rhs != null {
+          local a = me._get(regs, "" + lhs)
+          local b = me._get(regs, "" + rhs)
+          me._set(regs, "" + dst, me._bin(kind, a, b))
+        }
+      } else { if opname == "ret" {
+        local v = me._find_int_in(seg, ""value":")
+        if v == null { v = 0 }
+        local out = me._get(regs, "" + v)
+        print(me._int_to_str(out))
+        return 0
+      } } }
+      cur = next_pos
+    }
+    print("0")
+    return 0
+  }
+}

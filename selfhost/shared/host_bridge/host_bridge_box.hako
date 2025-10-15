@@ -1,0 +1,21 @@
+// host_bridge_box.hako — HostBridgeBox (Phase A, Hako-side thin adapter)
+// Responsibility: Provide minimal API to construct/call host boxes for VM backend.
+// Note: Phase A supports only a small subset (FileBox). Phase B wires full Hako ABI.
+
+static box HostBridgeBox {
+  // Create a box by name with args (Phase B: extern → Rust HostBridge)
+  // Route: hostbridge.box_new(name, args)
+  box_new(name, args) {
+    if args == null { args = new ArrayBox() }
+    return hostbridge.box_new(name, args)
+  }
+
+  // Call a method by name with Array args (Phase B: extern → Rust HostBridge)
+  // Route: hostbridge.box_call(receiver, method, args) → lowered to Extern("hostbridge.box_call")
+  box_call(inst, method, args) {
+    if inst == null { return null }
+    if args == null { args = new ArrayBox() }
+    return hostbridge.box_call(inst, method, args)
+  }
+}
+

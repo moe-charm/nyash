@@ -1,0 +1,19 @@
+// JIT minimal path demo (Core-1)
+// Enable with: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_STATS=1
+// Optional hostcall: NYASH_JIT_HOSTCALL=1
+
+// Straight-line integer math + compare + return
+static box Main {
+    main() {
+        local a, b, c
+        a = 40
+        b = 2
+        c = a + b  // 42
+        // Compare still compiles; branching falls back to VM when needed
+        if (c == 42) {
+            print("jit-ok")
+        }
+        return c
+    }
+}
+

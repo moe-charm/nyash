@@ -1,0 +1,11 @@
+// Simple Addition Benchmark
+// Expected Result: 42 (15 + 27)
+// Tests: Basic integer arithmetic
+
+static box Main {
+  main() {
+    local result = 15 + 27
+    print(result)
+    return result  // → 42
+  }
+}

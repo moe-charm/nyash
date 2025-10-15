@@ -21,7 +21,7 @@ if 3 > 2 {
 }
 '
   local output
-  output=$(run_nyash_vm -c "$script" 2>&1)
+  output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "OK" "$output" "comparison_basic"
 }
 

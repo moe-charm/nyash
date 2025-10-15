@@ -1,0 +1,13 @@
+// NewExtractBox — Stage‑1 JSON から Return(New class(args...)) を抽出（整数引数のみ）
+// Delegation to Stage1IntArgsExtractBox (unified implementation)
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as Unified
+
+static box NewExtractBox {
+  // Returns { class: String, args: [Int,...] } or null
+  extract_return_new_ints(ast_json) {
+    return Unified.extract_return_new_ints(ast_json)
+  }
+}
+
+static box NewExtractStub { main(args) { return 0 } }
+

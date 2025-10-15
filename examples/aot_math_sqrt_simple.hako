@@ -1,0 +1,27 @@
+// Simplest math.sqrt example with ConsoleBox output
+static box Main {
+  main() {
+    local py, code, result, console, msg1, msg2
+    
+    // Create console
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Print start text
+    msg1 = new StringBox("Calculating sqrt(16)...")
+    console.log(msg1)
+    
+    // Use eval for math.sqrt (since import/getattr not available)
+    code = new StringBox("__import__('math').sqrt(16)")
+    result = py.eval(code)
+    
+    // Print done text
+    msg2 = new StringBox("Result calculated!")
+    console.log(msg2)
+    
+    // Return the result (should be 4.0 as FloatBox with NYASH_PY_AUTODECODE=1)
+    return result
+  }
+}

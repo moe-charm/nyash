@@ -1,0 +1,79 @@
+// UsingCollectorBox — line-based `using` extractor (Path/Namespace → JSON array)
+// Responsibility: Parse source text line-by-line and produce a JSON array
+//   [{"name":"AliasOrBase","path":"path/if/any"}, ...]
+// Notes:
+// - ParserBox.extract_usings delegates to this box (Phase 2 split)
+// - Pure string scan（依存ゼロ）。Fail‑Fastはせず、安全にスキップでループを進める
+
+using "apps/selfhost-compiler/boxes/parser/scan/parser_common_utils_box.hako" as Utils
+
+static box UsingCollectorBox {
+
+  // Public API: collect line-based using declarations to JSON array string
+  collect(src) {
+    if src == null { return "[]" }
+    local n = src.size()
+    local i = 0
+    local first = 1
+    local out = "["
+    loop(i < n) {
+      // line slice [i, j)
+      local j = i
+      loop(j < n && src.substring(j, j+1) != "
+") { j = j + 1 }
+      local line = src.substring(i, j)
+      // trim left spaces/tabs
+      local k = 0
+      loop(k < line.size() && (line.substring(k,k+1) == " " || line.substring(k,k+1) == "	")) { k = k + 1 }
+      if Utils.starts_with(line, k, "using ") == 1 {
+        local rest = Utils.trim(line.substring(k + 6, line.size()))
+        // split on ' as '
+        local as_pos = Utils.index_of(rest, 0, " as ")
+        local target = rest
+        local alias = null
+        if as_pos >= 0 { target = Utils.trim(rest.substring(0, as_pos)) alias = Utils.trim(rest.substring(as_pos + 4, rest.size())) }
+        // path or namespace
+        local is_path = 0
+        if target.size() > 0 {
+          if Utils.starts_with(target, 0, Utils.dq()) == 1 { is_path = 1 }
+          if Utils.starts_with(target, 0, "./") == 1 { is_path = 1 }
+          if Utils.starts_with(target, 0, "/") == 1 { is_path = 1 }
+          if target.size() >= 5 && Utils.starts_with(target, target.size()-5, ".hako") == 1 { is_path = 1 }
+          if target.size() >= 6 && Utils.starts_with(target, target.size()-6, ".nyash") == 1 { is_path = 1 }
+        }
+        local name = ""
+        local path = null
+        if is_path == 1 {
+          // strip quotes
+          if Utils.starts_with(target, 0, Utils.dq()) == 1 {
+            target = target.substring(1, target.size())
+            if target.size() > 0 && target.substring(target.size()-1, target.size()) == Utils.dq() { target = target.substring(0, target.size()-1) }
+          }
+          path = target
+          if alias != null { name = alias } else {
+            // basename
+            local p = target
+            local idx = -1
+            local t = 0
+            loop(t < p.size()) { if p.substring(t,t+1) == "/" { idx = t } t = t + 1 }
+            if idx >= 0 { p = p.substring(idx+1, p.size()) }
+            // strip extension
+            if p.size() > 5 && Utils.starts_with(p, p.size()-5, ".hako") == 1 { p = p.substring(0, p.size()-5) }
+            else { if p.size() > 6 && Utils.starts_with(p, p.size()-6, ".nyash") == 1 { p = p.substring(0, p.size()-6) } }
+            name = p
+          }
+        } else {
+          name = target
+        }
+        // append entry
+        if first == 0 { out = out + "," } else { first = 0 }
+        out = out + "{" + Utils.dq() + "name" + Utils.dq() + ":" + Utils.dq() + Utils.esc_json(name) + Utils.dq()
+        if path != null { out = out + "," + Utils.dq() + "path" + Utils.dq() + ":" + Utils.dq() + Utils.esc_json(path) + Utils.dq() }
+        out = out + "}"
+      }
+      i = j + 1
+    }
+    out = out + "]"
+    return out
+  }
+}

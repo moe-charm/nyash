@@ -1,0 +1,9 @@
+// print JitStatsBox.toJson()
+static box Main {
+  main() {
+    local s
+    s = new JitStatsBox()
+    print(s.toJson())
+    return 0
+  }
+}

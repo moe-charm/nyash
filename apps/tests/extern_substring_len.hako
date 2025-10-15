@@ -1,0 +1,10 @@
+// Verify substring length via extern (string API) and Result line
+static box Main {
+  main() {
+    local s = "abcd"
+    local t = s.substring(1, 3) // expect "bc"
+    print("Result: " + t.size()) // expect 2
+    return 0
+  }
+}
+

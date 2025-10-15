@@ -1,10 +1,12 @@
 #[test]
 fn vtable_array_and_string_len_get_set() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
     };
+    use crate::mir::definitions::Callee;
+
     std::env::set_var("NYASH_ABI_VTABLE", "1");
 
     // Array: set(0, "x"); len(); get(0)
@@ -19,11 +21,8 @@ fn vtable_array_and_string_len_get_set() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let idx0 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -40,37 +39,16 @@ fn vtable_array_and_string_len_get_set() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "set".into(),
-            args: vec![idx0, sval],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.set/2".into())), args: vec![arr, idx0, sval], effects: EffectMask::PURE });
     let lenv = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(lenv),
-            box_val: arr,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(lenv), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![arr], effects: EffectMask::PURE });
     // sanity: len should be 1 (not asserted here, just exercise path)
     let got = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(got),
-            box_val: arr,
-            method: "get".into(),
-            args: vec![idx0],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(got), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.get/1".into())), args: vec![arr, idx0], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(got) });
@@ -99,22 +77,12 @@ fn vtable_array_and_string_len_get_set() {
     let sb = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb,
-            box_type: "StringBox".into(),
-            args: vec![s],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
+                auto_birth: None });
     let ln = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(ln),
-            box_val: sb,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(ln), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![sb], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(ln) });

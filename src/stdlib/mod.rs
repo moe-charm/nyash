@@ -6,6 +6,7 @@
  */
 
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::ArrayBox;
 use crate::box_factory::RuntimeError;
 use std::collections::HashMap;
@@ -210,9 +211,16 @@ impl BuiltinStdlib {
                     message: "array.create() takes no arguments".to_string(),
                 });
             }
-
-            let result = ArrayBox::new();
-            Ok(Box::new(result))
+            #[cfg(feature = "legacy-boxes")]
+            {
+                let result = ArrayBox::new();
+                Ok(Box::new(result))
+            }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                crate::runtime::plugin_host_box::create_box("ArrayBox", &[])
+                    .map_err(|_| RuntimeError::InvalidOperation { message: "array.create plugin path failed".into() })
+            }
         });
 
         array_box

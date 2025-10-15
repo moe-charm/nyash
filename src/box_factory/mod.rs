@@ -132,13 +132,45 @@ impl UnifiedBoxRegistry {
 
     /// Create registry with policy from environment variable (Phase 15.5 setup)
     pub fn with_env_policy() -> Self {
-        let policy = match std::env::var("NYASH_BOX_FACTORY_POLICY").ok().as_deref() {
+        let mut policy = match std::env::var("NYASH_BOX_FACTORY_POLICY").ok().as_deref() {
             Some("compat_plugin_first") => FactoryPolicy::CompatPluginFirst,
             Some("builtin_first") => FactoryPolicy::BuiltinFirst,
             Some("strict_plugin_first") | _ => FactoryPolicy::StrictPluginFirst, // Phase 15.5: Plugin First DEFAULT!
         };
 
-        eprintln!("[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)", policy);
+        // When plugins are globally disabled, prefer builtin factory ordering to reduce overhead.
+        if crate::runtime::env_gate_box::bool_alias_or("NYASH_DISABLE_PLUGINS", "HAKO_DISABLE_PLUGINS", false) {
+            policy = FactoryPolicy::BuiltinFirst;
+        }
+
+        // Quiet in JSON-only/quiet modes to avoid polluting child JSON output
+        let is_quiet = (std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1"))
+            || crate::runtime::env_gate_box::bool_alias_or("NYASH_QUIET", "HAKO_QUIET", false)
+            || (std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0"));
+        if !is_quiet {
+            eprintln!(
+                "[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)",
+                policy
+            );
+            // Also emit a one-line snapshot of core type ids and their source (non-quiet only)
+            let ids = [
+                ("MapBox", crate::types::ids::map()),
+                ("ArrayBox", crate::types::ids::array()),
+                ("StringBox", crate::types::ids::string()),
+            ];
+            let mut source = "default";
+            if let Ok(conf) = crate::config::nyash_toml_v2::NyashConfigV2::from_file("hako.toml")
+                .or_else(|_| crate::config::nyash_toml_v2::NyashConfigV2::from_file("nyash.toml"))
+                .or_else(|_| crate::config::nyash_toml_v2::NyashConfigV2::from_file("hakorune.toml"))
+            {
+                if !conf.box_types.is_empty() { source = "config"; }
+            }
+            eprintln!(
+                "[TypeRegistry] CORE type ids: MapBox={} ArrayBox={} StringBox={} (source={})",
+                ids[0].1, ids[1].1, ids[2].1, source
+            );
+
+        }
         Self::with_policy(policy)
     }
 
@@ -156,7 +188,13 @@ impl UnifiedBoxRegistry {
     }
 
     /// Rebuild type cache based on current policy
-    fn rebuild_cache(&mut self) {
+    /// Rebuild type cache based on current policy and environment
+    ///
+    /// Public because runner may update environment toggles
+    /// (e.g., NYASH_USE_PLUGIN_BUILTINS / NYASH_PLUGIN_OVERRIDE_TYPES)
+    /// after the registry has been initialized. Rebuilding ensures newly
+    /// allowed plugin-backed core boxes (ArrayBox/MapBox/...) are picked up.
+    pub fn rebuild_cache(&mut self) {
         // Clear existing cache
         let mut cache = self.type_cache.write().unwrap();
         cache.clear();
@@ -193,10 +231,16 @@ impl UnifiedBoxRegistry {
                 for type_name in types {
                     // Enforce reserved names: only builtin factory may claim them
                     if is_reserved_type(type_name) && !factory.is_builtin_factory() {
-                        eprintln!(
-                            "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
-                            type_name, factory_index
-                        );
+                        // Quiet noisy logs in JSON-only/quiet modes
+                        let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+                            || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+                            || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+                        if !is_quiet {
+                            eprintln!(
+                                "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
+                                type_name, factory_index
+                            );
+                        }
                         continue;
                     }
 
@@ -206,8 +250,19 @@ impl UnifiedBoxRegistry {
                     match entry {
                         Entry::Occupied(existing) => {
                             // Collision: type already claimed by higher-priority factory
-                            eprintln!("[UnifiedBoxRegistry] ⚠️ Policy '{}': type '{}' kept by higher priority factory #{}, ignoring factory #{}",
-                                      format!("{:?}", self.policy), existing.key(), existing.get(), factory_index);
+                            // Quiet noisy logs in JSON-only/quiet modes
+                            let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+                                || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+                                || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+                            if !is_quiet {
+                                eprintln!(
+                                    "[UnifiedBoxRegistry] ⚠️ Policy '{}': type '{}' kept by higher priority factory #{}, ignoring factory #{}",
+                                    format!("{:?}", self.policy),
+                                    existing.key(),
+                                    existing.get(),
+                                    factory_index
+                                );
+                            }
                         }
                         Entry::Vacant(v) => {
                             v.insert(factory_index);
@@ -268,6 +323,20 @@ impl UnifiedBoxRegistry {
         name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Fast path: when plugin policy is enabled, attempt direct plugin host creation first.
+        // This avoids dependency on registry provider mapping for core boxes in plugin-on mode.
+        let plugin_policy_on = match std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok()).as_deref() {
+            Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => true,
+            _ => false,
+        };
+        if plugin_policy_on {
+            if let Some(b) = {
+                let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                host_arc.read().ok().and_then(|h| h.create_box(name, args).ok())
+            } {
+                return Ok(b);
+            }
+        }
         // Prefer plugin-builtins when enabled and provider is available in v2 registry
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};
@@ -341,7 +410,31 @@ impl UnifiedBoxRegistry {
             }
         }
 
-        Err(RuntimeError::InvalidOperation {
+        {
+            let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+            let maybe = host_arc.read().ok().and_then(|h| h.create_box(name, args).ok());
+            if let Some(b) = maybe { return Ok(b); }
+        }
+
+        
+        if std::env::var("NYASH_PLUGIN_LOOKUP_LOCAL").ok().as_deref() == Some("1") {
+            let candidates = ["hako.toml", "nyash.toml"];
+            for cfg in candidates.iter() {
+                if let Ok(ny) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
+                    if let Some((lib, def)) = ny.find_library_for_box(name) {
+                        let maybe = {
+                            let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                            host_arc.read().ok().and_then(|h| {
+                                let _ = h.load_library_direct(lib, &def.path, &def.boxes);
+                                h.create_box(name, args).ok()
+                            })
+                        };
+                        if let Some(b) = maybe { return Ok(b); }
+                    }
+                }
+            }
+        }
+Err(RuntimeError::InvalidOperation {
             message: format!("Unknown Box type: {}", name),
         })
     }

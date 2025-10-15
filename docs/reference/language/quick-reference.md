@@ -6,7 +6,7 @@ Purpose
 
 Keywords (reserved)
 - control: `if`, `else`, `loop`, `match`, `case`, `break`, `continue`, `return`
-- decl: `static`, `box`, `local`, `using`, `as`
+- decl: `flow`, `static`, `box`, `local`, `using`, `as`
 - lit: `true`, `false`, `null`, `void`
 
 Expressions and Calls
@@ -38,12 +38,14 @@ Operators (precedence high→low)
 - Logical: `&& ||` (short‑circuit, side‑effect aware)
 
 Semicolons and ASI (Automatic Semicolon Insertion)
+- Semicolons are accepted by default. Newline remains the preferred separator.
 - Allowed to omit semicolon at:
   - End of line, before `}` or at EOF, when the statement is syntactically complete.
 - Not allowed:
   - Line break immediately after a binary operator (e.g., `1 +\n2`)
   - Ambiguous continuations; parser must Fail‑Fast with a clear message.
  - Enforce (dev flag): `NYASH_ASI_STRICT=1`（既定は互換・OFF）
+ - Disable semicolons entirely (dev/testing): set `NYASH_PARSER_ALLOW_SEMICOLON=0`
 
 Truthiness (boolean context)
 - `Bool` → itself
@@ -64,14 +66,33 @@ String and Numeric `+`
 - Other mixes are errors (dev: warn; prod: error) — keep it explicit（必要なら `str(x)` を使う）。
  - Enforce (dev flag): `NYASH_PLUS_MIX_ERROR=1`（既定は互換・OFF）
 
+String Literals
+- Normal: `"hello\nworld"` — interprets escapes: `\"`, `\\`, `\n`, `\t`, `\r`
+- Raw: `r"C:\path\file.txt"` — no escape interpretation (raw bytes)
+- Raw with quotes: `r#"He said "Hello""#` — use `#` delimiters (can nest: `r##"..."##`)
+- JSON processing: Use scanner boxes for robust parsing (escape-aware):
+  - `selfhost/vm/boxes/string_scan.hako` — `find_unescaped()`, `scan_string_end()`
+  - `selfhost/vm/boxes/json_scan.hako` — `seek_obj_end()`, `find_key_dual()` (plain/escaped)
+
 Blocks and Control
 - `if (cond) { ... } [else { ... }]`
 - `loop (cond) { ... }` — minimal loop form
 - `match (expr) { case ... }` — MVP (literals and simple type patterns)
 
+Sugar Syntax (Phase 12.7+)
+- Lambda: `fn(x, y) { x + y }` or `fn(x) { x * 2 }` (single expr, implicit return)
+  - Use in: `array.map(fn(x) { x * 2 })`, `sort(fn(a,b) { a - b })`
+- Result propagation: `data = readFile(path)?` — early return on error
+- Postfix handlers: `doWork() catch(e) { handle(e) } cleanup { always() }`
+- Match expression: `match ch { "0" => 0, "1" => 1, _ => -1 }`
+  - Prefer over if-chain for lookup/dispatch
+
+See also: docs/cookbook/quick-tips.md (practical examples)
+Advanced: docs/development/roadmap/language-evolution/ (full roadmap)
+
 Using / SSOT
 - Dev/CI: file‑based `using` allowed for convenience.
-- Prod: `nyash.toml` only. Duplicate imports or alias rebinding is an error.
+- Prod: `hako.toml` only (compat: `nyash.toml`). Duplicate imports or alias rebinding is an error.
 
 Errors (format)
 - Always: `Error at line X, column Y: <message>`
@@ -79,9 +100,16 @@ Errors (format)
 
 Dev/Prod toggles (indicative)
 - `NYASH_DEV=1` — developer defaults (diagnostics, tracing; behavior unchanged)
-- `NYASH_ENABLE_USING=1` — enable using resolver
+- `NYASH_USING=1` — enable using resolver (`NYASH_USING_STRATEGY={resolver|prelude}` for merge mode)
 - `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1` — allow `main` as top‑level entry
 
 Notes
 - Keep the language small. Prefer explicit conversions (`int(x)`, `str(x)`, `bool(x)`) in standard helpers over implicit coercions.
 - Builder rewrites method calls to keep runtime dispatch simple and consistent across backends.
+
+Flow (stateless namespace)
+- `flow Name { ... }` defines a stateless container of methods.
+- Allowed: methods, local variables inside methods.
+- Forbidden: fields, `birth`/`fini`, `new Name()`, `me` inside methods.
+- Lowering intent: `Name.method(a, b)` → global `Name.method/2` (no BoxCall).
+- Use for entry modules (Main.main) and utility groups.

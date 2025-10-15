@@ -1,0 +1,24 @@
+// Mini-VM library (function-based) with a tiny JSON extractor
+// Safe MVP: no real JSON parsing; string scan for first int literal only
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box MiniVm {
+  // Read consecutive digits starting at pos (delegated)
+  read_digits(json, pos) { return StringHelpers.read_digits(json, pos) }
+
+  // Extract the first integer literal from our AST JSON v0 subset
+  parse_first_int(json) {
+    @key = "\"value\":{\"type\":\"int\",\"value\":"
+    @idx = json.lastIndexOf(key)
+    if idx < 0 { return "0" }
+    @start = idx + key.size()
+    return me.read_digits(json, start)
+  }
+
+  // Execute a minimal program: print the extracted integer and exit code 0
+  run(json) {
+    @n = parse_first_int(json)
+    print(n)
+    return 0
+  }
+}

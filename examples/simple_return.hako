@@ -1,0 +1,6 @@
+// Simplest possible example for native build
+static box Main {
+  main() {
+    return 42
+  }
+}

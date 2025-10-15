@@ -1,0 +1,91 @@
+// Stage1IntArgsExtractBox — 統合Extract: Return(Call/Method/New) から名前と整数引数を抽出
+// Responsibility: 3つの類似ExtractBoxを統合（call_extract/method_extract/new_extract）
+// Notes: 85%重複コードを共通化、args抽出ロジックを一元管理
+
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box Stage1IntArgsExtractBox {
+  // ===== 汎用Extract（内部実装） =====
+
+  extract_return_expr_ints(ast_json, expr_type, name_key, name_offset) {
+    if ast_json == null { return null }
+
+    // Step 1: Return 探索
+    local rq = RegexFlow.find_from(ast_json, "\"type\":\"Return\"", 0)
+    if rq < 0 { return null }
+
+    // Step 2: Expr type 探索（Call/Method/New）
+    local q = RegexFlow.find_from(ast_json, "\"type\":\"" + expr_type + "\"", rq)
+    if q < 0 { return null }
+
+    // Step 3: 名前抽出
+    local nk = RegexFlow.find_from(ast_json, name_key, q)
+    if nk < 0 { return null }
+    local nk_end = RegexFlow.find_from(ast_json, "\"", nk + name_offset)
+    if nk_end < 0 { return null }
+    local name = ast_json.substring(nk + name_offset, nk_end)
+
+    // Step 4: args抽出（Int only、共通ロジック）
+    local args = me._extract_int_args(ast_json, q)
+
+    return { name: name, args: args }
+  }
+
+  // ===== 内部ヘルパー：Int引数抽出（共通化） =====
+
+  _extract_int_args(ast_json, start_pos) {
+    local ak = RegexFlow.find_from(ast_json, "\"args\":[", start_pos)
+    local vals = []
+    if ak < 0 { return vals }
+
+    // bracket-aware end detection
+    local lb = RegexFlow.find_from(ast_json, "[", ak)
+    local rb = ast_json.size()
+    if lb >= 0 {
+      local i2 = lb + 1
+      local depth = 1
+      loop(true) {
+        local ch = ast_json.substring(i2, i2+1)
+        if ch == "" { break }
+        if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+        if depth == 0 { rb = i2  break }
+        i2 = i2 + 1
+      }
+    }
+
+    // scan ints within ak..rb
+    local i = ak
+    loop(true) {
+      local tpos = RegexFlow.find_from(ast_json, "\"type\":\"Int\"", i)
+      if tpos < 0 || tpos >= rb { break }
+      local vpos = RegexFlow.find_from(ast_json, "\"value\":", tpos)
+      if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+      local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+      if ds != "" { vals.push(RegexFlow.to_int(ds)) }
+      i = vpos + 8 + ds.size()
+    }
+    return vals
+  }
+
+  // ===== 公開API（後方互換） =====
+
+  extract_return_call_ints(ast_json) {
+    return me.extract_return_expr_ints(ast_json, "Call", "\"name\":\"", 8)
+  }
+
+  extract_return_method_ints(ast_json) {
+    local result = me.extract_return_expr_ints(ast_json, "Method", "\"method\":\"", 10)
+    if result == null { return null }
+    // method key for backward compatibility
+    return { method: result.name, args: result.args }
+  }
+
+  extract_return_new_ints(ast_json) {
+    local result = me.extract_return_expr_ints(ast_json, "New", "\"class\":\"", 9)
+    if result == null { return null }
+    // class key for backward compatibility
+    return { class: result.name, args: result.args }
+  }
+}
+
+static box Stage1IntArgsExtractStub { main(args) { return 0 } }

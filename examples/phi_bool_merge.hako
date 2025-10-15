@@ -1,0 +1,23 @@
+// Boolean PHI merge demo (b1 internal path)
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_PHI_MIN=1
+// Optional DOT: NYASH_JIT_DOT=tmp/phi_bool.dot
+
+static box Main {
+    main() {
+        local a, b, c
+        a = 3
+        b = 5
+        // Create a boolean via branch to force PHI merge of boolean
+        if (a < b) {
+            c = true
+        } else {
+            c = false
+        }
+        // Use merged boolean
+        if (c) {
+            return 1
+        } else {
+            return 0
+        }
+    }
+}

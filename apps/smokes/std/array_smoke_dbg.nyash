@@ -31,12 +31,12 @@ static box Main {
     A.array_push(a, 3)
     local s
     s = A.array_slice(a, 0, 2)
-    print("slice_len1=" + s.length())
+    print("slice_len1=" + s.size())
     print("s[0]=" + s.get(0))
     print("s[1]=" + s.get(1))
     // clamp
     s = A.array_slice(a, -5, 99)
-    print("slice_len2=" + s.length())
+    print("slice_len2=" + s.size())
     return 0
   }
 }

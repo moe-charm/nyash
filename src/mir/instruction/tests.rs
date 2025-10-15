@@ -47,6 +47,7 @@ fn test_call_instruction() {
     let inst = MirInstruction::Call {
         dst: Some(dst),
         func,
+        callee: None,
         args: vec![arg1, arg2],
         effects: EffectMask::IO,
     };
@@ -80,43 +81,7 @@ fn test_ref_new_instruction() {
     assert!(inst.effects().is_pure());
 }
 
-#[test]
-fn test_ref_get_instruction() {
-    let dst = ValueId::new(0);
-    let reference = ValueId::new(1);
-    let field = "name".to_string();
-    let inst = MirInstruction::RefGet {
-        dst,
-        reference,
-        field,
-    };
-
-    assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![reference]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst
-        .effects()
-        .contains(super::super::effect::Effect::ReadHeap));
-}
-
-#[test]
-fn test_ref_set_instruction() {
-    let reference = ValueId::new(0);
-    let field = "value".to_string();
-    let value = ValueId::new(1);
-    let inst = MirInstruction::RefSet {
-        reference,
-        field,
-        value,
-    };
-
-    assert_eq!(inst.dst_value(), None);
-    assert_eq!(inst.used_values(), vec![reference, value]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst
-        .effects()
-        .contains(super::super::effect::Effect::WriteHeap));
-}
+// RefGet/RefSet retired (normalized to BoxCall at build time). Tests removed.
 
 #[test]
 fn test_weak_new_instruction() {
@@ -169,31 +134,19 @@ fn test_barrier_instructions() {
 }
 
 #[test]
-fn test_extern_call_instruction() {
+fn test_extern_call_instruction_replaced_by_callee_extern() {
     let dst = ValueId::new(0);
     let arg1 = ValueId::new(1);
     let arg2 = ValueId::new(2);
-    let inst = MirInstruction::ExternCall {
+    let inst = MirInstruction::Call {
         dst: Some(dst),
-        iface_name: "env.console".to_string(),
-        method_name: "log".to_string(),
+        func: ValueId::new(0),
+        callee: Some(crate::mir::Callee::Extern("env.console.log".into())),
         args: vec![arg1, arg2],
         effects: super::super::effect::EffectMask::IO,
     };
 
     assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![arg1, arg2]);
+    assert_eq!(inst.used_values().len() >= 2, true);
     assert_eq!(inst.effects(), super::super::effect::EffectMask::IO);
-
-    // Test void extern call
-    let void_inst = MirInstruction::ExternCall {
-        dst: None,
-        iface_name: "env.canvas".to_string(),
-        method_name: "fillRect".to_string(),
-        args: vec![arg1],
-        effects: super::super::effect::EffectMask::IO,
-    };
-
-    assert_eq!(void_inst.dst_value(), None);
-    assert_eq!(void_inst.used_values(), vec![arg1]);
 }

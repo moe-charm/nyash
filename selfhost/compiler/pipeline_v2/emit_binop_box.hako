@@ -1,0 +1,33 @@
+// EmitBinopBox — binop の最小 MIR(JSON v0) 生成
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+
+static box EmitBinopBox {
+  _map_binop(opk) {
+    if opk == "+" { return "Add" }
+    if opk == "-" { return "Sub" }
+    if opk == "*" { return "Mul" }
+    if opk == "/" { return "Div" }
+    if opk == "%" { return "Mod" }
+    return opk
+  }
+
+  emit_binop(lhs, rhs, opk) { return EmitBinopBox.emit_binop2(lhs, rhs, opk, 0) }
+
+  emit_binop2(lhs, rhs, opk, trace) {
+    // dev-trace (minimal, env-gate想定)
+    if trace == 1 { print("[emit] binop lhs=" + lhs + " rhs=" + rhs + " op=" + opk) }
+    local kind = EmitBinopBox._map_binop(opk)
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, lhs)
+      |> MirJsonBuilderMin.add_const(2, rhs)
+      |> MirJsonBuilderMin.add_binop(kind, 1, 2, 3)
+      |> MirJsonBuilderMin.add_ret(3)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitBinopStub { main(args) { return 0 } }

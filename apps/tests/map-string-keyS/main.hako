@@ -1,0 +1,15 @@
+// MapBox string-key (typed methods) support smoke
+static box Main {
+  main() {
+    local m = new MapBox()
+    m.setS("alpha", 1)
+    m.setS("beta", 2)
+    local a = m.getS("alpha")
+    local b = m.getS("beta")
+    if a == 1 {
+      if b == 2 { return 0 }
+    }
+    return 1
+  }
+}
+

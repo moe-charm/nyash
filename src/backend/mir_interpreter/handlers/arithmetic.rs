@@ -53,9 +53,8 @@ impl MirInterpreter {
                 }
             } else { (a0, b0) }
         } else { (a0, b0) };
-        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
-        {
+        let cfg = super::VmConfig::global();
+        if cfg.general_trace || cfg.trace_exec {
             let ak = crate::backend::abi_util::tag_of_vm(&a);
             let bk = crate::backend::abi_util::tag_of_vm(&b);
             eprintln!("[vm-op] binop {:?} a_k={} b_k={}", op, ak, bk);
@@ -132,7 +131,10 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
         let a = self.reg_load(lhs)?;
         let b = self.reg_load(rhs)?;
-        // Operator Box (Compare) — observe always; adopt gated
+        if super::super::VmConfig::global().general_trace {
+            eprintln!("[DEBUG-COMPARE] op={:?}, a={:?}, b={:?}", op, a, b);
+        }
+        // Operator Box (Compare) — adopt gated; do NOT execute when adopt is OFF
         if let Some(op_fn) = self.functions.get("CompareOperator.apply/3").cloned() {
             let in_guard = self
                 .cur_fn
@@ -147,24 +149,17 @@ impl MirInterpreter {
                 CompareOp::Gt => "Gt",
                 CompareOp::Ge => "Ge",
             };
-            if !in_guard {
-                if crate::config::env::operator_box_compare_adopt() {
-                    let out = self.exec_function_inner(
-                        &op_fn,
-                        Some(&[VMValue::String(opname.to_string()), a.clone(), b.clone()]),
-                    )?;
-                    let res = match out {
-                        VMValue::Bool(b) => b,
-                        _ => self.eval_cmp(op, a.clone(), b.clone())?,
-                    };
-                    self.regs.insert(dst, VMValue::Bool(res));
-                    return Ok(());
-                } else {
-                    let _ = self.exec_function_inner(
-                        &op_fn,
-                        Some(&[VMValue::String(opname.to_string()), a.clone(), b.clone()]),
-                    );
-                }
+            if !in_guard && crate::config::env::operator_box_compare_adopt() {
+                let out = self.exec_function_inner(
+                    &op_fn,
+                    Some(&[VMValue::String(opname.to_string()), a.clone(), b.clone()]),
+                )?;
+                let res = match out {
+                    VMValue::Bool(b) => b,
+                    _ => self.eval_cmp(op, a.clone(), b.clone())?,
+                };
+                self.regs.insert(dst, VMValue::Bool(res));
+                return Ok(());
             }
         }
         let res = self.eval_cmp(op, a, b)?;
@@ -173,8 +168,43 @@ impl MirInterpreter {
     }
 
     pub(super) fn handle_copy(&mut self, dst: ValueId, src: ValueId) -> Result<(), VMError> {
-        let v = self.reg_load(src)?;
-        self.regs.insert(dst, v);
-        Ok(())
+        // Defensive: some pipelines may place a Copy before the source has a
+        // definition in the current block (e.g., entry scheduling artifacts).
+        // Behavior:
+        // - If src is defined: perform normal copy.
+        // - If src is undefined but dst already has a value: treat as no-op (keep dst).
+        // - Otherwise: respect strict mode unless tolerate_void is enabled, in which
+        //   case initialize dst as Void to keep execution progressing in dev contexts.
+        match self.reg_load(src) {
+            Ok(v) => {
+                self.regs.insert(dst, v);
+                Ok(())
+            }
+            Err(e) => {
+                if self.regs.contains_key(&dst) {
+                    if super::VmConfig::global().general_trace {
+                        eprintln!(
+                            "[vm-copy] src undefined v%{} → no-op; keep dst v%{}",
+                            src.as_u32(),
+                            dst.as_u32()
+                        );
+                    }
+                    return Ok(());
+                }
+                if super::VmConfig::global().tolerate_void {
+                    if super::VmConfig::global().general_trace {
+                        eprintln!(
+                            "[vm-copy] src undefined v%{} → init dst v%{} = Void (tolerate)",
+                            src.as_u32(),
+                            dst.as_u32()
+                        );
+                    }
+                    self.regs.insert(dst, super::VMValue::Void);
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }

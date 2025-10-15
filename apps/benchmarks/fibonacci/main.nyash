@@ -1,0 +1,18 @@
+// Fibonacci Benchmark - Recursive Implementation
+// Expected Result: 55 (fibonacci(10))
+// Tests: Integer arithmetic, recursion, control flow
+
+static box Main {
+  compute(n) {
+    if n <= 1 {
+      return n
+    }
+    return me.compute(n - 1) + me.compute(n - 2)
+  }
+
+  main() {
+    local result = me.compute(10)
+    print(result)
+    return result  // → 55
+  }
+}

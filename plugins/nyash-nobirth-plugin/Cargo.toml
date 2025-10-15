@@ -1,0 +1,11 @@
+[package]
+name = "nyash-nobirth-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nyash_nobirth_plugin"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+hako_abi_impl = { path = "../../crates/hako_abi_impl" }

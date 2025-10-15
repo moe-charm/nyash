@@ -71,7 +71,7 @@ pub fn diagnose_unlowered_type_ops(
 }
 
 /// Diagnostic: detect legacy instructions that should be unified
-/// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite/ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke
+/// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite (Array/Ref are already normalized)
 pub fn diagnose_legacy_instructions(
     opt: &mut MirOptimizer,
     module: &MirModule,
@@ -84,39 +84,29 @@ pub fn diagnose_legacy_instructions(
         let mut count = 0usize;
         for (_bb, block) in &function.blocks {
             for inst in &block.instructions {
-                match inst {
+                if matches!(
+                    inst,
                     MirInstruction::TypeCheck { .. }
-                    | MirInstruction::Cast { .. }
-                    | MirInstruction::WeakNew { .. }
-                    | MirInstruction::WeakLoad { .. }
-                    | MirInstruction::BarrierRead { .. }
-                    | MirInstruction::BarrierWrite { .. }
-                    | MirInstruction::ArrayGet { .. }
-                    | MirInstruction::ArraySet { .. }
-                    | MirInstruction::RefGet { .. }
-                    | MirInstruction::RefSet { .. }
-                    | MirInstruction::PluginInvoke { .. } => {
-                        count += 1;
-                    }
-                    _ => {}
+                        | MirInstruction::Cast { .. }
+                        | MirInstruction::WeakNew { .. }
+                        | MirInstruction::WeakLoad { .. }
+                        | MirInstruction::BarrierRead { .. }
+                        | MirInstruction::BarrierWrite { .. }
+                ) {
+                    count += 1;
                 }
             }
             if let Some(term) = &block.terminator {
-                match term {
+                if matches!(
+                    term,
                     MirInstruction::TypeCheck { .. }
-                    | MirInstruction::Cast { .. }
-                    | MirInstruction::WeakNew { .. }
-                    | MirInstruction::WeakLoad { .. }
-                    | MirInstruction::BarrierRead { .. }
-                    | MirInstruction::BarrierWrite { .. }
-                    | MirInstruction::ArrayGet { .. }
-                    | MirInstruction::ArraySet { .. }
-                    | MirInstruction::RefGet { .. }
-                    | MirInstruction::RefSet { .. }
-                    | MirInstruction::PluginInvoke { .. } => {
-                        count += 1;
-                    }
-                    _ => {}
+                        | MirInstruction::Cast { .. }
+                        | MirInstruction::WeakNew { .. }
+                        | MirInstruction::WeakLoad { .. }
+                        | MirInstruction::BarrierRead { .. }
+                        | MirInstruction::BarrierWrite { .. }
+                ) {
+                    count += 1;
                 }
             }
         }

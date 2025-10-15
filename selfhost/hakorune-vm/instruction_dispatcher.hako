@@ -1,0 +1,71 @@
+// InstructionDispatcherBox - Dispatch instructions to specific handlers
+// Single Responsibility: Extract op field and route to correct handler
+
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/const_handler.hako" as ConstHandlerBox
+using "selfhost/hakorune-vm/binop_handler.hako" as BinOpHandlerBox
+using "selfhost/hakorune-vm/compare_handler.hako" as CompareHandlerBox
+using "selfhost/hakorune-vm/copy_handler.hako" as CopyHandlerBox
+using "selfhost/hakorune-vm/unaryop_handler.hako" as UnaryOpHandlerBox
+using "selfhost/hakorune-vm/load_handler.hako" as LoadHandlerBox
+using "selfhost/hakorune-vm/store_handler.hako" as StoreHandlerBox
+using "selfhost/hakorune-vm/nop_handler.hako" as NopHandlerBox
+using "selfhost/hakorune-vm/safepoint_handler.hako" as SafepointHandlerBox
+using "selfhost/hakorune-vm/barrier_handler.hako" as BarrierHandlerBox
+using "selfhost/hakorune-vm/typeop_handler.hako" as TypeOpHandlerBox
+using "selfhost/hakorune-vm/mircall_handler.hako" as MirCallHandlerBox
+using "selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
+using "selfhost/hakorune-vm/newbox_handler.hako" as NewBoxHandlerBox
+using "selfhost/hakorune-vm/ret_value_loader.hako" as RetValueLoaderBox
+
+static box InstructionDispatcherBox {
+  // Dispatch instruction based on op field
+  // inst_json: MIR instruction JSON (e.g., '{"op":"const","dst":1,...}')
+  // regs: register MapBox
+  // mem: memory MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  dispatch(inst_json, regs, mem) {
+    // Extract op field
+    local key_op = "\"op\":\""
+    local op_start = inst_json.indexOf(key_op)
+    if op_start < 0 {
+      return Result.Err("op field not found")
+    }
+    op_start = op_start + key_op.size()
+
+    local op_end = StringOps.index_of_from(inst_json, "\"", op_start)
+    if op_end < 0 {
+      return Result.Err("op field end not found")
+    }
+
+    local op = inst_json.substring(op_start, op_end)
+
+    // Skip PHI (handled separately at block start)
+    if op == "phi" {
+      return Result.Ok(0)
+    }
+
+    // @match instruction dispatch to handler boxes
+    return match op {
+      "const" => ConstHandlerBox.handle(inst_json, regs)
+      "unaryop" => UnaryOpHandlerBox.handle(inst_json, regs)
+      "binop" => BinOpHandlerBox.handle(inst_json, regs)
+      "compare" => CompareHandlerBox.handle(inst_json, regs)
+      "load" => LoadHandlerBox.handle(inst_json, regs, mem)
+      "store" => StoreHandlerBox.handle(inst_json, regs, mem)
+      "ret" => RetValueLoaderBox.load_from_instruction(inst_json, regs)
+      "copy" => CopyHandlerBox.handle(inst_json, regs)
+      "nop" => NopHandlerBox.handle(inst_json, regs, mem)
+      "safepoint" => SafepointHandlerBox.handle(inst_json, regs, mem)
+      "barrier" => BarrierHandlerBox.handle(inst_json, regs, mem)
+      "typeop" => TypeOpHandlerBox.handle(inst_json, regs, mem)
+      "mir_call" => MirCallHandlerBox.handle(inst_json, regs, mem)
+      "boxcall" => BoxCallHandlerBox.handle(inst_json, regs)
+      "newbox" => NewBoxHandlerBox.handle(inst_json, regs)
+      _ => Result.Err("unsupported instruction: " + op)
+    }
+  }
+}

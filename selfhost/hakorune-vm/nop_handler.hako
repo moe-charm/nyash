@@ -1,0 +1,13 @@
+// NopHandlerBox - No-operation instruction handler
+// Handles: nop (does nothing, always succeeds)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+
+static box NopHandlerBox {
+  // Handle nop instruction
+  // inst_json: {"op":"nop"}
+  // Returns: Result.Ok(0) always
+  handle(inst_json, regs, mem) {
+    return Result.Ok(0)
+  }
+}

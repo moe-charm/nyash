@@ -1,6 +1,42 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Embed basic build metadata for --version in runtime (if present)
+    // Safe best-effort: fall back to "unknown" when git/date are unavailable.
+    // Embed minimal build metadata (optional). Disabled if helper missing.
+    // Commented to avoid build-script failures in restricted environments.
+    // embed_build_metadata();
+    // Stage-4 minimal C harness (parser-c-abi) — compile when feature is enabled
+    if std::env::var_os("CARGO_FEATURE_PARSER_C_ABI").is_some() {
+        #[allow(unused)]
+        {
+            // Guard cc dependency presence; if missing, show a helpful note
+            #[allow(unused_imports)]
+            use cc as _;
+            println!("cargo:rerun-if-changed=src/parser_harness/parser_harness.c");
+            println!("cargo:rerun-if-changed=src/parser_harness/parser_harness.h");
+            cc::Build::new()
+                .file("src/parser_harness/parser_harness.c")
+                .include("src/parser_harness")
+                .compile("parser_harness");
+        }
+    }
+    // Opt-in export of host C ABI symbols and dynamic symbol table
+    // Set HAKO_EXPORT_HOST=1 to enable (used by Stage-2 plugin array return)
+    if std::env::var("HAKO_EXPORT_HOST").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_EXPORT_HOST").ok().as_deref() == Some("1")
+    {
+        // Export host C ABI (cfg) and make symbols visible to dlopen()ed plugins
+        println!("cargo:rustc-cfg=export_host_c_abi");
+        if cfg!(target_os = "linux") || cfg!(target_os = "android") || cfg!(target_os = "freebsd") {
+            println!("cargo:rustc-link-arg=-rdynamic");
+        } else if cfg!(target_os = "macos") {
+            // On macOS, export_all is default for executables; keep as-is.
+            // If needed in the future: println!("cargo:rustc-link-arg=-Wl,-export_dynamic");
+        } else if cfg!(target_os = "windows") {
+            // Windows uses import libraries; no action here (plugins call back via host API entry points).
+        }
+    }
     // Path to grammar spec
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let grammar_dir = manifest_dir.join("grammar");
@@ -457,4 +493,172 @@ pub fn lookup_keyword(word: &str) -> Option<&'static str> {
 
     fs::write(&out_file, code).expect("write generated.rs");
     println!("cargo:rerun-if-changed={}", grammar_file.display());
+
+    // Generate externs registry from specs (SSOT)
+    gen_externs_registry();
+    // --- SSOT registry (TypeRegistry) codegen stub ---
+    // Always write a small generated file that either includes specs/type_registry.toml
+    // or defines None when absent. Runtime can opt to read this later.
+    {
+        let gen_path =
+            PathBuf::from(env::var("OUT_DIR").unwrap()).join("registry_ssot_generated.rs");
+        let ssot_spec = manifest_dir.join("specs").join("type_registry.toml");
+        let gen_src = if ssot_spec.exists() {
+            r#"// Auto-generated: SSOT registry raw TOML presence
+pub const REGISTRY_SSOT_RAW: Option<&'static str> = Some(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/specs/type_registry.toml")));
+"#.to_string()
+        } else {
+            "// Auto-generated: SSOT registry not present
+pub const REGISTRY_SSOT_RAW: Option<&'static str> = None;
+"
+            .to_string()
+        };
+        std::fs::write(&gen_path, gen_src).expect("write registry_ssot_generated.rs");
+        println!("cargo:rerun-if-changed={}", ssot_spec.display());
+    }
+}
+
+// --- Externs SSOT generation -------------------------------------------------
+fn gen_externs_registry() {
+    use std::io::Write;
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let specs_dir = manifest_dir.join("specs").join("externs");
+    let specs_file = specs_dir.join("registry.toml");
+    println!("cargo:rerun-if-changed={}", specs_file.display());
+
+    if !specs_file.exists() {
+        fs::create_dir_all(&specs_dir).ok();
+        let minimal = r#"[[extern]]
+name = "env.console.log"
+argc = 1
+io = true
+"#;
+        fs::write(&specs_file, minimal).expect("write minimal externs registry");
+        println!(
+            "cargo:warning=Created minimal externs registry at {}",
+            specs_file.display()
+        );
+    }
+
+    let content = fs::read_to_string(&specs_file).expect("read externs registry");
+    #[derive(Default)]
+    struct Item {
+        name: String,
+        argc: usize,
+        io: bool,
+    }
+    let mut items: Vec<Item> = Vec::new();
+    let mut cur: Option<Item> = None;
+    for line in content.lines() {
+        let s = line.trim();
+        if s.is_empty() || s.starts_with('#') {
+            continue;
+        }
+        if s == "[[extern]]" {
+            if let Some(it) = cur.take() {
+                items.push(it);
+            }
+            cur = Some(Item::default());
+            continue;
+        }
+        if let Some(eq) = s.find('=') {
+            let key = s[..eq].trim();
+            let val = s[eq + 1..].trim().trim_matches('"');
+            if let Some(ref mut it) = cur {
+                match key {
+                    "name" => it.name = val.to_string(),
+                    "argc" => it.argc = val.parse().unwrap_or(0),
+                    "io" => {
+                        let v = val.trim_matches('"').to_ascii_lowercase();
+                        it.io = matches!(v.as_str(), "1" | "true" | "on");
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    if let Some(it) = cur.take() {
+        items.push(it);
+    }
+
+    // Generate Rust source
+    let out_dir = manifest_dir.join("src").join("mir").join("externs");
+    fs::create_dir_all(&out_dir).ok();
+    let out_file = out_dir.join("generated.rs");
+    let mut buf = String::new();
+    buf.push_str("// @generated by build.rs from specs/externs/registry.toml\n");
+    buf.push_str(
+        "pub fn generated_externs() -> &'static [(&'static str, usize, bool)] {\n    &[\n",
+    );
+    for it in &items {
+        if it.name.is_empty() {
+            continue;
+        }
+        buf.push_str(&format!(
+            "        (\"{}\", {}, {}),\n",
+            it.name,
+            it.argc,
+            if it.io { "true" } else { "false" }
+        ));
+    }
+    buf.push_str("    ]\n}\n");
+
+    let mut f = fs::File::create(&out_file).expect("create generated externs file");
+    f.write_all(buf.as_bytes())
+        .expect("write generated externs");
+
+    // ---- Static plugins codegen (optional, config-driven) ----
+    // Read plugin list from static_plugins.toml and generate a small Rust module
+    // that registers their hako_box.toml specs at runtime.
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let static_cfg = manifest_dir.join("static_plugins.toml");
+    let out_dir_rs = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let gen_path = out_dir_rs.join("static_plugins_generated.rs");
+    let mut generated = String::new();
+    generated.push_str(
+        "// Auto-generated by build.rs — static plugins registry
+",
+    );
+    generated.push_str(
+        "// Edit static_plugins.toml to change the set.
+
+",
+    );
+    generated.push_str(
+        "pub fn register_static_plugins() {
+",
+    );
+    if static_cfg.exists() {
+        println!("cargo:rerun-if-changed={}", static_cfg.display());
+        let cfg_str =
+            std::fs::read_to_string(&static_cfg).expect("Failed to read static_plugins.toml");
+        #[derive(serde::Deserialize)]
+        struct PluginCfg {
+            path: String,
+            #[allow(dead_code)]
+            feature: Option<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Root {
+            plugins: Vec<PluginCfg>,
+        }
+        let root: Root = toml::from_str(&cfg_str).expect("static_plugins.toml parse error");
+        for p in root.plugins {
+            let inc = format!(
+                r#"    let toml_str: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/{}/hako_box.toml"));
+    register_from_toml(toml_str);
+"#,
+                p.path
+            );
+            generated.push_str(&inc);
+        }
+    } else {
+        // No config — keep function but do nothing
+        println!("cargo:rerun-if-changed=static_plugins.toml");
+    }
+    generated.push_str(
+        "}
+",
+    );
+    std::fs::write(&gen_path, generated).expect("write static_plugins_generated.rs");
 }

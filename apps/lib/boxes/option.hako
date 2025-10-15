@@ -1,0 +1,93 @@
+// option.hako — Option / OptionBox
+// 責務: 値の存在/不在の統一表現（Some(value) or None）
+// 使い方: Option.some(val) / Option.none() → OptionBox
+// Box-First原則: すべてのフィールドがBox型
+
+box OptionBox {
+  _value: Box
+  _is_some: IntegerBox  // 1=Some, 0=None
+
+  birth() {
+    me._value = null
+    me._is_some = 0
+  }
+
+  // === 判定メソッド ===
+
+  is_some() {
+    return me._is_some
+  }
+
+  is_none() {
+    if me._is_some == 1 {
+      return 0
+    }
+    return 1
+  }
+
+  // === 値取り出しメソッド ===
+
+  // Fail-Fast版: None時はエラーメッセージ表示してnull返却
+  unwrap() {
+    if me._is_some == 0 {
+      print("[PANIC] OptionBox.unwrap: called on None value")
+      return null
+    }
+    return me._value
+  }
+
+  // 安全版: デフォルト値を返す
+  unwrap_or(default) {
+    if me._is_some == 1 {
+      return me._value
+    }
+    return default
+  }
+
+  // 内部値の直接参照（null返却可能、内部用）
+  value() {
+    return me._value
+  }
+
+  // === デバッグ ===
+
+  debug() {
+    if me._is_some == 1 {
+      local v_str = me._value
+      if me._value == null {
+        v_str = "null"
+      }
+      return "Some(" + v_str + ")"
+    }
+    return "None"
+  }
+}
+
+// === Static Box: コンストラクタと判定ヘルパー ===
+
+static box Option {
+  // Some(value) コンストラクタ
+  some(v) {
+    local opt = new OptionBox()
+    opt._value = v
+    opt._is_some = 1
+    return opt
+  }
+
+  // None() コンストラクタ
+  none() {
+    local opt = new OptionBox()
+    opt._value = null
+    opt._is_some = 0
+    return opt
+  }
+
+  // 判定ヘルパー（static版）
+  is_some(opt) {
+    return opt.is_some()
+  }
+
+  is_none(opt) {
+    return opt.is_none()
+  }
+}

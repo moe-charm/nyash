@@ -1,0 +1,20 @@
+// AOT Python simple call demo - single print to avoid doubling
+static box Main {
+  init { py, abs_func, result }
+  
+  main() {
+    // Create Python runtime
+    me.py = new PyRuntimeBox()
+    
+    // Get built-in abs function
+    me.abs_func = me.py.eval("abs")
+    
+    // Call abs(-42) 
+    local neg42
+    neg42 = new IntegerBox(-42)
+    me.result = me.py.call(me.abs_func, neg42)
+    
+    // Return the result (should be 42)
+    return me.result
+  }
+}

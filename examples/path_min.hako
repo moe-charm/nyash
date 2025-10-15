@@ -1,0 +1,8 @@
+static box Main {
+  main() {
+    local p = new PathBox()
+    local j = p.join("/usr", "bin")
+    local b = p.basename(j)
+    return b
+  }
+}

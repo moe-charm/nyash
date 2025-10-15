@@ -1,0 +1,34 @@
+// EmitMethodBox — Return(Method recv, method, args[int...]) → MIR(JSON v0)
+// 最小形: const recv→r1; 各引数を r2..rN; boxcall(method, recv=r1, args=r2..) → rK; ret rK
+
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+using "selfhost/shared/mir/block_builder_box.hako" as BlockBuilder
+using "selfhost/compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
+
+static box EmitMethodBox {
+  emit_method_int_args(method, recv_val, args) {
+    method = match method { null => "", _ => method }
+    args = match args { null => [], _ => args }
+    // Normalize args via ArgsParserBox (robust)
+    local vals = Stage1ArgsParserBox.parse_ints(args)
+    local mod_full = BlockBuilder.method_call_ival_ret(method, recv_val, vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  // JSON v1 (MirCall) emission — shape equivalent（CallEmitBox + HeaderEmitBox）
+  emit_method_int_args_v1(method, recv_val, args) {
+    method = match method { null => "", _ => method }
+    args = match args { null => [], _ => args }
+    // Same shape via shared builder (unified path)
+    local vals = Stage1ArgsParserBox.parse_ints(args)
+    local mod_full = BlockBuilder.method_call_ival_ret(method, recv_val, vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+}
+
+static box EmitMethodStub { main(args) { return 0 } }

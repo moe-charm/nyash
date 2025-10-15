@@ -2,6 +2,12 @@
 
 use crate::constants::*;
 
+// Re-export shared TLV codec functions from hako_abi_impl
+pub use hako_abi_impl::tlv::{
+    read_arg_i64, read_arg_string, write_tlv_bool, write_tlv_handle, write_tlv_i64,
+    write_tlv_string,
+};
+
 pub fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {
         return E_ARGS;
@@ -49,81 +55,10 @@ pub fn write_tlv_void(result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(9u8, &[])], result, result_len)
 }
 
-pub fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
-}
-
-pub fn write_tlv_bool(v: bool, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(1u8, &[if v { 1u8 } else { 0u8 }])], result, result_len)
-}
-
-pub fn write_tlv_handle(
-    type_id: u32,
-    instance_id: u32,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    let mut payload = Vec::with_capacity(8);
-    payload.extend_from_slice(&type_id.to_le_bytes());
-    payload.extend_from_slice(&instance_id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], result, result_len)
-}
-
-pub fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
-}
-
-pub fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag != 6 {
-                return None;
-            }
-            let s = String::from_utf8_lossy(&buf[off + 4..off + 4 + size]).to_string();
-            return Some(s);
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-pub fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag != 3 || size != 8 {
-                return None;
-            }
-            let mut b = [0u8; 8];
-            b.copy_from_slice(&buf[off + 4..off + 12]);
-            return Some(i64::from_le_bytes(b));
-        }
-        off += 4 + size;
-    }
-    None
-}
+// Removed duplicate TLV functions - now using shared codec from hako_abi_impl:
+// - write_tlv_i64() -> re-exported from hako_abi_impl::tlv
+// - write_tlv_bool() -> re-exported from hako_abi_impl::tlv
+// - write_tlv_handle() -> re-exported from hako_abi_impl::tlv
+// - write_tlv_string() -> re-exported from hako_abi_impl::tlv
+// - read_arg_string() -> re-exported from hako_abi_impl::tlv
+// - read_arg_i64() -> re-exported from hako_abi_impl::tlv

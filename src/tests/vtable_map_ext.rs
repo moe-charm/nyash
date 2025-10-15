@@ -1,6 +1,6 @@
 #[test]
 fn vtable_map_keys_values_delete_clear() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
@@ -19,11 +19,8 @@ fn vtable_map_keys_values_delete_clear() {
     let m = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: m,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![],
+                auto_birth: None });
     // set two entries
     let k1 = f.next_value_id();
     f.get_block_mut(bb)
@@ -41,14 +38,7 @@ fn vtable_map_keys_values_delete_clear() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: m,
-            method: "set".into(),
-            args: vec![k1, v1],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.set/2".into())), args: vec![m, k1, v1], effects: EffectMask::PURE });
     let k2 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -65,59 +55,24 @@ fn vtable_map_keys_values_delete_clear() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: m,
-            method: "set".into(),
-            args: vec![k2, v2],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.set/2".into())), args: vec![m, k2, v2], effects: EffectMask::PURE });
     // keys().len + values().len == 4
     let keys = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(keys),
-            box_val: m,
-            method: "keys".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(keys), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.keys/0".into())), args: vec![m], effects: EffectMask::PURE });
     let klen = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(klen),
-            box_val: keys,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(klen), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![keys], effects: EffectMask::PURE });
     let vals = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(vals),
-            box_val: m,
-            method: "values".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(vals), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.values/0".into())), args: vec![m], effects: EffectMask::PURE });
     let vlen = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(vlen),
-            box_val: vals,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(vlen), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![vals], effects: EffectMask::PURE });
     let sum = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -148,11 +103,8 @@ fn vtable_map_keys_values_delete_clear() {
     let m2v = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: m2v,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: m2v, box_type: "MapBox".into(), args: vec![],
+                auto_birth: None });
     let k = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -169,14 +121,7 @@ fn vtable_map_keys_values_delete_clear() {
         });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: m2v,
-            method: "set".into(),
-            args: vec![k, v],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.set/2".into())), args: vec![m2v, k, v], effects: EffectMask::PURE });
     let dk = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -186,35 +131,14 @@ fn vtable_map_keys_values_delete_clear() {
         });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: m2v,
-            method: "delete".into(),
-            args: vec![dk],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.delete/1".into())), args: vec![m2v, dk], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: m2v,
-            method: "clear".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.clear/0".into())), args: vec![m2v], effects: EffectMask::PURE });
     let sz = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(sz),
-            box_val: m2v,
-            method: "size".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(sz), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.size/0".into())), args: vec![m2v], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(sz) });

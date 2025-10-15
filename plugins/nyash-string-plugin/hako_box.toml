@@ -1,0 +1,64 @@
+[box]
+type_name = "StringBox"
+type_id = 13
+provider = "nyash-string-plugin"
+
+[[methods]]
+name = "birth"
+slot = 0
+arity = 1
+
+[[methods]]
+name = "size"
+slot = 1
+arity = 0
+
+[[methods]]
+name = "isEmpty"
+slot = 2
+arity = 0
+
+[[methods]]
+name = "charCodeAt"
+slot = 3
+arity = 1
+
+[[methods]]
+name = "concat"
+slot = 4
+arity = 1
+
+[[methods]]
+name = "fromUtf8"
+slot = 5
+arity = 1
+
+[[methods]]
+name = "toUtf8"
+slot = 6
+arity = 0
+
+[[methods]]
+name = "substring"
+slot = 7
+arity = 2
+
+[[methods]]
+name = "indexOf"
+slot = 8
+arity = 1
+
+[[methods]]
+name = "lastIndexOf"
+slot = 9
+arity = 1
+
+[[methods]]
+name = "charAt"
+slot = 10
+arity = 1
+
+[[methods]]
+name = "fini"
+slot = 4294967295
+arity = 0

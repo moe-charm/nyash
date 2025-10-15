@@ -21,7 +21,49 @@ returns = { type = "i64" }
 
 [MapBox.methods.get]
 id = 2
-args = [ { name = "key", type = "i64" } ]
+args = [ { name = "key", type = "box" } ]
+returns = { type = "box" }
+
+[MapBox.methods.has]
+id = 3
+args = [ { name = "key", type = "box" } ]
+returns = { type = "bool" }
+
+[MapBox.methods.set]
+id = 4
+args = [ { name = "key", type = "box" }, { name = "value", type = "box" } ]
+returns = { type = "void" }
+
+[MapBox.methods.remove]
+id = 6
+args = [ { name = "key", type = "box" } ]
+returns = { type = "box" }
+
+[MapBox.methods.clear]
+id = 7
+args = []
+returns = { type = "void" }
+
+# Stage-1 shim methods# Stage-1 shim methods (string newline-joined). Host converts to ArrayBox for keys()/values().
+[MapBox.methods.keysS]
+id = 8
+args = []
+returns = { type = "string" }
+
+[MapBox.methods.valuesS]
+id = 13
+args = []
+returns = { type = "string" }
+
+# Stage-2 (opt-in): true ArrayBox return via HostHandle
+[MapBox.methods.keys]
+id = 15
+args = []
+returns = { type = "box" }
+
+[MapBox.methods.values]
+id = 16
+args = []
 returns = { type = "box" }
 
 [implementation]

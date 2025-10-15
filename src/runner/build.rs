@@ -1,6 +1,21 @@
 use super::NyashRunner;
 use std::path::{Path, PathBuf};
 
+fn resolve_runner_bin(bin_dir: &Path) -> PathBuf {
+    #[cfg(windows)]
+    let candidates = ["hakorune.exe", "hako.exe", "nyash.exe"];
+    #[cfg(not(windows))]
+    let candidates = ["hakorune", "hako", "nyash"];
+    let default_name = candidates[0];
+    for name in candidates {
+        let cand = bin_dir.join(name);
+        if cand.exists() {
+            return cand;
+        }
+    }
+    bin_dir.join(default_name)
+}
+
 pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result<(), String> {
     let cwd = std::env::current_dir().unwrap_or(PathBuf::from("."));
     let cfg_abspath = if Path::new(cfg_path).is_absolute() {
@@ -66,7 +81,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             }
         }
     }
-    // 4) Build nyash core (features)
+    // 4) Build hakorune core (features)
     {
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("build");
@@ -85,7 +100,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             cmd.args(["--target", t]);
         }
         println!(
-            "[build] nyash core ({}, features={})",
+            "[build] hakorune core ({}, features={})",
             profile,
             if aot == "llvm" {
                 "llvm"
@@ -97,7 +112,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             .status()
             .map_err(|e| format!("spawn cargo (core): {}", e))?;
         if !status.success() {
-            return Err("nyash core build failed".into());
+            return Err("hakorune core build failed".into());
         }
     }
     // 5) Determine app entry
@@ -126,7 +141,11 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
                     let p = e.path();
                     if p.is_dir() {
                         walk(&p, acc);
-                    } else if p.file_name().map(|n| n == "main.nyash").unwrap_or(false) {
+                    } else if p
+                        .file_name()
+                        .map(|n| n == "main.hako" || n == "main.nyash")
+                        .unwrap_or(false)
+                    {
                         acc.push(p.display().to_string());
                     }
                 }
@@ -134,7 +153,8 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
         }
         walk(&cwd.join("apps"), &mut cand);
         let msg = if cand.is_empty() {
-            "no app specified (--app) and no apps/**/main.nyash found".to_string()
+            "no app specified (--app) and no apps/**/main.hako (or legacy main.nyash) found"
+                .to_string()
         } else {
             format!(
                 "no app specified (--app). Candidates:\n  - {}",
@@ -151,14 +171,12 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
         // llvmliteハーネス使用によりLLVM_SYS_180_PREFIX不要
         std::env::set_var("NYASH_LLVM_OBJ_OUT", &obj_path);
         println!("[emit] LLVM object → {}", obj_path.display());
-        let status = std::process::Command::new(
-            cwd.join("target")
-                .join(profile.clone())
-                .join(if cfg!(windows) { "nyash.exe" } else { "nyash" }),
-        )
-        .args(["--backend", "llvm", &app])
-        .status()
-        .map_err(|e| format!("spawn nyash llvm: {}", e))?;
+        let bin_dir = cwd.join("target").join(profile.clone());
+        let runner_bin = resolve_runner_bin(&bin_dir);
+        let status = std::process::Command::new(&runner_bin)
+            .args(["--backend", "llvm", &app])
+            .status()
+            .map_err(|e| format!("spawn {} (llvm): {}", runner_bin.display(), e))?;
         if !status.success() {
             return Err("LLVM emit failed".into());
         }
@@ -168,14 +186,12 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             "[emit] Cranelift object → {} (directory)",
             obj_dir.display()
         );
-        let status = std::process::Command::new(
-            cwd.join("target")
-                .join(profile.clone())
-                .join(if cfg!(windows) { "nyash.exe" } else { "nyash" }),
-        )
-        .args(["--backend", "vm", &app])
-        .status()
-        .map_err(|e| format!("spawn nyash jit-aot: {}", e))?;
+        let bin_dir = cwd.join("target").join(profile.clone());
+        let runner_bin = resolve_runner_bin(&bin_dir);
+        let status = std::process::Command::new(&runner_bin)
+            .args(["--backend", "vm", &app])
+            .status()
+            .map_err(|e| format!("spawn {} (jit-aot): {}", runner_bin.display(), e))?;
         if !status.success() {
             return Err("Cranelift emit failed".into());
         }

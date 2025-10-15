@@ -1,0 +1,66 @@
+// ArrayParseBox — naive JSON array parser (primitive-only, escape-aware commas)
+using "./string.hako" as StringUtils
+using "./parse_ops_box.hako" as ParseOpsBox
+using "../core/node.hako" as JsonNode
+
+static box ArrayParseBox {
+  // Parse a JSON array string like "[1, 2, "x"]" into JsonNode (array)
+  // MVP: elements are parsed via ParseOpsBox.parse_primitive; non-primitive yields null
+  parse_array(text) {
+    if text == null { return JsonNode.create_array() }
+    local s = StringUtils.trim(text)
+    if !(StringUtils.starts_with(s, "[") and StringUtils.ends_with(s, "]")) {
+      return JsonNode.create_array()
+    }
+    local inner = s.substring(1, s.size()-1)
+    local n = inner.size()
+    local i = 0
+    local parts = new ArrayBox()
+    local current = ""
+    local in_str = 0
+    local guard = 0
+    local max = 400000
+    loop(i < n) {
+      if guard > max { break } else { guard = guard + 1 }
+      local ch = inner.substring(i, i+1)
+      if in_str == 1 {
+        current = current + ch
+        if ch == "\\" && i + 1 < n {
+          // copy escape pair as-is
+          current = current + inner.substring(i+1, i+2)
+          i = i + 2
+          continue
+        }
+        if ch == "\"" { in_str = 0 }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1 current = current + ch i = i + 1 continue }
+      if ch == "," {
+        local tok = StringUtils.trim(current)
+        if tok.size() > 0 {
+          local node = ParseOpsBox.parse_primitive(tok)
+          if node == null { node = JsonNode.create_null() }
+          parts.push(node)
+        }
+        current = ""
+        i = i + 1
+        continue
+      }
+      current = current + ch
+      i = i + 1
+    }
+    // last token
+    local tok = StringUtils.trim(current)
+    if tok.size() > 0 {
+      local node = ParseOpsBox.parse_primitive(tok)
+      if node == null { node = JsonNode.create_null() }
+      parts.push(node)
+    }
+    // build result
+    local out = JsonNode.create_array()
+    local k = 0
+    loop(k < parts.size()) { out.array_push(parts.get(k)) k = k + 1 }
+    return out
+  }
+}

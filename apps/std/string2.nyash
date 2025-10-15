@@ -11,7 +11,7 @@
 static box StdStringNy {
   string_length(s) {
     if s == null { return 0 }
-    return s.length()
+    return s.size()
   }
 
   // Keep only length for now to diagnose include hang

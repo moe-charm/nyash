@@ -85,6 +85,20 @@ impl BasicBlock {
 
     /// Add an instruction to this block
     pub fn add_instruction(&mut self, instruction: MirInstruction) {
+        let trace_emit = std::env::var("NYASH_MIR_TRACE_EMIT").ok().as_deref() == Some("1");
+        if trace_emit {
+            match &instruction {
+                MirInstruction::Copy { dst, src } => {
+                    eprintln!("[MIR-EMIT] bb={} copy %{} := %{}", self.id.as_u32(), dst.as_u32(), src.as_u32());
+                }
+                MirInstruction::Const { dst, value } => {
+                    eprintln!("[MIR-EMIT] bb={} const {:?} -> %{}", self.id.as_u32(), value, dst.as_u32());
+                }
+                other => {
+                    eprintln!("[MIR-EMIT] bb={} {:?}", self.id.as_u32(), other);
+                }
+            }
+        }
         // Update effect mask
         self.effects = self.effects | instruction.effects();
 
@@ -98,7 +112,18 @@ impl BasicBlock {
             // Update successors based on terminator
             self.update_successors_from_terminator();
         } else {
+            // Fail-Fast: Do not allow non-terminator instructions after a terminator.
+            // This guards against invalid MIR like `ret; const 1` inside the same block.
+            if self.terminator.is_some() {
+                panic!(
+                    "Cannot emit instruction after terminator in block {}",
+                    self.id
+                );
+            }
             self.instructions.push(instruction);
+            if trace_emit {
+                eprintln!("[MIR-EMIT] bb={} len={} (after push)", self.id.as_u32(), self.instructions.len());
+            }
         }
     }
 

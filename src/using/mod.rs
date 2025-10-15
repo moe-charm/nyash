@@ -9,7 +9,7 @@
 \
  The goal is to keep runner/pipeline lean by delegating nyash.toml parsing here,\
  without changing default behavior. Future work will add: file/DLL specs, policies,\
- and plugin metadata fusion (nyash_box.toml / embedded BID).\
+ and plugin metadata fusion (hako_box.toml or nyash_box.toml / embedded BID).\
 */
 
 pub mod resolver;
@@ -17,3 +17,4 @@ pub mod spec;
 pub mod policy;
 pub mod errors;
 pub mod simple_registry;
+pub mod namespace_box;

@@ -1,5 +1,5 @@
 // Declarations lowering: static boxes and box declarations
-use super::{ConstValue, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::slot_registry::{get_or_assign_type_id, reserve_method_slot};
 use std::collections::HashSet;
@@ -42,11 +42,7 @@ impl super::MirBuilder {
                     let pid = self.value_gen.next();
                     if p == "args" {
                         // new ArrayBox() with no args
-                        self.emit_instruction(MirInstruction::NewBox {
-                            dst: pid,
-                            box_type: "ArrayBox".to_string(),
-                            args: vec![],
-                        })?;
+                        self.emit_instruction(MirInstruction::NewBox { dst: pid, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;
                     } else {
                         let v = crate::mir::builder::emission::constant::emit_void(self);
                         // ensure pid holds the emitted const id
@@ -78,17 +74,17 @@ impl super::MirBuilder {
         weak_fields: Vec<String>,
     ) -> Result<(), String> {
         // Create a type registration constant (marker)
-        let type_id = crate::mir::builder::emission::constant::emit_string(self, format!("__box_type_{}", name));
+        let _type_id = crate::mir::builder::emission::constant::emit_string(self, format!("__box_type_{}", name));
 
         // Emit field metadata markers
         for field in fields {
             let _field_id = crate::mir::builder::emission::constant::emit_string(self, format!("__field_{}_{}", name, field));
         }
 
-        // Record weak fields for this box
+        // Record weak fields for this box (WeakFieldRegistryBox)
         if !weak_fields.is_empty() {
             let set: HashSet<String> = weak_fields.into_iter().collect();
-            self.weak_fields_by_box.insert(name.clone(), set);
+            self.weak_field_registry.register(name.clone(), set);
         }
 
         // Reserve method slots for user-defined instance methods (deterministic, starts at 4)

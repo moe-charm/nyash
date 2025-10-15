@@ -1,0 +1,62 @@
+// NamespaceBox — Resolve alias-based names to fully qualified module functions
+// Responsibility:
+// - Canonicalize global call names like "Timer.now_ms" → "selfhost.core.timer.now_ms"
+// - Uses UsingResolverBox context (alias→ns) provided by caller
+// Non‑Responsibility:
+// - IO / TOML 読み込み、Runner 側の using 解決、実行
+
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box NamespaceBox {
+  // Normalize global function name using resolver context
+  // Behavior:
+  // - If name has a dot and its head matches an alias in resolver, replace head with ns
+  // - Otherwise return the original name
+  normalize_global_name(name, resolver) {
+    if name == null { return "" }
+    local s = "" + name
+    // find first '.' (head separator)
+    local pos = RegexFlow.find_from(s, ".", 0)
+    if pos < 0 { return s }
+    local head = s.substring(0, pos)
+    local tail = s.substring(pos + 1, s.size())
+    if resolver == null { return s }
+    local ns = resolver.resolve_namespace_alias(head)
+    if ns == null {
+      // Strict: alias used but not declared
+      print("[ERROR] Unresolved using alias: " + head)
+      return null
+    }
+    return ns + "." + tail
+  }
+
+  // Normalize class name similarly (e.g., Alias.Box → Ns.Box)
+  normalize_class_name(class_name, resolver) {
+    if class_name == null { return "" }
+    local s = "" + class_name
+    local pos = RegexFlow.find_from(s, ".", 0)
+    if pos < 0 {
+      // Single identifier; if it's an alias, return ns (leave as-is otherwise)
+      if resolver == null { return s }
+      local ns = resolver.resolve_namespace_alias(s)
+      if ns != null { return ns }
+      // If a bare alias is used but not declared, treat as error as well
+      // (keeps behavior consistent with global name normalization)
+      print("[ERROR] Unresolved using alias: " + s)
+      return null
+    }
+    local head = s.substring(0, pos)
+    local tail = s.substring(pos + 1, s.size())
+    if resolver == null { return s }
+    local ns2 = resolver.resolve_namespace_alias(head)
+    if ns2 == null {
+      print("[ERROR] Unresolved using alias: " + head)
+      return null
+    }
+    return ns2 + "." + tail
+  }
+}
+
+static box NamespaceBoxStub { main(args) { return 0 } }
+

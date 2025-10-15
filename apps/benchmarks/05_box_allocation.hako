@@ -1,0 +1,39 @@
+// ベンチマーク5: Box作成・破棄オーバーヘッド
+// 期待値: 1000
+//
+// 測定内容:
+// - Box allocation (new + birth)
+// - Box finalization (Drop)
+// - 1000回のBox作成・破棄
+//
+// 重要: Hakoruneの核心機能「Everything is Box」の性能測定
+// Python/JSのオブジェクト作成と比較可能
+
+box Counter {
+    value: IntegerBox
+
+    birth() {
+        me.value = 0
+    }
+}
+
+static box Main {
+    main() {
+        local i
+        local lastValue
+
+        i = 0
+        lastValue = 0
+
+        loop(i < 1000) {
+            local c
+            c = new Counter()
+            c.value = i
+            lastValue = c.value
+            i = i + 1
+        }
+
+        print("Result: " + lastValue)
+        return 0
+    }
+}

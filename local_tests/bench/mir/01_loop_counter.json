@@ -1,0 +1,40 @@
+{
+  "schema_version": "0.1.0",
+  "capabilities": ["unified_call", "phi", "effects", "callee_typing"],
+  "metadata": {},
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 0}},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {"op": "phi", "dst": 2, "incoming": [
+              {"block": 0, "value": 1},
+              {"block": 1, "value": 4}
+            ]},
+            {"op": "const", "dst": 3, "value": {"type": "i64", "value": 1}},
+            {"op": "binop", "operation": "+", "lhs": 2, "rhs": 3, "dst": 4},
+            {"op": "const", "dst": 5, "value": {"type": "i64", "value": 10}},
+            {"op": "compare", "operation": "<", "lhs": 2, "rhs": 5, "dst": 6},
+            {"op": "branch", "cond": 6, "then": 1, "else": 2}
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {"op": "ret", "value": 2}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+// Factorial Benchmark - Recursive Implementation
+// Calculates factorial(20) to test recursion depth
+
+static box Main {
+    factorial(n) {
+        local cond
+        local result
+        local n_minus_1
+        local rec_result
+
+        // Base case: n <= 1
+        cond = n <= 1
+        if cond {
+            return 1
+        }
+
+        // Recursive case: n * factorial(n-1)
+        n_minus_1 = n - 1
+        rec_result = me.factorial(n_minus_1)
+        result = n * rec_result
+        return result
+    }
+
+    main() {
+        local result
+        result = me.factorial(20)
+        return result
+    }
+}

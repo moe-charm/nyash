@@ -4,6 +4,30 @@
 
 # set -eは使わない（個々のテストが失敗しても全体を続行するため）
 set -uo pipefail
+# Guard against double sourcing
+if [ -n "${RESULT_CHECKER_SH_LOADED:-}" ]; then
+    return 0 2>/dev/null || true
+fi
+RESULT_CHECKER_SH_LOADED=1
+
+# Failure capture helper (optional)
+_smokes_capture_failure() {
+    local kind="$1"; shift
+    local test_name="$1"; shift
+    local expected="$1"; shift
+    local actual="$1"; shift
+    if [ "${SMOKES_CAPTURE:-0}" != "1" ]; then return 0; fi
+    local ts dir
+    ts=$(date +%Y%m%d_%H%M%S)
+    dir="tmp/smokes_capture/${test_name}_${kind}_${ts}"
+    mkdir -p "$dir" 2>/dev/null || true
+    # Save minimal bundle
+    printf "%s" "$expected" > "$dir/expected.txt" 2>/dev/null || true
+    printf "%s" "$actual"   > "$dir/actual.txt"   2>/dev/null || true
+    # ENV stamp (limited)
+    { env | grep -E '^(HAKO|NYASH|SMOKES)=' | sort; echo "NYASH_BIN=${NYASH_BIN:-}"; } > "$dir/env.txt" 2>/dev/null || true
+    echo "[capture] saved failure bundle → $dir" >&2
+}
 
 # 結果比較種別
 readonly EXACT_MATCH="exact"
@@ -23,6 +47,7 @@ check_exact() {
         echo "[FAIL] $test_name: Exact match failed" >&2
         echo "  Expected: '$expected'" >&2
         echo "  Actual:   '$actual'" >&2
+        _smokes_capture_failure exact "$test_name" "$expected" "$actual"
         return 1
     fi
 }
@@ -39,6 +64,7 @@ check_regex() {
         echo "[FAIL] $test_name: Regex match failed" >&2
         echo "  Pattern:  '$pattern'" >&2
         echo "  Actual:   '$actual'" >&2
+        _smokes_capture_failure regex "$test_name" "$pattern" "$actual"
         return 1
     fi
 }
@@ -57,6 +83,7 @@ check_numeric_range() {
     if [ -z "$number" ]; then
         echo "[FAIL] $test_name: No number found in output" >&2
         echo "  Actual: '$actual'" >&2
+        _smokes_capture_failure numeric "$test_name" "$min..$max" "$actual"
         return 1
     fi
 
@@ -67,6 +94,7 @@ check_numeric_range() {
         echo "[FAIL] $test_name: Number out of range" >&2
         echo "  Range:    [$min, $max]" >&2
         echo "  Actual:   $number" >&2
+        _smokes_capture_failure numeric "$test_name" "$min..$max" "$actual"
         return 1
     fi
 }
@@ -80,12 +108,14 @@ check_json() {
     # JSONパース可能性チェック
     if ! echo "$expected_json" | jq . >/dev/null 2>&1; then
         echo "[FAIL] $test_name: Expected JSON is invalid" >&2
+        _smokes_capture_failure json "$test_name" "$expected_json" "$actual_json"
         return 1
     fi
 
     if ! echo "$actual_json" | jq . >/dev/null 2>&1; then
         echo "[FAIL] $test_name: Actual JSON is invalid" >&2
         echo "  Actual: '$actual_json'" >&2
+        _smokes_capture_failure json "$test_name" "$expected_json" "$actual_json"
         return 1
     fi
 
@@ -100,6 +130,7 @@ check_json() {
         echo "[FAIL] $test_name: JSON comparison failed" >&2
         echo "  Expected: $expected_normalized" >&2
         echo "  Actual:   $actual_normalized" >&2
+        _smokes_capture_failure json "$test_name" "$expected_normalized" "$actual_normalized"
         return 1
     fi
 }
@@ -121,6 +152,34 @@ check_parity() {
     fi
 
     local vm_output llvm_output vm_exit llvm_exit
+
+    # Local noise filter for parity runs (applies to both VM/LLVM)
+    # Prefer shared filter_noise() if loaded from test_runner.sh
+    parity_filter_noise() {
+        if type filter_noise >/dev/null 2>&1; then
+            filter_noise
+            return
+        fi
+        # Minimal built-in fallback
+        grep -v '^\[UnifiedBoxRegistry\]' \
+        | grep -v '^\[FileBox\]' \
+        | grep -v '^Net plugin:' \
+        | grep -v '^\[.*\] Plugin' \
+        | grep -v '^\[using\]' \
+        | grep -v '^\[using/resolve\]' \
+        | grep -v '^\[deprecate\] CLI name' \
+        | grep -v '^Exception ignored in:' \
+        | grep -v '^Traceback \(most recent call last\):' \
+        | grep -v 'llvmlite/binding/ffi\.py' \
+        | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
+        | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
+        | grep -v '^\[deprecate\] \[modules\.aliases\]' \
+        | grep -v '^🔧 Mock LLVM Backend Execution' \
+        | grep -v '^✅ Mock exit code:' \
+        | sed -E 's/^❌[[:space:]]*//' \
+        | sed -E 's/^Pipeline error: *//' \
+        | sed -E 's/\bbb[0-9]+\b/bb<ID>/g'
+    }
 
     # Rust VM 実行
     if [ "$program" = "-c" ]; then
@@ -157,13 +216,14 @@ check_parity() {
         echo "[FAIL] $test_name: Exit code mismatch" >&2
         echo "  VM exit:   $vm_exit" >&2
         echo "  LLVM exit: $llvm_exit" >&2
+        _smokes_capture_failure parity "$test_name" "exit=$vm_exit" "exit=$llvm_exit"
         return 1
     fi
 
-    # 出力比較（正規化）
+    # 出力比較（正規化＋ノイズ除去）
     local vm_normalized llvm_normalized
-    vm_normalized=$(echo "$vm_output" | sed 's/[[:space:]]*$//' | sort)
-    llvm_normalized=$(echo "$llvm_output" | sed 's/[[:space:]]*$//' | sort)
+    vm_normalized=$(echo "$vm_output" | parity_filter_noise | sed 's/[[:space:]]*$//' | sort)
+    llvm_normalized=$(echo "$llvm_output" | parity_filter_noise | sed 's/[[:space:]]*$//' | sort)
 
     if [ "$vm_normalized" = "$llvm_normalized" ]; then
         echo "[PASS] $test_name: VM ↔ LLVM parity verified" >&2
@@ -174,6 +234,7 @@ check_parity() {
         echo "$vm_output" | sed 's/^/    /' >&2
         echo "  LLVM output:" >&2
         echo "$llvm_output" | sed 's/^/    /' >&2
+        _smokes_capture_failure parity "$test_name" "$vm_output" "$llvm_output"
         return 1
     fi
 }

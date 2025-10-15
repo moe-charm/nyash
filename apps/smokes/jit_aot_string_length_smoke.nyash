@@ -1,9 +1,9 @@
-// JIT AOT smoke: StringBox.length() should be 3
+// JIT AOT smoke: StringBox.size() should be 3
 static box Main {
   main() {
     local s
     s = new StringBox("abc")
-    print("Result: " + s.length())
+    print("Result: " + s.size())
     return 0
   }
 }

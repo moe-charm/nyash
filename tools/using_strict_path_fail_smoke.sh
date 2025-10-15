@@ -16,7 +16,7 @@ static box Main { main(args) { return 0 } }
 NY
 
 set +e
-NYASH_ENABLE_USING=1 NYASH_USING_STRICT=1 "$BIN" --backend vm "$TMP" >/tmp/nyash-using-strict.out 2>&1
+NYASH_USING=1 NYASH_USING_STRICT=1 "$BIN" --backend vm "$TMP" >/tmp/nyash-using-strict.out 2>&1
 rc=$?
 set -e
 

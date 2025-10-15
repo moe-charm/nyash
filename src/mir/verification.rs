@@ -12,8 +12,12 @@ mod dom;
 mod awaits;
 mod barrier;
 mod legacy;
+mod compare;
+mod static_self_fields;
+mod phi_inputs;
 mod utils;
 mod ssa;
+mod string_receivers;
 
 
 /// MIR verifier for SSA form and semantic correctness
@@ -91,7 +95,38 @@ impl MirVerifier {
             local_errors.append(&mut await_cp);
         }
 
-        // 9. PHI-off strict edge-copy policy (optional)
+        // 9. Forbid Box Compare(Eq/Ne): equality must route via op_eq() at MIR
+        if let Err(mut cmp_errors) = compare::check_no_box_compare(function) {
+            local_errors.append(&mut cmp_errors);
+        }
+
+        // 9.5. Forbid static self field emulation: getField/setField on constant class name
+        if let Err(mut static_field_errors) = static_self_fields::check_no_static_self_field_calls(function) {
+            local_errors.append(&mut static_field_errors);
+        }
+
+        // 9.6. PHI inputs coverage (dev-first): ensure PHI inputs cover reachable predecessors
+        if std::env::var("NYASH_VERIFY_PHI_STRICT").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_VM_VERIFY_MIR").ok().as_deref() == Some("1")
+        {
+            if let Err(mut phi_cov) = phi_inputs::check_phi_inputs_cover_predecessors(function) {
+                local_errors.append(&mut phi_cov);
+            }
+        }
+
+        // 9.7. Unified Call invariants
+        if let Err(mut call_errors) = self.verify_calls(function) {
+            local_errors.append(&mut call_errors);
+        }
+
+        // 9.8. String length receiver materialization (dev-only gate)
+        if std::env::var("NYASH_VERIFY_STRING_RECV_COPY").ok().as_deref() == Some("1") {
+            if let Err(mut recv_errors) = string_receivers::check_string_len_receiver_materialized(function) {
+                local_errors.append(&mut recv_errors);
+            }
+        }
+
+        // 10. PHI-off strict edge-copy policy (optional)
         if crate::config::env::mir_no_phi() && crate::config::env::verify_edge_copy_strict() {
             if let Err(mut ecs) = self.verify_edge_copy_strict(function) {
                 local_errors.append(&mut ecs);
@@ -304,6 +339,28 @@ impl MirVerifier {
     /// In merge blocks, values coming from predecessors must be routed through Phi.
     fn verify_merge_uses(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         cfg::check_merge_uses(function)
+    }
+
+    /// Verify unified Call invariants
+    fn verify_calls(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        use crate::mir::MirInstruction as I;
+        let mut errors = Vec::new();
+        for (bid, block) in &function.blocks {
+            for (idx, inst) in block.instructions.iter().enumerate() {
+                if let I::Call { callee, .. } = inst {
+                    if callee.is_none() {
+                        errors.push(VerificationError::LegacyCallMissingCallee { block: *bid, instruction_index: idx });
+                        continue;
+                    }
+                    if let Some(crate::mir::definitions::Callee::Method { receiver, method, certainty, .. }) = callee {
+                        if matches!(certainty, crate::mir::definitions::call_unified::TypeCertainty::Known) && receiver.is_none() {
+                            errors.push(VerificationError::MethodReceiverMissing { block: *bid, instruction_index: idx, method: method.clone() });
+                        }
+                    }
+                }
+            }
+        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 
     /// Get all verification errors from the last run

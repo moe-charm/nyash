@@ -269,6 +269,6 @@ else
     echo "Failed areas need investigation:"
     echo "- Check NYASH_CLI_VERBOSE=1 output above"
     echo "- Verify plugin builds with: ls -la plugins/*/target/release/*.so"
-    echo "- Check NyKernel linking: nm target/release/libnyash_kernel.a | head"
+    echo "- Check NyKernel linking: nm target/release/libhako_kernel.a | head"
     exit 1
 fi

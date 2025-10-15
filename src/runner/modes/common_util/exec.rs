@@ -28,6 +28,9 @@ pub fn llvmlite_emit_object(
     let mir_json_path = tmp_dir.join("nyash_harness_mir.json");
     crate::runner::mir_json_emit::emit_mir_json_for_harness(module, &mir_json_path)
         .map_err(|e| format!("MIR JSON emit error: {}", e))?;
+    // Export externs registry (abstract spec) for harness (optional)
+    let extern_json_path = tmp_dir.join("externs_registry.json");
+    let _ = nyash_rust::mir::externs::registry::export_json(&extern_json_path);
     crate::cli_v!(
         "[Runner/LLVM] using llvmlite harness → {} (mir={})",
         out_path,
@@ -42,6 +45,13 @@ pub fn llvmlite_emit_object(
         "--out",
         out_path,
     ]);
+    // Provide extern spec JSON to harness
+    cmd.env("NYASH_EXTERN_SPEC_JSON", extern_json_path);
+    // Default-on: sanitize empty PHIs in IR to keep llvmlite happy.
+    // Users can explicitly disable with NYASH_LLVM_SANITIZE_EMPTY_PHI=0.
+    if std::env::var("NYASH_LLVM_SANITIZE_EMPTY_PHI").ok().map(|v| v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")).unwrap_or(false) == false {
+        cmd.env("NYASH_LLVM_SANITIZE_EMPTY_PHI", "1");
+    }
     let out = spawn_with_timeout(cmd, timeout_ms).map_err(|e| format!("spawn harness: {}", e))?;
     if out.timed_out || !out.status_ok {
         return Err(format!(
@@ -64,7 +74,7 @@ pub fn llvmlite_emit_object(
 }
 
 /// Resolve ny-llvmc executable path with env/PATH fallbacks
-fn resolve_ny_llvmc() -> std::path::PathBuf {
+pub fn resolve_ny_llvmc() -> std::path::PathBuf {
     std::env::var("NYASH_NY_LLVM_COMPILER")
         .ok()
         .and_then(|s| if !s.is_empty() { Some(std::path::PathBuf::from(s)) } else { None })
@@ -92,6 +102,11 @@ pub fn ny_llvmc_emit_exe_lib(
     let json_path = tmp_dir.join("nyash_cli_emit.json");
     crate::runner::mir_json_emit::emit_mir_json_for_harness(module, &json_path)
         .map_err(|e| format!("MIR JSON emit error: {}", e))?;
+
+    // Export externs registry (abstract spec) for harness/ny-llvmc
+    let extern_json_path = tmp_dir.join("externs_registry.json");
+    let _ = nyash_rust::mir::externs::registry::export_json(&extern_json_path);
+
     let ny_llvmc = resolve_ny_llvmc();
     if !ny_llvmc.exists() {
         return Err(hint_ny_llvmc_missing(&ny_llvmc));
@@ -103,6 +118,10 @@ pub fn ny_llvmc_emit_exe_lib(
         .arg("exe")
         .arg("--out")
         .arg(exe_out);
+
+    // Provide extern spec JSON to ny-llvmc (which passes to harness)
+    cmd.env("NYASH_EXTERN_SPEC_JSON", extern_json_path);
+
     let default_nyrt = std::env::var("NYASH_EMIT_EXE_NYRT")        .ok()        .or_else(|| std::env::var("NYASH_ROOT").ok().map(|r| format!("{}/target/release", r)))        .unwrap_or_else(|| "target/release".to_string());
     if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg(default_nyrt); }
     if let Some(flags) = extra_libs { if !flags.trim().is_empty() { cmd.arg("--libs").arg(flags); } }

@@ -1,0 +1,10 @@
+static box Main {
+  main(args) {
+    // try 内の return より cleanup の return を優先（設計）
+    try {
+      return 1
+    } cleanup {
+      return 2
+    }
+  }
+}

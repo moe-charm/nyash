@@ -7,6 +7,7 @@
 
 use super::super::{Effect, EffectMask, ValueId};
 use crate::mir::instruction::MirInstruction;
+use crate::mir::definitions::call_unified::Callee;
 use crate::mir::instruction_kinds as inst_meta;
 use crate::mir::types::{BarrierOp, ConstValue, WeakRefOp};
 
@@ -17,10 +18,19 @@ impl MirInstruction {
             return eff;
         }
         match self {
-            // Pure operations
-            MirInstruction::Const { .. }
-            | MirInstruction::BinOp { .. }
-            | MirInstruction::UnaryOp { .. }
+            // Pure operations (with refined exceptions below)
+            MirInstruction::Const { .. } => EffectMask::PURE,
+            // Binary operations are generally pure, but some variants may panic at runtime
+            // (e.g., division/modulo by zero). Mark such ops as having Panic effect so that
+            // passes like DCE do not eliminate them even if their result is unused.
+            MirInstruction::BinOp { op, .. } => {
+                use crate::mir::types::BinaryOp;
+                match op {
+                    BinaryOp::Div | BinaryOp::Mod => EffectMask::PURE.add(Effect::Panic),
+                    _ => EffectMask::PURE,
+                }
+            }
+            MirInstruction::UnaryOp { .. }
             | MirInstruction::Compare { .. }
             | MirInstruction::Cast { .. }
             | MirInstruction::TypeOp { .. }
@@ -31,13 +41,10 @@ impl MirInstruction {
 
             // Memory operations
             MirInstruction::Load { .. } => EffectMask::READ,
-            MirInstruction::Store { .. } | MirInstruction::ArraySet { .. } => EffectMask::WRITE,
-            MirInstruction::ArrayGet { .. } => EffectMask::READ,
+            MirInstruction::Store { .. } => EffectMask::WRITE,
 
             // Function calls use provided effect mask
-            MirInstruction::Call { effects, .. }
-            | MirInstruction::BoxCall { effects, .. }
-            | MirInstruction::PluginInvoke { effects, .. } => *effects,
+            MirInstruction::Call { effects, .. } | MirInstruction::BoxCall { effects, .. } => *effects,
 
             // Control flow (pure but affects execution)
             MirInstruction::Branch { .. }
@@ -60,8 +67,6 @@ impl MirInstruction {
 
             // Phase 6: Box reference operations
             MirInstruction::RefNew { .. } => EffectMask::PURE, // Creating reference is pure
-            MirInstruction::RefGet { .. } => EffectMask::READ, // Reading field has read effects
-            MirInstruction::RefSet { .. } => EffectMask::WRITE, // Writing field has write effects
             MirInstruction::WeakNew { .. } => EffectMask::PURE, // Creating weak ref is pure
             MirInstruction::WeakLoad { .. } => EffectMask::READ, // Loading weak ref has read effects
             MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
@@ -81,8 +86,7 @@ impl MirInstruction {
             MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
             MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
 
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
+            // (ExternCall retired) — handled via Call callee=Extern with effects computed upstream
             // Function value construction: treat as pure with allocation
             MirInstruction::NewClosure { .. } => EffectMask::PURE.add(Effect::Alloc),
         }
@@ -104,10 +108,8 @@ impl MirInstruction {
             | MirInstruction::TypeCheck { dst, .. }
             | MirInstruction::Cast { dst, .. }
             | MirInstruction::TypeOp { dst, .. }
-            | MirInstruction::ArrayGet { dst, .. }
             | MirInstruction::Copy { dst, .. }
             | MirInstruction::RefNew { dst, .. }
-            | MirInstruction::RefGet { dst, .. }
             | MirInstruction::WeakNew { dst, .. }
             | MirInstruction::WeakLoad { dst, .. }
             | MirInstruction::WeakRef { dst, .. }
@@ -115,20 +117,15 @@ impl MirInstruction {
             | MirInstruction::Await { dst, .. } => Some(*dst),
             MirInstruction::NewClosure { dst, .. } => Some(*dst),
 
-            MirInstruction::Call { dst, .. }
-            | MirInstruction::BoxCall { dst, .. }
-            | MirInstruction::PluginInvoke { dst, .. }
-            | MirInstruction::ExternCall { dst, .. } => *dst,
+            MirInstruction::Call { dst, .. } | MirInstruction::BoxCall { dst, .. } => *dst,
 
             MirInstruction::Store { .. }
             | MirInstruction::Branch { .. }
             | MirInstruction::Jump { .. }
             | MirInstruction::Return { .. }
-            | MirInstruction::ArraySet { .. }
             | MirInstruction::Debug { .. }
             | MirInstruction::Print { .. }
             | MirInstruction::Throw { .. }
-            | MirInstruction::RefSet { .. }
             | MirInstruction::BarrierRead { .. }
             | MirInstruction::BarrierWrite { .. }
             | MirInstruction::Barrier { .. }
@@ -169,21 +166,32 @@ impl MirInstruction {
                 ..
             } => vec![*lhs, *rhs],
 
-            MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
-
-            MirInstruction::ArraySet {
-                array,
-                index,
-                value,
-            } => vec![*array, *index, *value],
+            
 
             MirInstruction::Branch { condition, .. } => vec![*condition],
 
             MirInstruction::Return { value } => value.map(|v| vec![v]).unwrap_or_default(),
 
-            MirInstruction::Call { func, args, .. } => {
+            MirInstruction::Call { func, args, callee, .. } => {
                 let mut used = vec![*func];
                 used.extend(args);
+                // Include receiver and other embedded ids from unified callee forms
+                if let Some(c) = callee {
+                    match c {
+                        Callee::Method { receiver, .. } => {
+                            if let Some(r) = receiver { used.push(*r); }
+                        }
+                        Callee::Constructor { .. } => {
+                            // no extra ids
+                        }
+                        Callee::Closure { me_capture, captures, .. } => {
+                            if let Some(me) = me_capture { used.push(*me); }
+                            for (_name, vid) in captures { used.push(*vid); }
+                        }
+                        Callee::Value(vid) => { used.push(*vid); }
+                        Callee::ModuleFunction(_) | Callee::Global(_) | Callee::Extern(_) => {}
+                    }
+                }
                 used
             }
             MirInstruction::NewClosure { captures, me, .. } => {
@@ -195,8 +203,7 @@ impl MirInstruction {
                 used
             }
 
-            MirInstruction::BoxCall { box_val, args, .. }
-            | MirInstruction::PluginInvoke { box_val, args, .. } => {
+            MirInstruction::BoxCall { box_val, args, .. } => {
                 let mut used = vec![*box_val];
                 used.extend(args);
                 used
@@ -213,10 +220,7 @@ impl MirInstruction {
 
             // Phase 6: Box reference operations
             MirInstruction::RefNew { box_val, .. } => vec![*box_val],
-            MirInstruction::RefGet { reference, .. } => vec![*reference],
-            MirInstruction::RefSet {
-                reference, value, ..
-            } => vec![*reference, *value],
+            
             MirInstruction::WeakNew { box_val, .. } => vec![*box_val],
             MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
             MirInstruction::BarrierRead { ptr } => vec![*ptr],
@@ -229,8 +233,7 @@ impl MirInstruction {
             MirInstruction::FutureSet { future, value } => vec![*future, *value],
             MirInstruction::Await { future, .. } => vec![*future],
 
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall { args, .. } => args.clone(),
+            // External calls are represented via Call with callee=Extern
         }
     }
 }

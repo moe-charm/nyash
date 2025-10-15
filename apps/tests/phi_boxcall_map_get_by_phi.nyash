@@ -1,0 +1,21 @@
+// PHI → BoxCall(Map.get) 経由の値解決（DP）を確認
+// 期待: Result: v2
+static box Main {
+  main() {
+    // 準備: マップにキー→値を設定
+    local m = new MapBox()
+    m.set("k1", "v1")
+    m.set("k2", "v2")
+
+    // PHI でキー k を合流（常に then）
+    local k = "k1"
+    if (1 < 2) { k = "k2" } else { k = "k1" }
+
+    // PHI 経由の k をそのまま BoxCall 引数に使用
+    local v = m.get(k)   // 期待: "v2"
+    // 文字列→長さを取り i64 で比較（ハーネス/VMの橋渡し差を回避）
+    local n = v.size()
+    print("Result: " + n) // 期待: 2
+    return 0
+  }
+}

@@ -1,0 +1,27 @@
+// Factorial Benchmark - 階乗計算（再帰）
+//
+// 目的: 再帰深さの確認・関数呼び出しオーバーヘッド測定
+// 期待値: factorial(20) = 2,432,902,008,176,640,000
+// 注意: i64範囲内（factorial(20)まで）
+
+static box Main {
+    // 階乗計算（再帰版）
+    factorial(n) {
+        if n <= 1 {
+            return 1
+        }
+        return n * me.factorial(n - 1)
+    }
+
+    main() {
+        local result
+
+        // factorial(20)を計算
+        // i64範囲: factorial(20) = 2,432,902,008,176,640,000
+        result = me.factorial(20)
+
+        print("Factorial(20) = " + result)
+
+        return result
+    }
+}

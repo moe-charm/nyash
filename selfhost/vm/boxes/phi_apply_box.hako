@@ -1,0 +1,19 @@
+// phi_apply_box.hako — PhiApplyBox
+// 責務: φ の適用（dst レジスタに vin の値をロードして書き込む）
+// 非責務: φ のデコードやスキャン（呼び出し元で行う）
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box PhiApplyBox {
+  // 内部: 文字列が整数表現かを緩く判定
+  _is_numeric_str(s){ if s==null {return 0} return StringHelpers.is_numeric_str(s) }
+  _str_to_int(s){ return StringHelpers.to_i64(s) }
+  _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return me._str_to_int(s) } return 0 }
+
+  apply(dst, vin, regs) {
+    if dst == null || vin == null { return }
+    local vv = me._load_reg(regs, vin)
+    regs.set(""+dst, vv)
+  }
+}
+

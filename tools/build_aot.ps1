@@ -64,4 +64,4 @@ if (-not (Test-Path $Out)) {
 }
 
 Info "Done: $Out"
-Write-Host "   (runtime requires nyash.toml and plugin .so/.dll per config)"
+Write-Host "   (runtime requires hako.toml (compat: nyash.toml) and plugin .so/.dll per config)"

@@ -79,7 +79,7 @@ pub fn prelex_normalize(src: &str) -> String {
                         Some('"') => {
                             // verify hashes
                             let mut ok = true;
-                            for i in 0..hashes {
+                            for _ in 0..hashes {
                                 if it.peek().copied() != Some('#') { ok = false; break; }
                                 // stage-verify only; do not consume here
                             }
@@ -139,4 +139,3 @@ pub fn prelex_normalize(src: &str) -> String {
 
     out
 }
-

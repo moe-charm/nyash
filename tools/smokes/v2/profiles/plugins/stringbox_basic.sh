@@ -3,8 +3,8 @@
 # stringbox_basic.sh - StringBoxの基本操作テスト
 
 # 共通ライブラリ読み込み（必須）
-source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
+source "$(dirname "$0")/../../lib/test_runner.sh"
+source "$(dirname "$0")/../../lib/result_checker.sh"
 source "$(dirname "$0")/_ensure_fixture.sh"
 
 # 環境チェック（必須）
@@ -24,7 +24,7 @@ s = new StringBox("Hello")
 print(s)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     # Plugin-first prints a descriptor like "StringBox(<id>)"; legacy builtin prints the raw string.
     if echo "$output" | grep -q '^StringBox('; then
         check_regex '^StringBox\([0-9]\+\)$' "$output" "stringbox_new_plugin"
@@ -40,7 +40,7 @@ s = new StringBox("Nyash")
 print(s.length())
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     # If VM currently lacks StringBox.length route, skip gracefully in quick profile.
     if echo "$output" | grep -q 'BoxCall unsupported on StringBox.length'; then
         test_skip "stringbox_length (plugin method path not wired yet)"
@@ -60,7 +60,7 @@ test_stringbox_concat() {
 print("Hello" + " World")
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "Hello World" "$output" "stringbox_concat_literals"
 }
 

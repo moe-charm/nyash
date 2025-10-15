@@ -1,0 +1,12 @@
+// ConsoleBox native build test - simplest version
+// Build native:
+//   ./tools/build_aot.sh examples/console_native_simple.nyash console_simple
+
+static box Main {
+  main() {
+    local c
+    c = new ConsoleBox()
+    c.println("Hello Nyash Native!")
+    return 0
+  }
+}

@@ -1,0 +1,70 @@
+// ParserCommonUtilsBox — shared utility functions for parser boxes
+// Responsibility: Provide common string/character operations used across parser components
+// Notes: Pure utility functions; no state, no dependencies
+
+static box ParserCommonUtilsBox {
+  // ===== 数値・文字列変換 =====
+
+  i2s(v) { return "" + v }
+
+  // ===== 文字判定 =====
+
+  is_alpha(ch) {
+    return (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_"
+  }
+
+  is_digit(ch) {
+    return ch >= "0" && ch <= "9"
+  }
+
+  // ===== 文字列検索・操作 =====
+
+  dq() { return "\"" }
+
+  starts_with(src, i, pat) {
+    local n = src.size()
+    local m = pat.size()
+    if i + m > n { return 0 }
+    local k = 0
+    loop(k < m) {
+      if src.substring(i + k, i + k + 1) != pat.substring(k, k + 1) { return 0 }
+      k = k + 1
+    }
+    return 1
+  }
+
+  index_of(src, i, pat) {
+    local n = src.size()
+    local m = pat.size()
+    if m == 0 { return i }
+    local j = i
+    loop(j + m <= n) {
+      if me.starts_with(src, j, pat) { return j }
+      j = j + 1
+    }
+    return -1
+  }
+
+  trim(s) {
+    local i = 0
+    local n = s.size()
+    loop(i < n && (s.substring(i,i+1) == " " || s.substring(i,i+1) == "	")) { i = i + 1 }
+    local j = n
+    loop(j > i && (s.substring(j-1,j) == " " || s.substring(j-1,j) == "	" || s.substring(j-1,j) == ";")) { j = j - 1 }
+    return s.substring(i, j)
+  }
+
+  esc_json(s) {
+    local out = ""
+    local i = 0
+    local n = s.size()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" }
+      else { if ch == "\"" { out = out + "\\\"" }
+      else { out = out + ch } }
+      i = i + 1
+    }
+    return out
+  }
+}

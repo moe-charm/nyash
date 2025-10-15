@@ -9,10 +9,10 @@
 **Phase 2.4 NyRT→NyKernel Architecture Revolution 100%成功達成！**
 
 ### ✅ **完全実装成果**
-- **アーキテクチャ変更**: `crates/nyrt` → `crates/nyash_kernel` 完全移行
+- **アーキテクチャ変更**: `crates/nyrt` → `crates/hako_kernel` 完全移行
 - **42%削減実現**: 11箇所の`with_legacy_vm_args`系統的削除完了
 - **Plugin-First統一**: 旧VM依存システム完全根絶
-- **ビルド成功**: libnyash_kernel.a完全生成（0エラー・0警告）
+- **ビルド成功**: libhako_kernel.a完全生成（0エラー・0警告）
 - **参照更新**: build_llvm.sh, ny-llvmc等すべて完了
 - **🎯 ExternCall修正**: LLVM EXE print出力問題根本解決（codex技術力）
 

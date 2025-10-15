@@ -1,0 +1,120 @@
+// mir_v1_adapter.nyash — Minimal JSON v1 (mir_call) to v0 adapter for selfhost
+// Scope: selfhost only. Transforms op:"mir_call" into legacy v0 ops (call/boxcall/newbox).
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+
+static box MirJsonV1Adapter {
+  // Delegate to JsonCursorBox (escape-aware implementations, fixes 2 escape bugs)
+  _index_of_from(hay, needle, pos) {
+    return JsonCursorBox.index_of_from(hay, needle, pos)
+  }
+  _seek_obj_end(text, obj_start) {
+    return JsonCursorBox.seek_obj_end(text, obj_start)
+  }
+  _seek_array_end(text, pos_after_bracket) {
+    // JsonCursorBox.seek_array_end expects pos at '[', adjust since we receive pos after '['
+    if text == null { return -1 }
+    if pos_after_bracket <= 0 { return -1 }
+    local bracket_pos = pos_after_bracket - 1
+    return JsonCursorBox.seek_array_end(text, bracket_pos)
+  }
+  _read_digits(text, pos) {
+    return JsonCursorBox.digits_from(text, pos)
+  }
+  _read_string(text, pos_after_quote) {
+    local end = me._index_of_from(text, "\"", pos_after_quote)
+    if end < 0 { return "" }
+    return text.substring(pos_after_quote, end)
+  }
+
+  // Convert one mir_call object JSON segment to v0 legacy op JSON
+  _convert_mir_call(seg) {
+    // dst
+    local dpos = me._index_of_from(seg, "\"dst\":", 0)
+    local dst = 0
+    if dpos >= 0 {
+      local dd = me._read_digits(seg, dpos + 6)
+      if dd != "" { dst = 0 + ("" + dd).size()  // placeholder to avoid lints
+        dst = 0  // reassign after parse
+        // parse int
+        local acc = 0
+        local i = 0
+        loop(i < dd.size()) { acc = acc * 10 + ("0123456789".indexOf(dd.substring(i,i+1)))  i = i + 1 }
+        dst = acc
+      }
+    }
+    // args array substring (reuse existing as-is)
+    local ak = me._index_of_from(seg, "\"args\":[", 0)
+    local args_json = "[]"
+    if ak >= 0 {
+      local lb = me._index_of_from(seg, "[", ak)
+      if lb >= 0 {
+        local rb = me._seek_array_end(seg, lb + 1)
+        if rb > lb { args_json = seg.substring(lb, rb + 1) }
+      }
+    }
+    // callee type
+    local ck = me._index_of_from(seg, "\"callee\":{\"type\":\"", 0)
+    if ck < 0 { return seg }
+    local ct = me._read_string(seg, ck + 18)
+    if ct == "Global" {
+      local nk = me._index_of_from(seg, "\"name\":\"", ck)
+      local name = ""
+      if nk >= 0 { name = me._read_string(seg, nk + 8) }
+      return "{\"op\":\"call\",\"name\":\"" + name + "\",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    if ct == "Method" {
+      local mk = me._index_of_from(seg, "\"method\":\"", ck)
+      local method = ""
+      if mk >= 0 { method = me._read_string(seg, mk + 10) }
+      local rk = me._index_of_from(seg, "\"receiver\":", ck)
+      local recv = 0
+      if rk >= 0 {
+        local rd = me._read_digits(seg, rk + 11)
+        if rd != "" {
+          local acc2 = 0
+          local i2 = 0
+          loop(i2 < rd.size()) { acc2 = acc2 * 10 + ("0123456789".indexOf(rd.substring(i2,i2+1)))  i2 = i2 + 1 }
+          recv = acc2
+        }
+      }
+      return "{\"op\":\"boxcall\",\"method\":\"" + method + "\",\"recv\":" + recv + ",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    if ct == "Constructor" {
+      local tk = me._index_of_from(seg, "\"box_type\":\"", ck)
+      local tname = ""
+      if tk >= 0 { tname = me._read_string(seg, tk + 12) }
+      return "{\"op\":\"newbox\",\"box_type\":\"" + tname + "\",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    // default: return original segment
+    return seg
+  }
+
+  // Public API: convert all mir_call objects within MIR(JSON v1) to v0 legacy ops
+  to_v0(mjson) {
+    if mjson == null { return null }
+    local out = mjson
+    local cur = 0
+    loop(true) {
+      local op = me._index_of_from(out, "\"op\":\"mir_call\"", cur)
+      if op < 0 { break }
+      // find object bounds
+      local start = op
+      loop(start >= 0) {
+        if out.substring(start, start+1) == "{" { break }
+        start = start - 1
+      }
+      if start < 0 { break }
+      local end = me._seek_obj_end(out, start)
+      if end <= start { break }
+      local seg = out.substring(start, end)
+      local rep = me._convert_mir_call(seg)
+      out = out.substring(0, start) + rep + out.substring(end, out.size())
+      cur = start + rep.size()
+    }
+    return out
+  }
+}
+
+static box MirJsonV1AdapterStub { main(args) { return 0 } }
+

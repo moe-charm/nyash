@@ -52,6 +52,22 @@ static box MacroBoxSpec {
 
 Example (repo): `apps/macros/examples/echo_macro.nyash`.
 
+### Simple rewrite macros (recommended now)
+
+For Phase‑15/16 stabilization, keep user macros as pure, deterministic AST rewrites that desugar syntax sugar into the existing language forms. This keeps behavior strict and predictable and lets the normal Builder/VM pipeline handle semantics.
+
+- Examples (selfhost minimum):
+  - `json({ a: 1, b: arr([2,3]) })` → Map/Array literals (no semantic change)
+  - `map({ k: v })` → Map literal
+  - `arr([x, y])` → Array literal
+- Packaging (suggested layout):
+  - Put your macros under `apps/macros/<pkg>/macros.hako`
+  - Enable via `NYASH_MACRO_PATHS=apps/macros/<pkg>/macros.hako`
+- Policy: no IO/NET/ENV by default (caps off). Expansion must return valid AST JSON v0, or the runner fails fast.
+
+Complex, effectful, or code‑generating macros are deferred until after self‑hosting. When needed, prefer promoting them to proper Boxes or plugins with clear interfaces and tests.
+
+
 Editing template (string literal uppercasing)
 - Example: `apps/macros/examples/upper_string_macro.nyash`
 - Behavior: if a string literal value starts with `UPPER:`, the suffix is uppercased.
@@ -80,16 +96,29 @@ NYASH_VM_USE_PY=1 \
 
 Notes: 現状は PyVM ルートのみ対応。`NYASH_VM_USE_PY=1` が必須。
 
+Selfhost minimum (json/map/arr) — enable and run
+```
+export NYASH_MACRO_ENABLE=1
+export NYASH_MACRO_PATHS=apps/macros/selfhost_min/macros.hako   # when provided
+
+# Or use the built‑in Rust MacroBox variant during bring‑up (dev only):
+#   export NYASH_MACRO_BOX_ENABLE=SelfhostMinMacro
+
+./target/release/hakorune --backend vm apps/APP/main.hako
+```
+
+
 CLI プロファイル（推奨）
-- `--profile dev`（既定相当: マクロON/厳格ON）
+- `--macro-profile dev`（既定相当: マクロON/厳格ON）
 - `--profile lite`（マクロOFFの軽量モード）
 - `--profile ci|strict`（マクロON/厳格ON）
-  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/nyash --macro-profile dev --backend vm apps/tests/ternary_basic.nyash`
 
 Notes
 - Built-in child route (stdin JSON -> stdout JSON) remains available when `NYASH_MACRO_BOX_CHILD_RUNNER=0`.
 - Internal child can receive ctx via env: `NYASH_MACRO_CTX_JSON='{"caps":{"io":false,"net":false,"env":true}}'`
 - CLI からも指定可能: `--macro-ctx-json '{"caps":{"io":false,"net":false,"env":true}}'`
+- Child isolation (tests/dev): runner isolates macro‑child from project TOML by setting `NYASH_SKIP_TOML_ENV=1` and `NYASH_USING=0` to avoid ambient modules/env affecting expansion。
 - Strict mode: `NYASH_MACRO_STRICT=1` (default) fails build on macro child error/timeout; set `0` to fallback to identity.
 - Timeout: `NYASH_NY_COMPILER_TIMEOUT_MS` (default `2000`).
 
@@ -147,7 +176,7 @@ Purpose: restrict side‑effects and ensure deterministic macro expansion.
   - net=false → no Http/Socket inside macro
   - env=false → MacroCtx.getEnv disabled; child inherits scrubbed env
 - Planned configuration (nyash.toml): see `docs/reference/macro/capabilities.md`
-- PoC mapping: child is always `NYASH_VM_USE_PY=1`, `NYASH_DISABLE_PLUGINS=1`, timeout via `NYASH_NY_COMPILER_TIMEOUT_MS`
+- PoC mapping: child is always `NYASH_VM_USE_PY=1`, `NYASH_PLUGIN_POLICY=off`（compat: `NYASH_DISABLE_PLUGINS=1`）、timeout via `NYASH_NY_COMPILER_TIMEOUT_MS`
 
 ## Top-level static MacroBoxSpec (safety)
 - 既定では無効（`NYASH_MACRO_TOPLEVEL_ALLOW=0`）。Box宣言なしで `static function MacroBoxSpec.expand` を受理したい場合は `--macro-top-level-allow` を指定してください。

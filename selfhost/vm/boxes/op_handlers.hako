@@ -1,0 +1,131 @@
+// op_handlers.hako — OpHandlersBox
+// Minimal handlers for const/compare/ret etc. with loose JSON key parsing.
+using "selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+// Prefer logical module names to avoid file-path using in strict profiles
+static box OpHandlersBox {
+  _tprint(msg) {
+    // Only emit hard errors by default; avoid env dependencies in Mini‑VM
+    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
+  }
+  _is_numeric_str(s) { return StringHelpers.is_numeric_str(s) }
+
+  _str_to_int(s) { return JsonFragBox._str_to_int(s) }
+
+  // --- Safe decimal arithmetic on strings (non-negative integers only) ---
+
+  _find_int_in(seg, keypat) {
+    local p = seg.indexOf(keypat)
+    if p < 0 { return null }
+    p = p + keypat.size()
+    local i = p
+    local out = ""
+    loop(true) {
+      local ch = seg.substring(i, i+1)
+      if ch == "" { break }
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      if ch == "-" { out = out + ch  i = i + 1  continue }
+      if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+    }
+    if out == "" { return null }
+    return me._str_to_int(out)
+  }
+
+  _find_str_in(seg, keypat) {
+    local p = seg.indexOf(keypat)
+    if p < 0 { return "" }
+    p = p + keypat.size()
+    // Use substring to work around indexOf not supporting start position
+    local rest = seg.substring(p, seg.size())
+    local q = rest.indexOf("\"")
+    if q < 0 { return "" }
+    return rest.substring(0, q)
+  }
+
+  _find_kv_int(seg, key) {
+    // pattern: "key":<num>
+    local pat = "\"" + key + "\":"
+    return me._find_int_in(seg, pat)
+  }
+
+  _find_kv_str(seg, key) {
+    // pattern: "key":"..."
+    local pat = "\"" + key + "\":\""
+    return me._find_str_in(seg, pat)
+  }
+
+  _load_reg(regs, id) {
+    local v = regs.get("" + id)
+    if v == null { return 0 }
+    local s = "" + v
+    if me._is_numeric_str(s) == 1 { return me._str_to_int(s) }
+    return 0
+  }
+
+  handle_const(seg, regs) {
+    // Prefer internal scanner to avoid resolver differences in strict profiles
+    local dst = me._find_kv_int(seg, "dst")
+    if dst == null { return }
+    // Try direct value first
+    local val = me._find_kv_int(seg, "value")
+    if val == null {
+      // Nested pattern: "value":{"type":"i64","value":N}
+      local pat = "\"value\":{\"type\":\"i64\",\"value\":"
+      local p = seg.indexOf(pat)
+      if p >= 0 {
+        // Minimal digit read (inline)
+        local i = p + pat.size()
+        local out = ""
+        loop(true) {
+          local ch = seg.substring(i, i+1)
+          if ch == "" { break }
+          if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+        }
+        if out != "" { val = me._str_to_int(out) }
+      }
+    }
+    if val == null { val = 0 }
+    regs.set("" + dst, val)
+  }
+
+  handle_compare(seg, regs) {
+    local kind = me._find_kv_str(seg, "cmp")
+    if kind == "" {
+      local sym = me._find_kv_str(seg, "operation")
+      if sym == "" {
+        print("[ERROR] Missing key: cmp")
+        return
+      }
+      kind = CompareOpsBox.map_symbol(sym)
+    }
+    local lhs = me._find_kv_int(seg, "lhs")
+    local rhs = me._find_kv_int(seg, "rhs")
+    local dst = me._find_kv_int(seg, "dst")
+    if lhs == null { print("[ERROR] Missing key: lhs") return }
+    if rhs == null { print("[ERROR] Missing key: rhs") return }
+    if dst == null { print("[ERROR] Missing key: dst") return }
+    local a = me._load_reg(regs, lhs)
+    local b = me._load_reg(regs, rhs)
+    local r = CompareOpsBox.eval(kind, a, b)
+    // Store as numeric string to simplify downstream _load_reg parsing
+    regs.set("" + dst, "" + r)
+  }
+
+  handle_binop(seg, regs) {
+    // Minimal Add/Sub/Mul/Div/Mod for selfhost Mini‑VM tests
+    local kind = JsonFragBox.get_str_strict(seg, "op_kind")
+    local lhs = JsonFragBox.get_int_strict(seg, "lhs")
+    local rhs = JsonFragBox.get_int_strict(seg, "rhs")
+    local dst = JsonFragBox.get_int_strict(seg, "dst")
+    if lhs == null || rhs == null || dst == null { return }
+    local a = me._load_reg(regs, lhs)
+    local b = me._load_reg(regs, rhs)
+    if kind == "Add" { regs.set(""+dst, ArithmeticBox.add_i64(a, b)) }
+    else if kind == "Sub" { regs.set(""+dst, ArithmeticBox.sub_i64(a, b)) }
+    else if kind == "Mul" { regs.set(""+dst, ArithmeticBox.mul_i64(a, b)) }
+    else if kind == "Div" { if b == 0 { regs.set(""+dst, 0) } else { regs.set(""+dst, a / b) } }
+    else if kind == "Mod" { if b == 0 { regs.set(""+dst, 0) } else { regs.set(""+dst, a % b) } }
+  }
+}

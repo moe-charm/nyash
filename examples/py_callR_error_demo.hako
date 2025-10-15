@@ -1,0 +1,17 @@
+// Python callR error demo (returns Result.Err)
+// Run:
+//   NYASH_PLUGIN_ONLY=1 ./target/release/nyash --backend vm examples/py_callR_error_demo.nyash
+
+static box Main {
+  main() {
+    local py, mod, sqrt, r
+    py = new PyRuntimeBox()
+    mod = py.import("math")
+    sqrt = mod.getattr("sqrt")
+    // wrong type to trigger TypeError
+    r = sqrt.callR("oops")
+    me.console.println(r)
+    return 0
+  }
+}
+

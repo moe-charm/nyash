@@ -1,0 +1,16 @@
+// @env NYASH_AWAIT_MAX_MS=5000
+// Simple nowait/await test under Interpreter
+
+static box Main {
+    main() {
+        // spawn two async computations
+        nowait fa = 10 + 20
+        nowait fb = 1 + 2
+
+        // wait and combine
+        a = await fa
+        b = await fb
+        return a + b   // 33
+    }
+}
+

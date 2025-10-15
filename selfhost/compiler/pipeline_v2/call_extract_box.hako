@@ -1,0 +1,13 @@
+// CallExtractBox — Stage‑1 JSON から Return(Call name(args...)) を抽出（整数引数のみ）
+// Delegation to Stage1IntArgsExtractBox (unified implementation)
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as Unified
+
+static box CallExtractBox {
+  // Returns { name: String, args: [Int,...] } or null
+  extract_return_call_ints(ast_json) {
+    return Unified.extract_return_call_ints(ast_json)
+  }
+}
+
+static box CallExtractStub { main(args) { return 0 } }
+

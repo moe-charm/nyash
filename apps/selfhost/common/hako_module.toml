@@ -1,0 +1,20 @@
+[module]
+name = "selfhost.common"
+version = "1.0.0"
+
+[exports]
+json_adapter = "json_adapter.hako"
+mini_vm_scan = "mini_vm_scan.hako"
+mini_vm_binop = "mini_vm_binop.hako"
+mini_vm_compare = "mini_vm_compare.hako"
+string_ops = "string_ops.hako"
+json.mir_builder_min = "json/mir_builder_min.hako"
+json.mir_v1_adapter = "json/mir_v1_adapter.hako"
+json.core.string_scan = "json/core/string_scan.hako"
+json.utils.json_frag = "json/utils/json_frag.hako"
+
+[private]
+# string_helpers.hako and json/core/json_scan.hako kept private for now
+
+[dependencies]
+"selfhost.vm" = "^1.0.0"

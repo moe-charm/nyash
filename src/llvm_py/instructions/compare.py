@@ -6,7 +6,7 @@ Handles comparison operations (<, >, <=, >=, ==, !=)
 import llvmlite.ir as ir
 from typing import Dict, Optional, Any
 from utils.values import resolve_i64_strict
-from .externcall import lower_externcall
+from dispatch import PhiDispatchPoint
 from trace import values as trace_values
 
 def lower_compare(
@@ -48,10 +48,9 @@ def lower_compare(
                 bb_map = ctx.bb_map
         except Exception:
             pass
-    # Get operands
-    # Prefer same-block SSA from vmap; fallback to resolver for cross-block dominance
-    lhs_val = resolve_i64_strict(resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
-    rhs_val = resolve_i64_strict(resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
+    # Get operands via DispatchPoint（統一フォールバック経路）
+    lhs_val = PhiDispatchPoint.resolve_i64(builder, resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
+    rhs_val = PhiDispatchPoint.resolve_i64(builder, resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
 
     i64 = ir.IntType(64)
     i8p = ir.IntType(8).as_pointer()
@@ -101,7 +100,7 @@ def lower_compare(
                 vmap[dst] = ne
             return
 
-    # Default integer compare path
+    # Default integer compare path（値解決は Resolver に集約）
     if lhs_val is None:
         lhs_val = ir.Constant(i64, 0)
     if rhs_val is None:
@@ -112,7 +111,10 @@ def lower_compare(
         lhs_val = builder.ptrtoint(lhs_val, i64)
     if hasattr(rhs_val, 'type') and isinstance(rhs_val.type, ir.PointerType):
         rhs_val = builder.ptrtoint(rhs_val, i64)
-    
+
+    # DispatchPoint で十分にフォールバック済みなので、ここでは追加のヒューリスティックを持たない。
+
+    # 値は resolver 側で PHI優先・Registry優先の方針を取るため、ここでは追加ヒューリスティックを持たない
     # Perform signed comparison using canonical predicates ('<','>','<=','>=','==','!=')
     pred = op if op in ('<','>','<=','>=','==','!=') else '=='
     cmp_result = builder.icmp_signed(pred, lhs_val, rhs_val, name=f"cmp_{dst}")

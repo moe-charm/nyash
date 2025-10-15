@@ -1,5 +1,5 @@
 use super::{BasicBlock, BasicBlockId};
-use crate::mir::{BarrierOp, TypeOpKind, WeakRefOp};
+use crate::mir::{BarrierOp, WeakRefOp};
 use std::sync::atomic::{AtomicUsize, Ordering};
 // include path resolver removed (using handles modules)
 
@@ -45,8 +45,7 @@ impl super::MirBuilder {
             .map(|t| matches!(t, super::MirType::String))
             .unwrap_or(false);
         let is_string_origin = self
-            .value_origin_newbox
-            .get(&recv)
+            .origin_get(recv)
             .map(|s| s == "StringBox")
             .unwrap_or(false);
         // Only coerce for ambiguous/non-string non-core receivers (Instance/Parser/Debug/File/Unknown)
@@ -78,9 +77,6 @@ impl super::MirBuilder {
     pub(crate) fn local_arg(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::arg(self, v) }
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn local_cmp_operand(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::cmp_operand(self, v) }
-    #[allow(dead_code)]
-    #[inline]
     pub(crate) fn local_field_base(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::field_base(self, v) }
     #[allow(dead_code)]
     #[inline]
@@ -107,19 +103,26 @@ impl super::MirBuilder {
             self.local_ssa_map.clear();
             // BlockSchedule materialize cache is per-block as well
             self.schedule_mat_map.clear();
+            // Drop any stale pending copies for this block id (fresh block)
+            self.pending_entry_pin_copies.remove(&block_id);
             // Entry materialization for pinned slots only when not suppressed.
             // This provides block-local defs in single-predecessor flows without touching user vars.
             if !self.suppress_pin_entry_copy_next {
                 // First pass: copy all pin slots and remember old->new mapping
-                let names: Vec<String> = self.variable_map.keys().cloned().collect();
+                let mut names: Vec<String> = self.variable_map.keys().cloned().collect();
+                names.sort();
+                let mut pending: Vec<super::MirInstruction> = Vec::new();
                 for name in names.iter() {
                     if !name.starts_with("__pin$") { continue; }
                     if let Some(&src) = self.variable_map.get(name) {
                         let dst = self.value_gen.next();
-                        self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
+                        pending.push(super::MirInstruction::Copy { dst, src });
                         crate::mir::builder::metadata::propagate::propagate(self, src, dst);
                         self.variable_map.insert(name.clone(), dst);
                     }
+                }
+                if !pending.is_empty() {
+                    self.pending_entry_pin_copies.insert(block_id, pending);
                 }
             }
             // Reset suppression flag after use (one-shot)
@@ -146,6 +149,34 @@ impl super::MirBuilder {
         // (unified -> boxcall -> unified -> ...).
         force_legacy: bool,
     ) -> Result<(), String> {
+        if method == "birth" {
+            let recv_local = self.local_recv(box_val);
+            let mut argv: Vec<super::ValueId> = args.into_iter().map(|a| self.local_arg(a)).collect();
+            let (cls, _c) = crate::mir::builder::infer::receiver::infer_receiver(
+                None,
+                &method,
+                recv_local,
+                |vid| self.origin_get(vid).map(|s| s.to_string()),
+                &self.value_types,
+            );
+            let arity = argv.len();
+            let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
+            let name_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
+            let mut call_args: Vec<super::ValueId> = Vec::with_capacity(1 + arity);
+            call_args.push(recv_local);
+            call_args.extend(argv.drain(..));
+            let out = dst.unwrap_or_else(|| self.value_gen.next());
+            self.emit_instruction(super::MirInstruction::Call {
+                dst: Some(out),
+                func: name_val,
+                callee: Some(crate::mir::definitions::Callee::ModuleFunction(fname.clone())),
+                args: call_args,
+                effects,
+            })?;
+            self.annotate_call_result_from_func_name(out, &fname);
+            return Ok(());
+        }
+
         // Ensure receiver has a definition in the current block to avoid undefined use across
         // block boundaries (LoopForm/header, if-joins, etc.).
         // LocalSSA: ensure receiver has an in-block definition (kind=0 = recv)
@@ -156,7 +187,11 @@ impl super::MirBuilder {
         let use_unified_env = super::calls::call_unified::is_unified_call_enabled();
         // First, infer the receiver class consistently with unified path
         let (mut inferred_cls, _certainty) = crate::mir::builder::infer::receiver::infer_receiver(
-            None, &method, box_val, &self.value_origin_newbox, &self.value_types,
+            None,
+            &method,
+            box_val,
+            |vid| self.origin_get(vid).map(|s| s.to_string()),
+            &self.value_types,
         );
         let mut box_val = box_val;
         // Coerce ambiguous receiver for string-like APIs (Instance/Parser/Debug/File/Unknown)
@@ -203,7 +238,7 @@ impl super::MirBuilder {
             effects,
         })?;
         if let Some(d) = dst {
-            let mut recv_box: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
+            let mut recv_box: Option<String> = self.origin_get(box_val).map(|s| s.to_string());
             if recv_box.is_none() {
                 if let Some(t) = self.value_types.get(&box_val) {
                     match t {
@@ -227,45 +262,11 @@ impl super::MirBuilder {
     }
 
     #[allow(dead_code)]
-    pub(super) fn emit_type_check(
-        &mut self,
-        value: super::ValueId,
-        expected_type: String,
-    ) -> Result<super::ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp {
-            dst,
-            op: TypeOpKind::Check,
-            value,
-            ty: super::MirType::Box(expected_type),
-        })?;
-        Ok(dst)
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn emit_cast(
-        &mut self,
-        value: super::ValueId,
-        target_type: super::MirType,
-    ) -> Result<super::ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp {
-            dst,
-            op: TypeOpKind::Cast,
-            value,
-            ty: target_type.clone(),
-        })?;
-        Ok(dst)
-    }
-
-    #[allow(dead_code)]
     pub(super) fn emit_weak_new(
         &mut self,
         box_val: super::ValueId,
     ) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            return Ok(box_val);
-        }
+        // Core‑13 pure mode removed; keep WeakRef emission available.
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,
@@ -280,9 +281,7 @@ impl super::MirBuilder {
         &mut self,
         weak_ref: super::ValueId,
     ) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            return Ok(weak_ref);
-        }
+        // Core‑13 pure mode removed; keep WeakRef emission available.
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,
@@ -331,26 +330,6 @@ impl super::MirBuilder {
         // Propagate metadata (type/origin) from source to the new local copy
         crate::mir::builder::metadata::propagate::propagate(self, v, dst);
         Ok(dst)
-    }
-
-    /// Insert a Copy immediately after PHI nodes in the current block (position-stable).
-    pub(crate) fn insert_copy_after_phis(&mut self, dst: super::ValueId, src: super::ValueId) -> Result<(), String> {
-        if let (Some(ref mut function), Some(bb)) = (&mut self.current_function, self.current_block) {
-            if let Some(block) = function.get_block_mut(bb) {
-                // Propagate effects on the block
-                block.insert_instruction_after_phis(super::MirInstruction::Copy { dst, src });
-                // Lightweight metadata propagation (unified)
-                crate::mir::builder::metadata::propagate::propagate(self, src, dst);
-                return Ok(());
-            }
-        }
-        Err("No current function/block to insert copy".to_string())
-    }
-
-    /// Ensure a value is safe to use in the current block by slotifying (pinning) it.
-    /// Currently correctness-first: always pin to get a block-local def and PHI participation.
-    pub(crate) fn ensure_slotified_for_use(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
-        self.pin_to_slot(v, hint)
     }
 
     /// Local SSA: ensure a value has a definition in the current block and cache it per-block.

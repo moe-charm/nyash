@@ -2,5 +2,5 @@
 return (fn(){
     local a = new ArrayBox()
     a.push(1)
-    return a.length()
+    return a.size()
 })()

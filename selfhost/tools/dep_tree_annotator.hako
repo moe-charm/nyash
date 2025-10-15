@@ -1,0 +1,43 @@
+// dep_tree_annotator.hako — DepTreeAnnotatorBox
+// Responsibility: annotate using records with resolution metadata in a single place.
+
+static box DepTreeAnnotatorBox {
+  // Mark a using-record as unresolved with a hint; returns the record for chaining.
+  annotate_unresolved_using(u, hint) {
+    if u != null { u.set("unresolved", true)  u.set("hint", hint) }
+    return u
+  }
+}
+
+  annotate_resolved_using(u, path) { if u != null { u.set("resolved", path) } return u }
+  annotate_path_missing(u, cand) { if u != null { u.set("unresolved", true)  u.set("hint", cand) } return u }
+
+  // Mark a using-record as resolved with concrete path; returns the record for chaining.
+  annotate_resolved_using(u, path) {
+    if u != null { u.set("resolved", path) }
+    return u
+  }
+
+  // Record a path-missing case for using(path) resolution (candidate shown in hint).
+  annotate_path_missing(u, cand) {
+    if u != null { u.set("unresolved", true)  u.set("hint", cand) }
+    return u
+  }
+
+  // Includes-side annotations (attach to module map `m`).
+  annotate_include_resolved(m, target, resolved) {
+    if m == null { return m }
+    if !m.has("include_resolved") { m.set("include_resolved", new ArrayBox()) }
+    local arr = m.get("include_resolved")
+    arr.push(map({ target: target, resolved: resolved }))
+    return m
+  }
+  annotate_include_missing(m, target, cand) {
+    if m == null { return m }
+    if !m.has("include_missing") { m.set("include_missing", new ArrayBox()) }
+    local arr = m.get("include_missing")
+    arr.push(map({ target: target, hint: cand }))
+    return m
+  }
+
+}

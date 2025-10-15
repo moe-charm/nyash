@@ -32,7 +32,7 @@ impl ArrayBox {
     /// 要素を追加
     pub fn push(&self, item: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         self.items.write().unwrap().push(item);
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 最後の要素を取り出す
@@ -45,7 +45,8 @@ impl ArrayBox {
 
     /// 要素数を取得
     pub fn length(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.items.read().unwrap().len() as i64))
+        let n = self.items.read().unwrap().len();
+        Box::new(IntegerBox::new(hako_core_array::length(n)))
     }
 
     /// Rust向けヘルパー: 要素数をusizeで取得（テスト用）
@@ -56,20 +57,22 @@ impl ArrayBox {
     /// インデックスで要素を取得
     pub fn get(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
-            let idx = idx_box.value as usize;
             let items = self.items.read().unwrap();
-            match items.get(idx) {
-                Some(item) => {
-                    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-                    if item
-                        .as_any()
-                        .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
-                        .is_some()
-                    {
-                        return item.share_box();
+            match hako_core_array::safe_get_index(items.len(), idx_box.value) {
+                Some(idx) => match items.get(idx) {
+                    Some(item) => {
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if item
+                            .as_any()
+                            .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                            .is_some()
+                        {
+                            return item.share_box();
+                        }
+                        item.clone_box()
                     }
-                    item.clone_box()
-                }
+                    None => Box::new(crate::boxes::null_box::NullBox::new()),
+                },
                 None => Box::new(crate::boxes::null_box::NullBox::new()),
             }
         } else {
@@ -77,24 +80,24 @@ impl ArrayBox {
         }
     }
 
-    /// インデックスで要素を設定
+    /// インデックスで要素を設定（戻り値: null）
     pub fn set(&self, index: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
-            let idx = idx_box.value as usize;
             let mut items = self.items.write().unwrap();
-            if idx < items.len() {
-                items[idx] = value;
-                Box::new(StringBox::new("ok"))
-            } else if idx == items.len() {
-                // Pragmatic semantics: allow set at exact end to append
-                items.push(value);
-                Box::new(StringBox::new("ok"))
-            } else {
-                Box::new(StringBox::new("Error: index out of bounds"))
+            match hako_core_array::classify_set_index(items.len(), idx_box.value) {
+                hako_core_array::SetIndex::Replace(i) => { items[i] = value; }
+                hako_core_array::SetIndex::Append => { items.push(value); }
+                hako_core_array::SetIndex::Oob => { return Box::new(StringBox::new("Error: index out of bounds")); }
             }
+            Box::new(crate::boxes::null_box::NullBox::new())
         } else {
             Box::new(StringBox::new("Error: set() requires integer index"))
         }
+    }
+
+    /// 空配列かどうか
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.items.read().unwrap().is_empty()))
     }
 
     /// 要素を削除
@@ -134,10 +137,10 @@ impl ArrayBox {
         Box::new(BoolBox::new(false))
     }
 
-    /// 配列を空にする
+    /// 配列を空にする（戻り値: null）
     pub fn clear(&self) -> Box<dyn NyashBox> {
         self.items.write().unwrap().clear();
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 文字列結合
@@ -211,52 +214,44 @@ impl ArrayBox {
             a_str.cmp(&b_str)
         });
 
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 配列を反転
     pub fn reverse(&self) -> Box<dyn NyashBox> {
         let mut items = self.items.write().unwrap();
         items.reverse();
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
+    }
+
+    /// JSON文字列に変換（ネストも対応）
+    pub fn toJSON(&self) -> Box<dyn NyashBox> {
+        let s = crate::boxes::json::stringify_any(self.clone_box());
+        Box::new(StringBox::new(&s))
     }
 
     /// 部分配列を取得
     pub fn slice(&self, start: Box<dyn NyashBox>, end: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let items = self.items.read().unwrap();
 
-        // Extract start and end indices
-        let start_idx = if let Some(start_int) = start.as_any().downcast_ref::<IntegerBox>() {
-            if start_int.value < 0 {
-                0
-            } else {
-                start_int.value as usize
-            }
+        // Extract start and end as i64
+        let start_i = if let Some(start_int) = start.as_any().downcast_ref::<IntegerBox>() {
+            start_int.value
         } else {
-            return Box::new(StringBox::new(
-                "Error: slice() start index must be an integer",
-            ));
+            return Box::new(StringBox::new("Error: slice() start index must be an integer"));
+        };
+        let end_i = if let Some(end_int) = end.as_any().downcast_ref::<IntegerBox>() {
+            end_int.value
+        } else {
+            return Box::new(StringBox::new("Error: slice() end index must be an integer"));
         };
 
-        let end_idx = if let Some(end_int) = end.as_any().downcast_ref::<IntegerBox>() {
-            if end_int.value < 0 {
-                items.len()
-            } else {
-                (end_int.value as usize).min(items.len())
-            }
-        } else {
-            return Box::new(StringBox::new(
-                "Error: slice() end index must be an integer",
-            ));
-        };
-
-        // Validate indices
-        if start_idx > items.len() || start_idx > end_idx {
-            return Box::new(ArrayBox::new());
-        }
+        // Clamp/normalize via core helper (negative end => len)
+        let (i0, i1) = hako_core_array::slice_bounds(items.len(), start_i, end_i);
+        if i0 > items.len() || i0 > i1 { return Box::new(ArrayBox::new()); }
 
         // Create slice
-        let slice_items: Vec<Box<dyn NyashBox>> = items[start_idx..end_idx]
+        let slice_items: Vec<Box<dyn NyashBox>> = items[i0..i1]
             .iter()
             .map(|item| {
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]

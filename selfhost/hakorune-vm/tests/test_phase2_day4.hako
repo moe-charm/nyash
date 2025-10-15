@@ -1,0 +1,83 @@
+// test_phase2_day4.hako — Phase 2 Day 4 UnaryOp tests
+// Expected: UnaryOp instruction (Neg/Not/BitNot) tests
+
+using "selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    // Test 1: UnaryOp Neg (-42 → -42)
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"unaryop","op_kind":"Neg","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1: -42 → " + StringHelpers.int_to_str(result1))
+    if result1 != 0 - 42 {
+      print("[FAIL] Test 1: expected -42, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: UnaryOp Neg positive (-(5) → -5)
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"unaryop","op_kind":"Neg","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2: -(5) → " + StringHelpers.int_to_str(result2))
+    if result2 != 0 - 5 {
+      print("[FAIL] Test 2: expected -5, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: UnaryOp Not true (!1 → 0)
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":1}},{"op":"unaryop","op_kind":"Not","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3: !1 → " + StringHelpers.int_to_str(result3))
+    if result3 != 0 {
+      print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: UnaryOp Not false (!0 → 1)
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":0}},{"op":"unaryop","op_kind":"Not","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4: !0 → " + StringHelpers.int_to_str(result4))
+    if result4 != 1 {
+      print("[FAIL] Test 4: expected 1, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    // Test 5: UnaryOp Not non-zero (!42 → 0)
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"unaryop","op_kind":"Not","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result5 = HakoruneVmCore.run(mir5)
+    print("Test 5: !42 → " + StringHelpers.int_to_str(result5))
+    if result5 != 0 {
+      print("[FAIL] Test 5: expected 0, got " + StringHelpers.int_to_str(result5))
+      return 1
+    }
+
+    // Test 6: UnaryOp BitNot (~5 → -6)
+    // BitNot formula: ~x = -x - 1
+    local mir6 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"unaryop","op_kind":"BitNot","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result6 = HakoruneVmCore.run(mir6)
+    print("Test 6: ~5 → " + StringHelpers.int_to_str(result6))
+    if result6 != 0 - 6 {
+      print("[FAIL] Test 6: expected -6, got " + StringHelpers.int_to_str(result6))
+      return 1
+    }
+
+    // Test 7: UnaryOp BitNot (~0 → -1)
+    local mir7 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":0}},{"op":"unaryop","op_kind":"BitNot","dst":2,"operand":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result7 = HakoruneVmCore.run(mir7)
+    print("Test 7: ~0 → " + StringHelpers.int_to_str(result7))
+    if result7 != 0 - 1 {
+      print("[FAIL] Test 7: expected -1, got " + StringHelpers.int_to_str(result7))
+      return 1
+    }
+
+    print("✅ All Phase 2 Day 4 tests PASSED!")
+    return 0
+  }
+}

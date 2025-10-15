@@ -1,4 +1,4 @@
-#![cfg(feature = "interpreter-legacy")]
+#![cfg(all(feature = "interpreter-legacy", feature = "legacy-boxes"))]
 
 use crate::interpreter::NyashInterpreter;
 use crate::ast::{ASTNode, LiteralValue};

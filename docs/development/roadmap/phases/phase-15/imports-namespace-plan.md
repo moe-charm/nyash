@@ -14,7 +14,7 @@ Scope & Sequence (Phase 15.3)
 2) Imports/Namespace minimal acceptance (15.3‑late)
    - Parse `using ns` / `using "path" [as alias]` as statements in the Ny compiler
    - Do not resolve; emit no JSON entries (or emit metadata) — runner continues to strip/handle
-   - Gate via `NYASH_ENABLE_USING=1`
+   - Gate via `NYASH_USING=1`（compat: `NYASH_ENABLE_USING=1`）
 3) Runner remains in charge
    - Keep existing Rust runner’s `using` stripping + modules registry population
    - `nyash.toml` parsing stays in Rust (Phase 15)
@@ -34,5 +34,5 @@ Looking ahead (MIR18 / Phase 16)
 - Keep VM unchanged; all resolution before MIR build
 
 Switches
-- `NYASH_ENABLE_USING=1` — enable `using` acceptance in Ny compiler (no resolution)
+- `NYASH_USING=1` — enable `using` acceptance in Ny compiler (no resolution; compat: `NYASH_ENABLE_USING=1`)
 - `NYASH_SKIP_TOML_ENV=1` — skip applying [env] in nyash.toml (existing)

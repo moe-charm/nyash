@@ -1,0 +1,53 @@
+// RetValueLoaderBox - Unified ret value loading
+// Single Responsibility: Load return value from register for ret instruction/terminator
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box RetValueLoaderBox {
+  // Load return value from ret instruction (JSON format)
+  // inst_json: {"op":"ret","value":X}
+  // regs: register MapBox
+  // Returns: Result.Ok(ret_value) or Result.Err(message)
+  load_from_instruction(inst_json, regs) {
+    // Extract return value register
+    local ret_reg = JsonFieldExtractor.extract_int(inst_json, "value")
+    if ret_reg == null {
+      return Result.Err("ret: value field not found")
+    }
+
+    // Load and validate
+    return me._load_value(ret_reg, regs)
+  }
+
+  // Load return value from terminator (MapBox format)
+  // term_map: MapBox with "type":"ret", "value":X
+  // regs: register MapBox
+  // Returns: Result.Ok(ret_value) or Result.Err(message)
+  load_from_terminator(term_map, regs) {
+    // Extract return value register
+    local ret_reg = term_map.get("value")
+    if ret_reg == null {
+      return Result.Err("ret: value field not found in terminator")
+    }
+
+    // Load and validate
+    return me._load_value(ret_reg, regs)
+  }
+
+  // Internal: Load value from register with validation
+  // ret_reg: register ID (integer)
+  // regs: register MapBox
+  // Returns: Result.Ok(ret_value) or Result.Err(message)
+  _load_value(ret_reg, regs) {
+    // Load return value from register
+    local ret_value = ValueManagerBox.get(regs, ret_reg)
+    if ret_value == null {
+      return Result.Err("ret: register v%" + ret_reg + " is unset")
+    }
+
+    // Return the actual value
+    return Result.Ok(ret_value)
+  }
+}

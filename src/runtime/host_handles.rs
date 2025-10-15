@@ -15,6 +15,8 @@ use std::sync::{
 
 use crate::box_trait::NyashBox;
 
+pub type HostHandle = u64;
+
 struct Registry {
     next: AtomicU64,
     map: RwLock<HashMap<u64, Arc<dyn NyashBox>>>,
@@ -56,17 +58,72 @@ fn reg() -> &'static Registry {
     REG.get_or_init(Registry::new)
 }
 
+// --- Lightweight diagnostics (opt-in) ---
+fn trace_enabled() -> bool {
+    static ON: OnceCell<bool> = OnceCell::new();
+    *ON.get_or_init(|| {
+        crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_HOST_HANDLE",
+            "NYASH_TRACE_HOST_HANDLE",
+        ])
+    })
+}
+
+fn trace(msg: &str) {
+    if trace_enabled() {
+        eprintln!("[host-handle] {}", msg);
+    }
+}
+
 /// Box<dyn NyashBox> → HostHandle (u64)
 pub fn to_handle_box(bx: Box<dyn NyashBox>) -> u64 {
-    reg().alloc(Arc::from(bx))
+    let ty = bx.type_name();
+    let ptr = format!("{:p}", &*bx);
+    let arc: Arc<dyn NyashBox> = Arc::from(bx);
+    let arc_ptr = format!("{:p}", Arc::as_ptr(&arc));
+    let h = reg().alloc(arc);
+    trace(&format!(
+        "alloc from Box: id={} type={} box_ptr={} arc_ptr={}",
+        h, ty, ptr, arc_ptr
+    ));
+    h
 }
 /// Arc<dyn NyashBox> → HostHandle (u64)
 pub fn to_handle_arc(arc: Arc<dyn NyashBox>) -> u64 {
-    reg().alloc(arc)
+    let ty = arc.type_name();
+    let arc_ptr = format!("{:p}", Arc::as_ptr(&arc));
+
+    // ✅ PluginBoxV2の場合、キャッシュに登録（identity保持のため）
+    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+    {
+        use crate::runtime::plugin_loader_v2::{PluginBoxV2, cache};
+        if let Some(pb) = arc.as_any().downcast_ref::<PluginBoxV2>() {
+            if let Ok(mut map) = cache().write() {
+                let key = (pb.inner.type_id, pb.inner.instance_id);
+                map.insert(key, std::sync::Arc::downgrade(&pb.inner));
+                if crate::runtime::env_gate_box::debug_plugin() {
+                    eprintln!("[host-handle] PluginBoxV2 cache insert: type_id={} instance_id={} cache_size={}",
+                             pb.inner.type_id, pb.inner.instance_id, map.len());
+                }
+            }
+        }
+    }
+
+    let h = reg().alloc(arc);
+    trace(&format!("alloc from Arc: id={} type={} arc_ptr={}", h, ty, arc_ptr));
+    h
 }
 /// HostHandle(u64) → Arc<dyn NyashBox>
 pub fn get(h: u64) -> Option<Arc<dyn NyashBox>> {
-    reg().get(h)
+    let out = reg().get(h);
+    if let Some(ref arc) = out {
+        let ty = arc.type_name();
+        let arc_ptr = format!("{:p}", Arc::as_ptr(arc));
+        trace(&format!("get: id={} type={} arc_ptr={}", h, ty, arc_ptr));
+    } else {
+        trace(&format!("get: id={} miss", h));
+    }
+    out
 }
 
 /// Snapshot all current handles as Arc<dyn NyashBox> roots for diagnostics/GC traversal.

@@ -2,8 +2,7 @@
 # vm_llvm_loop_break_continue.sh - VM vs LLVM parity for loop + break/continue
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
-
+require_llvm_or_skip || exit 0
 require_env || exit 2
 preflight_plugins || exit 2
 

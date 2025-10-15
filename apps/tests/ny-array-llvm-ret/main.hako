@@ -1,0 +1,12 @@
+// ny-array-llvm-ret - LLVM向け: ArrayBoxのpush/get 戻り値を検証
+// 期待: ランタイム標準出力に "Result: 3" が出る（ny_mainの戻り値）
+
+static box Main {
+    main() {
+        local a = new ArrayBox()
+        a.push(3)
+        local v = a.get(0)
+        return v
+    }
+}
+

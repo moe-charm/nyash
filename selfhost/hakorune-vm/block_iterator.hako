@@ -1,0 +1,30 @@
+// block_iterator.hako — BlockIteratorBox
+// Responsibility: iterate block objects within blocks content string
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+
+static box BlockIteratorBox {
+  // Returns Ok({ obj: <string>, next_pos: <int> }) or Err when malformed
+  next(blocks_content, pos) {
+    local n = blocks_content.size()
+    local i = pos
+    loop(i < n) {
+      local ch = blocks_content.substring(i, i+1)
+      if ch == " " || ch == "
+" || ch == "" || ch == "	" || ch == "," { i = i + 1  continue }
+      if ch == "{" {
+        local endi = JsonScanGuardBox.seek_obj_end(blocks_content, i, 200000)
+        if endi < 0 { return Result.Err("block object end not found") }
+        local obj = blocks_content.substring(i, endi+1)
+        local meta = new MapBox()
+        meta.set("obj", obj)
+        meta.set("next_pos", endi+1)
+        return Result.Ok(meta)
+      }
+      return Result.Err("block iterator: unexpected char")
+    }
+    return Result.Err("block iterator: end")
+  }
+}

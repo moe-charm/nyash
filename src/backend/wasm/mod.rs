@@ -6,11 +6,15 @@
  */
 
 mod codegen;
+mod extern_adapter;
+mod lowering;
 mod memory;
 mod runtime;
 // mod executor; // TODO: Fix WASM executor build errors
 
 pub use codegen::{WasmCodegen, WasmModule};
+pub use extern_adapter::{all_signatures as wasm_all_extern_signatures, resolve_signature as wasm_resolve_signature, WasmExternSignature};
+pub use lowering::BoxCallEliminator;
 pub use memory::{BoxLayout, MemoryManager};
 pub use runtime::RuntimeImports;
 // pub use executor::WasmExecutor; // TODO: Fix WASM executor build errors
@@ -99,9 +103,16 @@ impl WasmBackend {
 
     /// Compile MIR module to WAT text format (for debugging)
     pub fn compile_to_wat(&mut self, mir_module: MirModule) -> Result<String, WasmError> {
+        // Optional lowering: normalize BoxCall to Method/Extern for WASM path
+        let mm = if crate::config::env::wasm_lower_boxcall() {
+            // Lower on a cloned module to keep caller’s copy intact
+            crate::backend::wasm::BoxCallEliminator::lower_module(&mir_module)
+        } else {
+            mir_module
+        };
         let wasm_module =
             self.codegen
-                .generate_module(mir_module, &self.memory_manager, &self.runtime)?;
+                .generate_module(mm, &self.memory_manager, &self.runtime)?;
         Ok(wasm_module.to_wat())
     }
 

@@ -1,0 +1,21 @@
+// Simple AOT test for String.length()
+// Just a function that returns string length
+static box Main {
+  getLen(s) {
+    return s.length()
+  }
+  
+  main() {
+    local s = new StringBox()
+    local result = 0
+    local i = 0
+    
+    // Call getLen multiple times to trigger JIT
+    loop(i < 20) {
+      result = me.getLen(s)
+      i = i + 1
+    }
+    
+    return result
+  }
+}

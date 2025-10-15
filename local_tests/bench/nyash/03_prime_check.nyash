@@ -1,0 +1,22 @@
+// Prime Check Benchmark
+// Checks if 97 is prime (returns 1 for true)
+
+static box Main {
+    main() {
+        local n
+        local divisor
+        local limit
+
+        n = 97
+        divisor = 2
+
+        loop(divisor * divisor <= n) {
+            if (n % divisor == 0) {
+                return 0
+            }
+            divisor = divisor + 1
+        }
+
+        return 1
+    }
+}

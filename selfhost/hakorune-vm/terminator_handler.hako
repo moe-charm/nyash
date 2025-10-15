@@ -1,0 +1,268 @@
+// terminator_handler.hako — Phase 1 Day 3: Terminator処理
+// Strategy: 箱化モジュール化 - Ret/Jump/Branch を分離
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
+using "selfhost/hakorune-vm/backward_object_scanner.hako" as BackwardObjectScannerBox
+
+static box TerminatorHandlerBox {
+  // Execute terminator instruction and return next action
+  // Returns: Result.Ok(MapBox with "type" and other fields) or Result.Err(message)
+  //
+  // Return types:
+  //   - "ret": {"type": "ret", "value": <return_value>}
+  //   - "jump": {"type": "jump", "next_bb": <target_block_id>}
+  //   - "branch": {"type": "branch", "next_bb": <selected_block_id>}
+  handle_terminator(block_json, regs) {
+    // Find terminator field
+    local key_term = "\"terminator\":{"
+    local term_start = block_json.indexOf(key_term)
+    if term_start < 0 {
+      // No terminator (should not happen in valid MIR)
+      return Result.Err("terminator not found")
+    }
+
+    local term_json_start = term_start + key_term.size() - 1
+    local term_end = me._find_terminator_end(block_json, term_json_start)
+    if term_end < 0 {
+      return Result.Err("terminator end not found")
+    }
+
+    local term_json = block_json.substring(term_json_start, term_end + 1)
+
+    // Extract op field (tolerant: ':' + optional spaces)
+    local key_opk = "\"op\""
+    local pos = term_json.indexOf(key_opk)
+    if pos < 0 {
+      // fallback
+      local fb = me._fallback_handle(block_json, regs)
+      if fb.is_Ok() { return fb }
+      return Result.Err("terminator op not found")
+    }
+    pos = pos + key_opk.size()
+    // find ':' then skip whitespace
+    loop(pos < term_json.size()) {
+      local ch = term_json.substring(pos, pos+1)
+      if ch == ":" { pos = pos + 1  break }
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { pos = pos + 1  continue }
+      local fb = me._fallback_handle(block_json, regs)
+      if fb.is_Ok() { return fb }
+      return Result.Err("terminator op colon not found")
+    }
+    loop(pos < term_json.size()) {
+      local ch = term_json.substring(pos, pos+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { pos = pos + 1  continue }
+      break
+    }
+    if term_json.substring(pos, pos+1) != "\"" {
+      local fb = me._fallback_handle(block_json, regs)
+      if fb.is_Ok() { return fb }
+      return Result.Err("terminator op quote not found")
+    }
+    local op_end = StringOps.index_of_from(term_json, "\"", pos+1)
+    if op_end < 0 {
+      local fb = me._fallback_handle(block_json, regs)
+      if fb.is_Ok() { return fb }
+      return Result.Err("terminator op end not found")
+    }
+    local op = term_json.substring(pos+1, op_end)
+
+    // Dispatch terminator type
+    if op == "ret" {
+      return me._handle_ret(term_json, regs)
+    }
+
+    if op == "jump" {
+      return me._handle_jump(term_json)
+    }
+
+    if op == "branch" {
+      return me._handle_branch(term_json, regs)
+    }
+
+    return Result.Err("unknown terminator op: " + op)
+  }
+
+  // Fallback helper
+  _fallback_handle(block_json, regs) {
+    local loc = InstrsLocatorBox.locate(block_json)
+    if loc.is_Err() { return loc }
+    local meta = loc.as_Ok()
+    local insts = meta.get("content")
+    if insts == "" { return Result.Err("terminator not found") }
+    local single = meta.get("single")
+    local term_json = null
+    if single != null && single == 1 { term_json = insts } else {
+      local last = BackwardObjectScannerBox.scan_last_object(insts, 200000)
+      if last.is_Err() { return Result.Err("terminator scan failed: " + last.as_Err()) }
+      term_json = last.as_Ok()
+    }
+    local k = "\"op\""
+    local p = term_json.indexOf(k)
+    if p < 0 { return Result.Err("terminator op not found") }
+    p = p + k.size()
+    loop(p < term_json.size()) { local ch = term_json.substring(p,p+1) if ch == ":" { p = p + 1 break } if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p = p + 1 continue } return Result.Err("terminator op colon not found") }
+    loop(p < term_json.size()) { local ch = term_json.substring(p,p+1) if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p = p + 1 continue } break }
+    if term_json.substring(p,p+1) != "\"" { return Result.Err("terminator op quote not found") }
+    local e = StringOps.index_of_from(term_json, "\"", p+1)
+    if e < 0 { return Result.Err("terminator op end not found") }
+    local op = term_json.substring(p+1, e)
+    if op == "ret" { return me._handle_ret(term_json, regs) }
+    if op == "jump" { return me._handle_jump(term_json) }
+    if op == "branch" { return me._handle_branch(term_json, regs) }
+    return Result.Err("unknown terminator op")
+  }
+
+  // Ret terminator
+  _handle_ret(term_json, regs) {
+    local result_map = new MapBox()
+    result_map.set("type", "ret")
+
+    // Extract value field (optional)
+    local key_val = "\"value\":"
+    local val_start = term_json.indexOf(key_val)
+    if val_start < 0 {
+      // No value → return 0
+      result_map.set("value", 0)
+      return Result.Ok(result_map)
+    }
+    val_start = val_start + key_val.size()
+
+    local val_digits = StringHelpers.read_digits(term_json, val_start)
+    if val_digits == "" {
+      return Result.Err("ret: invalid value")
+    }
+
+    local val_id = StringHelpers.to_i64(val_digits)
+    local reg_key = StringHelpers.int_to_str(val_id)
+
+    // Unified behavior: get() -> null if missing
+    local val = regs.get(reg_key)
+    if val == null {
+      val = 0
+    }
+
+    result_map.set("value", val)
+    return Result.Ok(result_map)
+  }
+
+  // Jump terminator
+  _handle_jump(term_json) {
+    local result_map = new MapBox()
+    result_map.set("type", "jump")
+
+    // Extract target field
+    local key_target = "\"target\":"
+    local target_start = term_json.indexOf(key_target)
+    if target_start < 0 {
+      return Result.Err("jump: target not found")
+    }
+    target_start = target_start + key_target.size()
+
+    local target_digits = StringHelpers.read_digits(term_json, target_start)
+    if target_digits == "" {
+      return Result.Err("jump: invalid target")
+    }
+
+    local target_bb = StringHelpers.to_i64(target_digits)
+    result_map.set("next_bb", target_bb)
+    return Result.Ok(result_map)
+  }
+
+  // Branch terminator
+  _handle_branch(term_json, regs) {
+    local result_map = new MapBox()
+    result_map.set("type", "branch")
+
+    // Extract condition
+    local key_cond = "\"condition\":"
+    local cond_start = term_json.indexOf(key_cond)
+    if cond_start < 0 {
+      return Result.Err("branch: condition not found")
+    }
+    cond_start = cond_start + key_cond.size()
+
+    local cond_digits = StringHelpers.read_digits(term_json, cond_start)
+    if cond_digits == "" {
+      return Result.Err("branch: invalid condition")
+    }
+
+    local cond_id = StringHelpers.to_i64(cond_digits)
+    local cond_key = StringHelpers.int_to_str(cond_id)
+
+    // Unified behavior: get() -> null if missing
+    local cond_val = regs.get(cond_key)
+    if cond_val == null {
+      cond_val = 0
+    }
+
+    // Extract then_bb
+    local key_then = "\"then_bb\":"
+    local then_start = term_json.indexOf(key_then)
+    if then_start < 0 {
+      return Result.Err("branch: then_bb not found")
+    }
+    then_start = then_start + key_then.size()
+
+    local then_digits = StringHelpers.read_digits(term_json, then_start)
+    if then_digits == "" {
+      return Result.Err("branch: invalid then_bb")
+    }
+
+    local then_bb = StringHelpers.to_i64(then_digits)
+
+    // Extract else_bb
+    local key_else = "\"else_bb\":"
+    local else_start = term_json.indexOf(key_else)
+    if else_start < 0 {
+      return Result.Err("branch: else_bb not found")
+    }
+    else_start = else_start + key_else.size()
+
+    local else_digits = StringHelpers.read_digits(term_json, else_start)
+    if else_digits == "" {
+      return Result.Err("branch: invalid else_bb")
+    }
+
+    local else_bb = StringHelpers.to_i64(else_digits)
+
+    // Select next_bb based on condition
+    local next_bb = 0
+    if cond_val == 0 {
+      next_bb = else_bb
+    } else {
+      next_bb = then_bb
+    }
+
+    result_map.set("next_bb", next_bb)
+    return Result.Ok(result_map)
+  }
+
+  // Helper: find terminator object end
+  _find_terminator_end(json, start) {
+    local depth = 0
+    local pos = start
+    local len = json.size()
+
+    loop(pos < len) {
+      local ch = json.substring(pos, pos + 1)
+
+      if ch == "{" {
+        depth = depth + 1
+      }
+
+      if ch == "}" {
+        depth = depth - 1
+        if depth == 0 {
+          return pos
+        }
+      }
+
+      pos = pos + 1
+    }
+
+    return -1
+  }
+}

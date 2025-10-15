@@ -1,8 +1,0 @@
-static box Main {
-  _is_digit(ch) { return ch == "1" }
-  main(args) {
-    print(me._is_digit("1"))
-    print(me._is_digit("2"))
-    return 0
-  }
-}

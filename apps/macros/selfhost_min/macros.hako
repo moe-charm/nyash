@@ -1,0 +1,194 @@
+// Selfhost Minimal Macros — .hako package
+// Contract: static box MacroBoxSpec { expand(json[, ctx]) -> json }
+// - Input: AST JSON v0 as a single-line string
+// - Output: AST JSON v0 as a single-line string
+//
+// Provided rewrites (pure textual, JSON-shape aware):
+// - FunctionCall json({ ... })  → Map { ... }
+// - FunctionCall map({ ... })   → Map { ... }
+// - FunctionCall arr([ ... ])   → Array [ ... ]
+// - FunctionCall call("Box.method/N", args...)
+//     → FunctionCall { name: "Box.method/N", arguments: [ args... ] }
+//
+// Notes
+// - The JSON generator emits keys in fixed order. We match those exact substrings.
+// - No whitespace in JSON v0 is assumed.
+
+static box MacroBoxSpec {
+  name() { return "SelfhostMinHako" }
+
+  // Public entry
+  expand(json, ctx) {
+    // First pass: json/map/arr passthrough
+    local s = self._rewrite_literals(json)
+    // Second pass: call("X.Y/N", ...) normalization
+    s = self._rewrite_call(s)
+    return s
+  }
+
+  // Replace FunctionCall json/map/arr wrapping literal with the literal itself
+  _rewrite_literals(s) {
+    local out = ""
+    local i = 0
+    local p_json = "\"kind\":\"FunctionCall\",\"name\":\"json\",\"arguments\":["
+    local p_map  = "\"kind\":\"FunctionCall\",\"name\":\"map\",\"arguments\":["
+    local p_arr  = "\"kind\":\"FunctionCall\",\"name\":\"arr\",\"arguments\":["
+    loop(i < s.size()) {
+      if i + p_json.size() <= s.size() && s.substring(i, i + p_json.size()) == p_json {
+        local j = i + p_json.size()
+        local lit = self._read_value(s, j)
+        local endp = j + lit.size()
+        // skip closing ]}
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        out = out + lit
+        i = endp
+        continue
+      }
+      if i + p_map.size() <= s.size() && s.substring(i, i + p_map.size()) == p_map {
+        local j = i + p_map.size()
+        local lit = self._read_value(s, j)
+        local endp = j + lit.size()
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        out = out + lit
+        i = endp
+        continue
+      }
+      if i + p_arr.size() <= s.size() && s.substring(i, i + p_arr.size()) == p_arr {
+        local j = i + p_arr.size()
+        local lit = self._read_value(s, j)
+        local endp = j + lit.size()
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        out = out + lit
+        i = endp
+        continue
+      }
+      // passthrough
+      out = out + s.substring(i, i+1)
+      i = i + 1
+    }
+    return out
+  }
+
+  // Normalize call("Box.method/N", a, b) → FunctionCall { name: "Box.method/N", arguments:[a,b] }
+  _rewrite_call(s) {
+    local out = ""
+    local i = 0
+    local p_call = "\"kind\":\"FunctionCall\",\"name\":\"call\",\"arguments\":["
+    local lit_prefix = "{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
+    loop(i < s.size()) {
+      if i + p_call.size() <= s.size() && s.substring(i, i + p_call.size()) == p_call {
+        local j = i + p_call.size()
+        // Expect string literal as first argument
+        if j + lit_prefix.size() <= s.size() && s.substring(j, j + lit_prefix.size()) == lit_prefix {
+          // Extract method name until unescaped quote
+          local k = j + lit_prefix.size()
+          local name = ""
+          local esc = 0
+          loop(k < s.size()) {
+            local ch = s.substring(k, k+1)
+            if esc == 1 { name = name + ch
+ esc = 0
+ k = k + 1
+ continue }
+            if ch == "\\" { esc = 1
+ k = k + 1
+ continue }
+            if ch == "\"" { break }
+            name = name + ch
+            k = k + 1
+          }
+          // Close literal JSON value fully
+          local lit_json = self._read_value(s, j)
+          local after_lit = j + lit_json.size()
+          // after_lit now at char after the first argument JSON
+          // Capture remaining arguments (if any) until the closing ']'
+          local rest = ""
+          local pos = after_lit
+          if pos < s.size() && s.substring(pos, pos+1) == "," { pos = pos + 1 }
+          // Read until matching ']' at top-level
+          local depth = 1
+          local in_str = 0
+          local esc2 = 0
+          loop(pos < s.size()) {
+            local ch2 = s.substring(pos, pos+1)
+            if in_str == 1 {
+              if esc2 == 1 { esc2 = 0 }
+              else if ch2 == "\\" { esc2 = 1 }
+              else if ch2 == "\"" { in_str = 0 }
+            } else {
+              if ch2 == "\"" { in_str = 1 }
+              else if ch2 == "[" { depth = depth + 1 }
+              else if ch2 == "]" {
+                depth = depth - 1
+                if depth == 0 { break }
+              }
+            }
+            rest = rest + ch2
+            pos = pos + 1
+          }
+          // Skip ']' and optional '}' of FunctionCall
+          if pos < s.size() && s.substring(pos, pos+1) == "]" { pos = pos + 1 }
+          if pos < s.size() && s.substring(pos, pos+1) == "}" { pos = pos + 1 }
+          // Emit new FunctionCall JSON
+          out = out + "{\"kind\":\"FunctionCall\",\"name\":\"" + name + "\",\"arguments\":[" + rest + "]}"
+          i = pos
+          continue
+        }
+      }
+      // passthrough
+      out = out + s.substring(i, i+1)
+      i = i + 1
+    }
+    return out
+  }
+
+  // Read a balanced JSON value starting at index `start` (expects '{' or '[')
+  // Returns substring only (caller computes end as start + len)
+  _read_value(s, start) {
+    local n = s.size()
+    if start >= n { return "" }
+    local ch0 = s.substring(start, start+1)
+    local is_obj = 0
+    local is_arr = 0
+    if ch0 == "{" { is_obj = 1 } else if ch0 == "[" { is_arr = 1 } else { return "" }
+    local depth = 1
+    local in_str = 0
+    local esc = 0
+    local i = start + 1
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if in_str == 1 {
+        if esc == 1 { esc = 0 }
+        else if ch == "\\" { esc = 1 }
+        else if ch == "\"" { in_str = 0 }
+      } else {
+        if ch == "\"" { in_str = 1 }
+        else if is_obj == 1 {
+          if ch == "{" { depth = depth + 1 }
+          else if ch == "}" {
+            depth = depth - 1
+            if depth == 0 {
+              i = i + 1
+              break
+            }
+          }
+        } else {
+          if ch == "[" { depth = depth + 1 }
+          else if ch == "]" {
+            depth = depth - 1
+            if depth == 0 {
+              i = i + 1
+              break
+            }
+          }
+        }
+      }
+      i = i + 1
+    }
+    return s.substring(start, i)
+  }
+}
+

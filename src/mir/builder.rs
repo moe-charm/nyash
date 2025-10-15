@@ -4,18 +4,17 @@
  * Implements AST → MIR conversion with SSA construction
  */
 
-use super::slot_registry::resolve_slot_by_type_name;
 use super::{
     BasicBlock, BasicBlockId, BasicBlockIdGenerator, CompareOp, ConstValue, Effect, EffectMask,
     FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, ValueIdGenerator,
 };
 use crate::ast::{ASTNode, LiteralValue};
-use crate::mir::builder::builder_calls::CallTarget;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 mod calls; // Call system modules (refactored from builder_calls)
+pub mod birth; // Auto-birth policy/emitter (thin boxes)
 mod builder_calls;
-mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod method_call_handlers; // Method call handler separation (Phase 3)
 mod decls; // declarations lowering split
 mod exprs; // expression lowering split
@@ -24,11 +23,11 @@ mod exprs_call; // call(expr)
 mod exprs_lambda; // lambda lowering
 mod exprs_peek; // peek expression
 mod exprs_qmark; // ?-propagate
-mod exprs_legacy; // legacy big-match lowering
 mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
 mod phi;
+mod phi_merge_helper; // PHI生成とマージの統一処理（箱理論実践）
 mod if_form;
 mod control_flow; // thin wrappers to centralize control-flow entrypoints
 mod lifecycle; // prepare/lower_root/finalize split
@@ -49,10 +48,15 @@ mod router;    // RouterPolicyBox（Unified vs BoxCall）
 mod emit_guard; // EmitGuardBox（emit直前の最終関所）
 mod name_const; // NameConstBox（関数名Const生成）
 mod infer; // ReceiverInferenceBox（受け手推定の一元化）
+pub mod lowering; // Builtin→Extern lowering map（対応表）
 // rewrite は既存モジュールを使用（gate サブモジュールを追加）
 mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
-mod materialize; // MaterializeBox（Call直前の材化を一元化）
 mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
+mod normalize; // Normalization helpers (boxed): string length, etc.
+pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
+pub mod entry; // Public entrypoint wrapper (AST→MIR module)
+mod field_origin_registry; // FieldOriginRegistryBox（field origin tracking統一）
+mod weak_field_registry; // WeakFieldRegistryBox（weak field tracking統一）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -93,17 +97,17 @@ pub struct MirBuilder {
 
     /// Names of user-defined boxes declared in the current module
     pub(super) user_defined_boxes: HashSet<String>,
+    /// Names of static boxes (including flow) declared in the current module
+    pub(super) static_box_names: HashSet<String>,
 
-    /// Weak field registry: BoxName -> {weak field names}
-    pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
+    /// Weak field registry (centralized tracking for weak reference fields)
+    pub(super) weak_field_registry: weak_field_registry::WeakFieldRegistryBox,
 
     /// Unified members: BoxName -> {propName -> Kind}
     pub(super) property_getters_by_box: HashMap<String, HashMap<String, PropertyKind>>,
 
-    /// Remember class of object fields after assignments: (base_id, field) -> class_name
-    pub(super) field_origin_class: HashMap<(ValueId, String), String>,
-    /// Class-level field origin (cross-function heuristic): (BaseBoxName, field) -> FieldBoxName
-    pub(super) field_origin_by_box: HashMap<(String, String), String>,
+    /// Field origin registry (centralized tracking for value-level and box-level field origins)
+    pub(super) field_origin_registry: field_origin_registry::FieldOriginRegistryBox,
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
@@ -112,15 +116,8 @@ pub struct MirBuilder {
     plugin_method_sigs: HashMap<(String, String), super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
-    /// Index of static methods seen during lowering: name -> [(BoxName, arity)]
-    pub(super) static_method_index: std::collections::HashMap<String, Vec<(String, usize)>>,
-    /// Index of instance methods seen during lowering: (BoxName, method, arity)
-    pub(super) instance_method_index: std::collections::HashSet<(String, String, usize)>,
-
-    /// Fast lookup: method+arity tail → candidate function names (e.g., ".str/0" → ["JsonNode.str/0", ...])
-    pub(super) method_tail_index: std::collections::HashMap<String, Vec<String>>,
-    /// Source size snapshot to detect when to rebuild the tail index
-    pub(super) method_tail_index_source_len: usize,
+    /// Method index registry (centralized tracking for static/instance/tail indexes)
+    pub(super) method_index: indexes::method_index::MethodIndexBox,
 
     // include guards removed
 
@@ -174,6 +171,8 @@ pub struct MirBuilder {
     pub(super) local_ssa_map: HashMap<(BasicBlockId, ValueId, u8), ValueId>,
     /// BlockSchedule cache: deduplicate materialize copies per (bb, src)
     pub(super) schedule_mat_map: HashMap<(BasicBlockId, ValueId), ValueId>,
+    /// Pending entry pin copies (emitted after PHI, before first non-PHI instruction)
+    pending_entry_pin_copies: HashMap<BasicBlockId, Vec<super::MirInstruction>>,
 }
 
 impl MirBuilder {
@@ -191,18 +190,15 @@ impl MirBuilder {
             pending_phis: Vec::new(),
             value_origin_newbox: HashMap::new(),
             user_defined_boxes: HashSet::new(),
-            weak_fields_by_box: HashMap::new(),
+            static_box_names: HashSet::new(),
+            weak_field_registry: weak_field_registry::WeakFieldRegistryBox::new(),
             property_getters_by_box: HashMap::new(),
-            field_origin_class: HashMap::new(),
-            field_origin_by_box: HashMap::new(),
+            field_origin_registry: field_origin_registry::FieldOriginRegistryBox::new(),
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,
-            static_method_index: std::collections::HashMap::new(),
-            instance_method_index: std::collections::HashSet::new(),
-            method_tail_index: std::collections::HashMap::new(),
-            method_tail_index_source_len: 0,
-            
+            method_index: indexes::method_index::MethodIndexBox::new(),
+
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
             if_merge_stack: Vec::new(),
@@ -225,6 +221,7 @@ impl MirBuilder {
 
             local_ssa_map: HashMap::new(),
             schedule_mat_map: HashMap::new(),
+            pending_entry_pin_copies: HashMap::new(),
         }
     }
 
@@ -293,55 +290,23 @@ impl MirBuilder {
     }
 
     // ----------------------
-    // Method tail index (performance helper)
+    // Method index (delegated to MethodIndexBox)
     // ----------------------
-    fn rebuild_method_tail_index(&mut self) {
-        self.method_tail_index.clear();
-        if let Some(ref module) = self.current_module {
-            for name in module.functions.keys() {
-                if let (Some(dot), Some(slash)) = (name.rfind('.'), name.rfind('/')) {
-                    if slash > dot {
-                        let tail = &name[dot..];
-                        self.method_tail_index
-                            .entry(tail.to_string())
-                            .or_insert_with(Vec::new)
-                            .push(name.clone());
-                    }
-                }
-            }
-            self.method_tail_index_source_len = module.functions.len();
-        } else {
-            self.method_tail_index_source_len = 0;
-        }
-    }
-
-    fn ensure_method_tail_index(&mut self) {
-        let need_rebuild = match self.current_module {
-            Some(ref refmod) => self.method_tail_index_source_len != refmod.functions.len(),
-            None => self.method_tail_index_source_len != 0,
-        };
-        if need_rebuild {
-            self.rebuild_method_tail_index();
-        }
-    }
-
     pub(super) fn method_candidates(&mut self, method: &str, arity: usize) -> Vec<String> {
-        self.ensure_method_tail_index();
-        let tail = format!(".{}{}", method, format!("/{}", arity));
-        self.method_tail_index
-            .get(&tail)
-            .cloned()
-            .unwrap_or_default()
+        if let Some(ref module) = self.current_module {
+            self.method_index.find_candidates(&module.functions, method, arity)
+        } else {
+            vec![]
+        }
     }
 
     pub(super) fn method_candidates_tail<S: AsRef<str>>(&mut self, tail: S) -> Vec<String> {
-        self.ensure_method_tail_index();
-        self.method_tail_index
-            .get(tail.as_ref())
-            .cloned()
-            .unwrap_or_default()
+        if let Some(ref module) = self.current_module {
+            self.method_index.find_candidates_by_tail(&module.functions, tail.as_ref())
+        } else {
+            vec![]
+        }
     }
-
 
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
@@ -393,12 +358,29 @@ impl MirBuilder {
             Ok(value_id)
         } else {
             // Enhance diagnostics using Using simple registry (Phase 1)
-            let mut msg = format!("Undefined variable: {}", name);
+            let cur_fn = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<unknown>".to_string());
+            let mut msg = format!("Undefined variable: {} (in function {})", name, cur_fn);
             let suggest = crate::using::simple_registry::suggest_using_for_symbol(&name);
             if !suggest.is_empty() {
                 msg.push_str("\nHint: symbol appears in using module(s): ");
                 msg.push_str(&suggest.join(", "));
                 msg.push_str("\nConsider adding 'using <module> [as Alias]' or check nyash.toml [using].");
+                // Additional debug info (when using system is enabled but symbol unresolved)
+                let using_on = crate::config::env::enable_using();
+                let ast_on = crate::config::env::using_ast_enabled();
+                let allow_file = crate::config::env::allow_using_file();
+                if using_on {
+                    msg.push_str("\nDebug Info:");
+                    msg.push_str(&format!("\n  Using enabled: {}", using_on));
+                    msg.push_str(&format!("\n  AST prelude merge: {}", ast_on));
+                    msg.push_str(&format!("\n  File using allowed: {}", allow_file));
+                    if !ast_on {
+                        msg.push_str("\nQuick fix: set HAKO_USING=full or NYASH_USING_AST=1");
+                    }
+                    if !allow_file {
+                        msg.push_str("\nQuick fix: set HAKO_USING=full or HAKO_ALLOW_USING_FILE=1");
+                    }
+                }
             }
             Err(msg)
         }
@@ -413,9 +395,7 @@ impl MirBuilder {
         let raw_value_id = self.build_expression(value)?;
         // Correctness-first: assignment results may be used across control-flow joins.
         // Pin to a slot so the value has a block-local def and participates in PHI merges.
-        let value_id = self
-            .pin_to_slot(raw_value_id, "@assign")
-            .unwrap_or(raw_value_id);
+        let value_id = raw_value_id;
 
         // In SSA form, each assignment creates a new value
         // Dev-stability: inside ParserBox.* methods, avoid binding `me`'s ValueId to other variable names
@@ -434,9 +414,49 @@ impl MirBuilder {
                 } else { value_id }
             } else { value_id }
         } else { value_id };
+        if std::env::var("NYASH_ASSIGN_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[assign] {} -> v%{}", var_name, value_id.0);
+        }
         self.variable_map.insert(var_name.clone(), value_id);
 
         Ok(value_id)
+    }
+
+    fn origin_trace_enabled() -> bool {
+        static FLAG: OnceLock<bool> = OnceLock::new();
+        *FLAG.get_or_init(|| matches!(
+            std::env::var("NYASH_ORIGIN_TRACE").ok().as_deref(),
+            Some("1" | "true" | "on")
+        ))
+    }
+
+    pub fn origin_tracker(&mut self) -> crate::mir::builder::origin::tracker::OriginTrackerBox<'_> {
+        crate::mir::builder::origin::tracker::OriginTrackerBox::new(
+            &mut self.value_origin_newbox,
+            Self::origin_trace_enabled(),
+        )
+    }
+
+    pub fn origin_register<S: Into<String>>(&mut self, value_id: ValueId, class_name: S) {
+        let mut tracker = self.origin_tracker();
+        tracker.register_newbox(value_id, class_name);
+    }
+
+    pub fn origin_propagate(&mut self, from: ValueId, to: ValueId) {
+        let mut tracker = self.origin_tracker();
+        tracker.propagate(from, to);
+    }
+
+    pub fn origin_get(&self, value_id: ValueId) -> Option<&str> {
+        self.value_origin_newbox.get(&value_id).map(|s| s.as_str())
+    }
+
+    pub fn origin_snapshot(&mut self) -> std::collections::HashMap<ValueId, String> {
+        std::mem::take(&mut self.value_origin_newbox)
+    }
+
+    pub fn origin_restore(&mut self, snapshot: std::collections::HashMap<ValueId, String>) {
+        self.value_origin_newbox = snapshot;
     }
 
 
@@ -444,13 +464,19 @@ impl MirBuilder {
     /// Emit an instruction to the current basic block
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
         let block_id = self.current_block.ok_or("No current basic block")?;
+        let is_phi = matches!(&instruction, MirInstruction::Phi { .. });
+        let mut pending_pin_copies = if !is_phi {
+            self.pending_entry_pin_copies.remove(&block_id)
+        } else {
+            None
+        };
 
         // Precompute debug metadata to avoid borrow conflicts later
-        let dbg_fn_name = self
+        let _dbg_fn_name = self
             .current_function
             .as_ref()
             .map(|f| f.signature.name.clone());
-        let dbg_region_id = self.debug_current_region_id();
+        let _dbg_region_id = self.debug_current_region_id();
         // P0: PHI の軽量補強と観測は、関数ブロック取得前に実施して借用競合を避ける
         if let MirInstruction::Phi { dst, inputs } = &instruction {
             origin::phi::propagate_phi_meta(self, *dst, inputs);
@@ -458,7 +484,37 @@ impl MirBuilder {
         }
 
         if let Some(ref mut function) = self.current_function {
+            // Fail-Fast: do not emit any instruction after a terminator in the current block
+            let already_terminated = function
+                .get_block(block_id)
+                .map(|b| b.is_terminated())
+                .unwrap_or(false);
+            if already_terminated {
+                let fname = _dbg_fn_name.as_deref().unwrap_or("<unknown>");
+                return Err(format!(
+                    "Builder emit after terminator forbidden: function='{}' block={}",
+                    fname, block_id
+                ));
+            }
             if let Some(block) = function.get_block_mut(block_id) {
+                if let Some(mut pending) = pending_pin_copies.take() {
+                    for copy_inst in pending.drain(..) {
+                        if utils::builder_debug_enabled() {
+                            if let MirInstruction::Copy { dst, src } = &copy_inst {
+                                eprintln!(
+                                    "[BUILDER] emit @bb{} (pending pin) -> copy %{} := %{}",
+                                    block_id,
+                                    dst.as_u32(),
+                                    src.as_u32()
+                                );
+                            } else {
+                                eprintln!("[BUILDER] emit @bb{} (pending pin) -> {:?}", block_id, copy_inst);
+                            }
+                        }
+                        crate::mir::builder::effects::verify_instruction_effects(&copy_inst);
+                        block.add_instruction(copy_inst);
+                    }
+                }
                 if utils::builder_debug_enabled() {
                     eprintln!(
                         "[BUILDER] emit @bb{} -> {}",
@@ -487,14 +543,22 @@ impl MirBuilder {
                                     )
                                 }
                             }
-                            MirInstruction::Call {
-                                func, args, dst, ..
-                            } => format!("call {}({:?}) -> {:?}", func, args, dst),
-                            MirInstruction::NewBox {
-                                dst,
-                                box_type,
-                                args,
-                            } => format!("new {}({:?}) -> {}", box_type, args, dst),
+                            MirInstruction::Call { func, callee, args, dst, .. } => {
+                                if let Some(c) = callee {
+                                    match c {
+                                        crate::mir::definitions::Callee::ModuleFunction(name) =>
+                                            format!("call MF:{}({:?}) -> {:?}", name, args, dst),
+                                        crate::mir::definitions::Callee::Global(name) =>
+                                            format!("call G:{}({:?}) -> {:?}", name, args, dst),
+                                        crate::mir::definitions::Callee::Method { box_name, method, .. } =>
+                                            format!("call M:{}.{}/{} -> {:?}", box_name, method, args.len(), dst),
+                                        _ => format!("call {:?}({:?}) -> {:?}", c, args, dst),
+                                    }
+                                } else {
+                                    format!("call {}({:?}) -> {:?}", func, args, dst)
+                                }
+                            },
+                            MirInstruction::NewBox { dst, box_type, args, .. } => format!("new {}({:?}) -> {}", box_type, args, dst),
                             MirInstruction::Const { dst, value } =>
                                 format!("const {:?} -> {}", value, dst),
                             MirInstruction::Branch {
@@ -507,6 +571,7 @@ impl MirBuilder {
                         }
                     );
                 }
+                crate::mir::builder::effects::verify_instruction_effects(&instruction);
                 block.add_instruction(instruction);
                 Ok(())
             } else {
@@ -528,34 +593,19 @@ impl MirBuilder {
         class: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
-        // Phase 9.78a: Unified Box creation using NewBox instruction
-        // Core-13 pure mode: emit ExternCall(env.box.new) with type name const only
-        if crate::config::env::mir_core13_pure() {
-            // Emit Const String for type name（ConstantEmissionBox）
-            let ty_id = crate::mir::builder::emission::constant::emit_string(self, class.clone());
-            // Evaluate arguments (pass through to env.box.new shim)
-            let mut arg_vals: Vec<ValueId> = Vec::with_capacity(arguments.len());
-            for a in arguments {
-                arg_vals.push(self.build_expression(a)?);
-            }
-            // Build arg list: [type, a1, a2, ...]
-            let mut args: Vec<ValueId> = Vec::with_capacity(1 + arg_vals.len());
-            args.push(ty_id);
-            args.extend(arg_vals);
-            // Call env.box.new
-            let dst = self.value_gen.next();
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: Some(dst),
-                iface_name: "env.box".to_string(),
-                method_name: "new".to_string(),
-                args,
-                effects: EffectMask::PURE,
-            })?;
-            // 型注釈（最小）
-            self.value_types
-                .insert(dst, super::MirType::Box(class.clone()));
-            return Ok(dst);
+        if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+            eprintln!("[BUILDER] enter build_new_expression class={} argc={}", class, arguments.len());
         }
+
+        // Forbid instantiation of static/flow boxes declared in source
+        if self.static_box_names.contains(&class) {
+            return Err(format!(
+                "Cannot instantiate static/flow box '{}' (use 'flow {} {{ ... }}' with static methods)",
+                class, class
+            ));
+        }
+        // Phase 9.78a: Unified Box creation using NewBox instruction
+        // Core‑13 pure mode removed; normal path only.
 
         // Optimization: Primitive wrappers → emit Const directly when possible
         if class == "IntegerBox" && arguments.len() == 1 {
@@ -586,61 +636,57 @@ impl MirBuilder {
 
         // Emit NewBox instruction for all Box types
         // VM will handle optimization for basic types internally
+        // Decide auto_birth (env-gated)
+        let auto_birth_enabled = match std::env::var("NYASH_BUILDER_NEWBOX_AUTOBIRTH").ok().as_deref() {
+            Some("0") | Some("false") | Some("off") => false,
+            _ => true,
+        };
+        let mut auto_birth: Option<String> = None;
+        if auto_birth_enabled && class != "StringBox" {
+            let birth_name = crate::mir::resolve::call_name_resolver::CallNameResolverBox::make_birth_name(&class, arg_values.len());
+            // Do not limit to current_module: embed auto_birth name; VM will call only if exists
+            auto_birth = Some(birth_name);
+        }
         self.emit_instruction(MirInstruction::NewBox {
             dst,
             box_type: class.clone(),
             args: arg_values.clone(),
+            auto_birth,
         })?;
+        // Dev trace: log NewBox emission when enabled
+        if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[BUILDER] new {}(arity={}) -> v{}",
+                class,
+                arg_values.len(),
+                dst
+            );
+        }
         // Phase 15.5: Unified box type handling
         // All boxes (including former core boxes) are treated uniformly as Box types
         self.value_types
             .insert(dst, super::MirType::Box(class.clone()));
 
         // Record origin for optimization: dst was created by NewBox of class
-        self.value_origin_newbox.insert(dst, class.clone());
+        self.origin_register(dst, class.clone());
 
         // birth 呼び出し（Builder 正規化）
         // 優先: 低下済みグローバル関数 `<Class>.birth/Arity`（Arity は me を含まない）
         // 代替: 既存互換として BoxCall("birth")（プラグイン/ビルトインの初期化に対応）
-        if class != "StringBox" {
-            let arity = arg_values.len();
-            let lowered = crate::mir::builder::calls::function_lowering::generate_method_function_name(
-                &class,
-                "birth",
-                arity,
-            );
-            let use_lowered = if let Some(ref module) = self.current_module {
-                module.functions.contains_key(&lowered)
-            } else { false };
-            if use_lowered {
-                // Call Global("Class.birth/Arity") with argv = [me, args...]
-                let mut argv: Vec<ValueId> = Vec::with_capacity(1 + arity);
-                argv.push(dst);
-                argv.extend(arg_values.iter().copied());
-                self.emit_legacy_call(None, CallTarget::Global(lowered), argv)?;
-            } else {
-                // Fallback policy:
-                // - For user-defined boxes (no explicit constructor), do NOT emit BoxCall("birth").
-                //   VM will treat plain NewBox as constructed; dev verify warns if needed.
-                // - For builtins/plugins, keep BoxCall("birth") fallback to preserve legacy init.
-                let is_user_box = self.user_defined_boxes.contains(&class);
-                // Dev safety: allow disabling birth() injection for builtins to avoid
-                // unified-call method dispatch issues while migrating. Off by default unless explicitly enabled.
-                let allow_builtin_birth = std::env::var("NYASH_DEV_BIRTH_INJECT_BUILTINS").ok().as_deref() == Some("1");
-                if !is_user_box && allow_builtin_birth {
-                    let birt_mid = resolve_slot_by_type_name(&class, "birth");
-                    self.emit_box_or_plugin_call(
-                        None,
-                        dst,
-                        "birth".to_string(),
-                        birt_mid,
-                        arg_values,
-                        EffectMask::READ.add(Effect::ReadHeap),
-                        false,
-                    )?;
-                }
+        if auto_birth_enabled == false {
+            if let Some(call_insn) = crate::mir::builder::birth::emitter::BirthCallEmitterBox::try_build(
+            self,
+            &class,
+            dst,
+            arg_values.clone(),
+        ) {
+            if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                eprintln!("[BUILDER] auto-birth via ModuleFunction for v{}", dst);
+            }
+            self.emit_instruction(call_insn)?;
             }
         }
+        
 
         Ok(dst)
     }
@@ -656,9 +702,26 @@ impl MirBuilder {
         false
     }
 
+    /// Check if a specific block is terminated (has return/jump/branch as final instruction)
+    pub(super) fn is_block_terminated(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
+            if let Some(block) = function.get_block(block_id) {
+                return block.is_terminated();
+            }
+        }
+        false
+    }
 
+    /// Check if a specific block ends with return or throw (not jump/branch)
+    /// Used for PHI predecessor判定: jump is reachable, return/throw is unreachable
+    pub(super) fn is_block_ends_with_return_or_throw(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
+            return crate::mir::phi_core::common::is_unreachable_pred(function, block_id);
+        }
+        false
+    }
 
-
+    // Note: Legacy ExternCall helper removed; use emit_unified_call with CallTarget::Extern instead.
 
 }
 

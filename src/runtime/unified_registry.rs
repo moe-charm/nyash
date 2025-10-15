@@ -8,8 +8,11 @@
 use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
-use crate::box_factory::{UnifiedBoxRegistry, FactoryPolicy};
+use crate::box_factory::UnifiedBoxRegistry;
 use std::sync::{Arc, Mutex, OnceLock};
+
+// For early plugin load and provider registration (plugin-first preferred)
+// keep imports minimal to avoid warnings; plugin boot handled by plugin_boot_box
 
 /// Global registry instance
 static GLOBAL_REGISTRY: OnceLock<Arc<Mutex<UnifiedBoxRegistry>>> = OnceLock::new();
@@ -36,6 +39,16 @@ pub fn init_global_unified_registry() {
         // Phase 15.5: FactoryPolicy determines actual priority order
         // StrictPluginFirst: plugins > user > builtin (SOLVES StringBox/IntegerBox issue)
         // BuiltinFirst: builtin > user > plugin (legacy default)
+
+        // Register minimal static metadata for core collections (no invoke yet)
+        crate::runtime::static_plugins::register_static_plugins();
+
+        // Early plugin load (best-effort):
+        // If policy/environment indicates plugin usage, attempt to load nyash.toml/hako.toml
+        // and register providers into the v2 BoxFactoryRegistry so `new ArrayBox/MapBox` works
+        // even when creation happens before runner plugin init.
+        // Defer plugin boot to PluginBootBox (idempotent)
+        let _ = crate::runtime::plugin_boot_box::boot();
 
         Arc::new(Mutex::new(registry))
     });

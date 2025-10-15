@@ -1,0 +1,187 @@
+// LocalSSABox — 材化（materialize）/Copy 挿入の最小ポリシーを集約
+// Phase 15.7: 最小実装。将来 PHI/Call 前の規約をここに集約して拡張する。
+
+static box LocalSSABox {
+  // 汎用: copy 命令を insts（ArrayBox of Map）末尾に追加
+  add_copy(insts, dst, src) {
+    if insts == null { return 1 }
+    // 柔軟受理: { instructions: [...] } 形式にも対応
+    if insts.get != null {
+      local inner = insts.get("instructions")
+      if inner != null { insts = inner }
+    }
+    // 末尾pushが無い形は非対応
+    if insts.push == null { return 1 }
+    insts.push({ op:"copy", dst: dst, src: src })
+    return 0
+  }
+
+  // PHI直後の材化（最小）: いまは add_copy と同じ。将来 PHI 群スキップを実装
+  ensure_after_phis_copy(insts, src, dst) {
+    if insts == null { return 1 }
+    // 柔軟受理: { instructions: [...] } 形式にも対応
+    if insts.get != null {
+      local inner = insts.get("instructions")
+      if inner != null { insts = inner }
+    }
+    // 基本的なAPIが無ければフォールバックして末尾追加
+    if insts.size == null || insts.get == null || insts.set == null || insts.push == null {
+      return me.add_copy(insts, dst, src)
+    }
+    // 先頭から連続する phi の個数を数える
+    local n = 0
+    if insts.size { n = insts.size() } else { return me.add_copy(insts, dst, src) }
+    local i = 0
+    loop (i < n) {
+      local ins = insts.get(i)
+      if ins == null { break }
+      local op = ins.get("op")
+      if op == null || op != "phi" { break }
+      i = i + 1
+    }
+    local insert_at = i  // phi 直後
+    local node = { op:"copy", dst: dst, src: src }
+    if insert_at >= n {
+      // 末尾に追加
+      insts.push(node)
+      return 0
+    }
+    // 1つ末尾に空きを作る（末尾要素を複製して押し出す）
+    if n > 0 {
+      insts.push(insts.get(n - 1))
+      // 末尾から insert_at までを右にシフト
+      local j = n - 1
+      loop (j >= insert_at) {
+        insts.set(j + 1, insts.get(j))
+        j = j - 1
+      }
+      insts.set(insert_at, node)
+      return 0
+    } else {
+      insts.push(node)
+      return 0
+    }
+  }
+
+  // 新規: 定義直後に copy を挿入（安全・最小）
+  // - insts: ArrayBox of Map（ブロックの instructions）
+  // - src: 定義済みのレジスタID
+  // - dst: 新規に確保するレジスタID
+  // 見つかった定義の直後に {op:"copy", dst, src} を1つ挿入する。
+  // 見つからない場合は末尾に push（保守的）。
+    ensure_after_last_def_copy(insts, src, dst) {
+    if insts == null { return 1 }
+    if insts.size == null || insts.get == null || insts.set == null || insts.push == null { return 1 }
+    local n = insts.size()
+    local insert_at = n
+    // Find the first terminator index (ret/branch/jump/throw) to ensure block ends with a terminator
+    local term_at = n
+    {
+      local i = 0
+      loop(i < n) {
+        local ins = insts.get(i)
+        if ins != null && ins.get != null {
+          local op = ins.get("op")
+          if op == "ret" || op == "branch" || op == "jump" || op == "throw" { term_at = i  break }
+        }
+        i = i + 1
+      }
+    }
+    // 探索: 最後に dst=src を定義した位置
+    local i = 0
+    loop (i < n) {
+      local ins = insts.get(i)
+      if ins != null {
+        local d = ins.get("dst")
+        if d != null && d == src { insert_at = i + 1 }
+      }
+      i = i + 1
+    }
+    // Do not cross terminator: insert before the first terminator if present
+    if insert_at > term_at { insert_at = term_at }
+    local node = { op:"copy", dst: dst, src: src }
+    if insert_at >= n { insts.push(node)  return 0 }
+    // 1つ末尾に空きを作る（末尾要素を複製して押し出す）
+    if n > 0 {
+      insts.push(insts.get(n - 1))
+      local j = n - 1
+      loop (j >= insert_at) {
+        insts.set(j + 1, insts.get(j))
+        j = j - 1
+      }
+      insts.set(insert_at, node)
+      return 0
+    }
+    insts.push(node)
+    return 0
+  }
+
+  // calls の最小材化: 最後の ret が参照する値 src を探し、src の直後に copy(dst=src+1) を挿入する。
+  // mod_full: { functions: [ { blocks: [ { instructions: [...] } ] } ] }
+  ensure_materialize_last_ret(mod_full) {
+    if mod_full == null { return 1 }
+    local fns = mod_full.functions
+    if fns == null || fns.size == null || fns.size() == 0 { return 1 }
+    local blocks = fns.get(0).get("blocks")
+    if blocks == null || blocks.size == null || blocks.size() == 0 { return 1 }
+    local insts = blocks.get(0).get("instructions")
+    if insts == null || insts.size == null || insts.size() == 0 { return 1 }
+    // ret の引数を探索
+    local n = insts.size()
+    local src = null
+    {
+      local i = 0
+      loop(i < n) {
+        local ins = insts.get(i)
+        if ins != null && ins.get != null {
+          if ins.get("op") == "ret" {
+            src = ins.get("value")
+          }
+        }
+        i = i + 1
+      }
+    }
+    if src == null { return 1 }
+    return me.ensure_after_last_def_copy(insts, src, src + 1)
+  }
+
+  // ensure_cond: 最初の branch の cond を検出し、その定義直後に copy を1つ挿入（最小）
+  // - 形状期待: いずれかの block.instructions に { op:"branch", cond:<id>, ... }
+  ensure_cond(mod_full) {
+    if mod_full == null { return 1 }
+    local fns = mod_full.functions
+    if fns == null || fns.size == null || fns.size() == 0 { return 1 }
+    local blocks = fns.get(0).get("blocks")
+    if blocks == null || blocks.size == null || blocks.size() == 0 { return 1 }
+    // 探索: 各ブロックの instructions から最初の branch を見つけ、そのブロックで材化
+    local bi = 0
+    local bn = 0
+    if blocks.size { bn = blocks.size() } else { bn = 0 }
+    loop (bi < bn) {
+      local insts = blocks.get(bi).get("instructions")
+      if insts != null && insts.size != null && insts.size() > 0 {
+        local n = insts.size()
+        local cond = null
+        {
+          local i = 0
+          loop(i < n) {
+            local ins = insts.get(i)
+            if ins != null && ins.get != null {
+              if ins.get("op") == "branch" {
+                cond = ins.get("cond")
+                break
+              }
+            }
+            i = i + 1
+          }
+        }
+        if cond != null { return me.ensure_after_last_def_copy(insts, cond, cond + 2) }
+      }
+      bi = bi + 1
+    }
+    return 1
+  }
+
+}
+
+static box LocalSSAStub { main(args) { return 0 } }

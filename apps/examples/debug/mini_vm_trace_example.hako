@@ -1,0 +1,37 @@
+// mini_vm_trace_example.hako — Mini-VM Debug Trace Example
+// This demonstrates how to enable debug tracing in Selfhost Mini-VM
+
+using selfhost.vm.entry as MiniVmEntryBox
+
+static box Main {
+  main() {
+    print("=== Mini-VM Trace Example ===")
+
+    // Simple MIR JSON: const 42 -> r1, const 10 -> r2, compare Gt(r1, r2) -> r3, ret r3
+    local json = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
+    json = json + "{\"id\":0,\"instructions\":["
+    json = json + "{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":42}},"
+    json = json + "{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":10}},"
+    json = json + "{\"op\":\"compare\",\"dst\":3,\"cmp\":\"Gt\",\"lhs\":1,\"rhs\":2},"
+    json = json + "{\"op\":\"ret\",\"value\":3}]}]}]}"
+
+    print("\n--- Without Trace ---")
+    local result1 = MiniVmEntryBox.run_min(json)
+    print("Result: " + MiniVmEntryBox.int_to_str(result1))
+
+    print("\n--- With Trace (Method 1: Wrapper) ---")
+    local result2 = MiniVmEntryBox.run_trace(json)
+    print("Result: " + MiniVmEntryBox.int_to_str(result2))
+
+    print("\n--- With Trace (Method 2: Direct Injection) ---")
+    local json_with_trace = "{\"__trace__\":1," + json.substring(1, json.size())
+    local result3 = MiniVmEntryBox.run_min(json_with_trace)
+    print("Result: " + MiniVmEntryBox.int_to_str(result3))
+
+    print("\n=== Expected Output ===")
+    print("All three methods should return: 1 (because 42 > 10)")
+    print("Methods 2 and 3 show [DEBUG] logs during execution")
+
+    return 0
+  }
+}

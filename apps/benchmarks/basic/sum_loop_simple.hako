@@ -1,0 +1,17 @@
+// Sum Loop Benchmark - Simple (LLVM測定用・print不使用)
+static box Main {
+    sum_range(n) {
+        local sum, i
+        sum = 0
+        i = 0
+        loop(i < n) {
+            sum = sum + i
+            i = i + 1
+        }
+        return sum
+    }
+
+    main() {
+        return me.sum_range(100000)
+    }
+}

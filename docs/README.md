@@ -51,10 +51,12 @@
 - guides/getting-started.md
 - guides/language-guide.md
 - guides/syntax-sugar.md
+- **🆕 cookbook/quick-tips.md** - 1ページ実用ガイド（match/Lambda/? 演算子等）
 - guides/p2p-guide.md
 
 ### 技術リファレンス
 - reference/language/LANGUAGE_REFERENCE_2025.md
+- reference/language/quick-reference.md - クイックリファレンス（糖衣構文セクション追加！）
 - reference/language/EBNF.md（演算子: ! 採用 / do-while 非採用）
 - reference/language/strings.md（UTF‑8/Byte 二本柱）
 - reference/architecture/TECHNICAL_ARCHITECTURE_2025.md
@@ -80,8 +82,11 @@
 
 ### 開発状況
 - [現在のタスク](../CURRENT_TASK.md)
- - [開発ロードマップ](development/roadmap/)
- - [Phase別計画](development/roadmap/phases/)
+- [開発ロードマップ](development/roadmap/)
+- **🆕 [言語進化ロードマップ](development/roadmap/language-evolution/)** - Phase 16-30計画（「コアは最小・糖衣は最強」）
+- [Phase別計画](development/roadmap/phases/)
+- **🔥 Phase 15.7: セルフホスティングPipeline v2** - [設計](development/selfhosting/pipeline_v2.md) | [実装](../selfhost/compiler/pipeline_v2/) | [契約](../apps/selfhost-compiler/INTERFACES.md)
+  - JSON v0 の降下は MirBuilder に統一（レガシーBridgeは撤去済み）
    - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
    - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
    - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**

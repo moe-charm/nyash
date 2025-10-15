@@ -1,5 +1,6 @@
 use super::super::host_bridge::BoxInvokeFn;
-use super::super::types::NyashTypeBoxFfi;
+use super::super::types::{NyashTypeBoxFfi, NyashTypeBoxFinalFfi};
+use super::super::host_bridge::FinalInvokeFn;
 use super::util::dbg_on;
 use super::PluginLoaderV2;
 use crate::bid::{BidError, BidResult};
@@ -9,13 +10,17 @@ use std::path::Path;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct LoadedBoxSpec {
     pub(crate) type_id: Option<u32>,
+    pub(crate) capabilities: Option<u64>,
     pub(crate) methods: HashMap<String, MethodSpec>,
     pub(crate) fini_method_id: Option<u32>,
     pub(crate) invoke_id: Option<BoxInvokeFn>,
     pub(crate) resolve_fn: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    // Optional Final ABI per-Box invoke (Phase A)
+    pub(crate) final_invoke: Option<FinalInvokeFn>,
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub(crate) struct MethodSpec {
     pub(crate) method_id: u32,
     pub(crate) returns_result: bool,
@@ -53,11 +58,36 @@ pub(super) fn record_typebox_spec(
         let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
         entry.invoke_id = Some(invoke_id);
         entry.resolve_fn = typebox.resolve;
+        entry.capabilities = Some(typebox.capabilities);
     } else if dbg_on() {
         eprintln!(
             "[PluginLoaderV2] WARN: TypeBox present but no invoke_id for {}.{} — plugin should export per-Box invoke",
             lib_name, box_type
         );
+    }
+    Ok(())
+}
+
+/// Record optional Final ABI spec if present (env-gated in loader)
+pub(super) fn record_typebox_final_spec(
+    loader: &PluginLoaderV2,
+    lib_name: &str,
+    box_type: &str,
+    final_box: &NyashTypeBoxFinalFfi,
+) -> BidResult<()> {
+    // Basic sanity: struct size must be at least our header
+    let ok = final_box.struct_size as usize >= std::mem::size_of::<NyashTypeBoxFinalFfi>();
+    if !ok {
+        return Ok(());
+    }
+    if let Some(final_invoke) = final_box.invoke_final {
+        let key = (lib_name.to_string(), box_type.to_string());
+        let mut map = loader
+            .box_specs
+            .write()
+            .map_err(|_| BidError::PluginError)?;
+        let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+        entry.final_invoke = Some(final_invoke);
     }
     Ok(())
 }
@@ -87,6 +117,16 @@ pub(super) fn ingest_box_specs_from_nyash_box(
                 .and_then(|v| v.as_integer())
             {
                 spec.type_id = Some(tid as u32);
+                super::util::dbg_once(
+                    &format!("spec_tid:{}:{}", lib_name, box_type),
+                    &format!(
+                        "[PluginLoaderV2] spec ingest: {}.{} type_id={} from {}",
+                        lib_name,
+                        box_type,
+                        tid,
+                        nyash_box_toml_path.display()
+                    ),
+                );
             }
             if let Some(fini) = doc
                 .get(box_type)
@@ -134,6 +174,17 @@ pub(super) fn ingest_box_specs_from_nyash_box(
                                 returns_result,
                             },
                         );
+                        super::util::dbg_once(
+                            &format!("spec_mid:{}:{}:{}", lib_name, box_type, mname),
+                            &format!(
+                                "[PluginLoaderV2] spec ingest: {}.{} method {} -> id={} returns_result={}",
+                                lib_name,
+                                box_type,
+                                mname,
+                                id,
+                                returns_result
+                            ),
+                        );
                     }
                 }
             }
@@ -151,4 +202,125 @@ pub(super) fn get_spec<'a>(
         map.get(&(lib_name.to_string(), box_type.to_string()))
             .cloned()
     })
+}
+
+impl super::PluginLoaderV2 {
+    /// Ingest specs from a given spec file path for the specified library.
+    pub(crate) fn ingest_specs_from_file(
+        &self,
+        lib_name: &str,
+        box_names: &[String],
+        spec_path: &std::path::Path,
+    ) {
+        ingest_box_specs_from_nyash_box(self, lib_name, box_names, spec_path);
+    }
+
+    /// Register a static (in-process) specification for a plugin box.
+    ///
+    /// This allows the runtime to know `type_id`/methods/invoke pointer without
+    /// relying on external nyash.toml or dlopen.
+    /// Duplicate registrations merge; existing fields are preserved.
+    pub(crate) fn register_static_box(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        _invoke_any: Option<*const ()>,
+    ) {
+        if let Ok(mut map) = self.box_specs.write() {
+            let key = (lib_name.to_string(), box_type.to_string());
+            let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+            if entry.type_id.is_none() { entry.type_id = type_id; }
+            if entry.capabilities.is_none() { entry.capabilities = capabilities; }
+            if entry.fini_method_id.is_none() { entry.fini_method_id = fini_method_id; }
+            
+            for (name, id, retres) in methods.iter().copied() {
+                entry.methods.insert(name.to_string(), MethodSpec { method_id: id, returns_result: retres });
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::plugin_loader_v2::enabled::types;
+
+    extern "C" fn dummy_final_invoke(
+        _type_id: u32,
+        _method_id: u32,
+        _instance_id: u32,
+        _args: *const types::NyValueFfi,
+        _argc: usize,
+        _out: *mut types::NyResultFfi,
+    ) -> i32 {
+        0
+    }
+
+    #[test]
+    fn record_final_spec_registers_invoke() {
+        let loader = PluginLoaderV2::new();
+        let ffi = NyashTypeBoxFinalFfi {
+            abi_tag: 0x5446494E, // 'TFIN' (arbitrary)
+            version: 1,
+            struct_size: std::mem::size_of::<NyashTypeBoxFinalFfi>() as u16,
+            invoke_final: Some(dummy_final_invoke),
+            get_method_meta: None,
+            get_all_methods: None,
+            get_type_info: None,
+        };
+        let _ = record_typebox_final_spec(&loader, "libX", "MyBox", &ffi);
+        let spec = get_spec(&loader, "libX", "MyBox").expect("spec missing");
+        assert!(spec.final_invoke.is_some());
+    }
+
+    #[test]
+    fn record_final_spec_ignores_when_struct_too_small() {
+        let loader = PluginLoaderV2::new();
+        let ffi = NyashTypeBoxFinalFfi {
+            abi_tag: 0,
+            version: 0,
+            struct_size: 4, // too small
+            invoke_final: Some(dummy_final_invoke),
+            get_method_meta: None,
+            get_all_methods: None,
+            get_type_info: None,
+        };
+        let _ = record_typebox_final_spec(&loader, "libY", "OtherBox", &ffi);
+        let spec = get_spec(&loader, "libY", "OtherBox");
+        assert!(spec.is_none() || spec.unwrap().final_invoke.is_none());
+    }
+}
+
+// Separate impl to avoid touching existing block
+impl super::PluginLoaderV2 {
+    /// Register a static spec and per-Box invoke pointer.
+    /// Same as `register_static_box`, but also records the `invoke` pointer used by
+    /// the enabled loader to bypass dynamic lookup. Existing `invoke_id` is preserved
+    /// when already present.
+    pub(crate) fn register_static_with_invoke(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        invoke: Option<super::super::host_bridge::BoxInvokeFn>,
+    ) {
+        if let Ok(mut map) = self.box_specs.write() {
+            let key = (lib_name.to_string(), box_type.to_string());
+            let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+            if entry.type_id.is_none() { entry.type_id = type_id; }
+            if entry.capabilities.is_none() { entry.capabilities = capabilities; }
+            if entry.fini_method_id.is_none() { entry.fini_method_id = fini_method_id; }
+            if entry.invoke_id.is_none() { entry.invoke_id = invoke; }
+            for (name, id, retres) in methods.iter().copied() {
+                entry.methods.insert(name.to_string(), MethodSpec { method_id: id, returns_result: retres });
+            }
+        }
+    }
 }

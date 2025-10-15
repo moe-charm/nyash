@@ -33,7 +33,7 @@ Avoid: deep AOT emission/linking, cross-platform toolchain work, or scope creep 
 ## Deliverables
 
 - `tools/aot_plan/` Nyash scripts and helpers
-- `docs/design/aot-plan-v1.md` (lightweight schema)
+- `docs/archive/design/legacy-2025-09/aot-plan-v1.md` (lightweight schema)
 - Compiler entry to import AOT-Plan → MIR13 (feature-gated)
 - 3 smokes + 1 golden JSON sample
 

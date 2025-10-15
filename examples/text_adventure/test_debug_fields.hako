@@ -1,0 +1,44 @@
+// Debug field visibility
+
+box TestBox {
+    init { x, y }
+    
+    TestBox(x, y) {
+        me.x = x
+        me.y = y
+    }
+    
+    debugFields() {
+        print("From inside method:")
+        print("  me.x = " + me.x)
+        print("  me.y = " + me.y)
+    }
+}
+
+// Direct creation
+print("=== Direct Creation ===")
+direct = new TestBox(10, 20)
+print("Field access: x=" + direct.x + ", y=" + direct.y)
+direct.debugFields()
+
+// Function return
+print("\n=== Function Return ===")
+function createBox() {
+    b = new TestBox(30, 40)
+    print("Inside function, before return:")
+    print("  b.x = " + b.x)
+    print("  b.y = " + b.y)
+    b.debugFields()
+    return b
+}
+
+returned = createBox()
+print("\nAfter return:")
+returned.debugFields()  // Method should still work
+try {
+    print("Direct field access: x=" + returned.x)
+} catch {
+    print("ERROR: Direct field access failed!")
+}
+
+print("\n✅ Debug test completed!")

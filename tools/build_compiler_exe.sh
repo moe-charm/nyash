@@ -10,7 +10,7 @@ usage() {
 Usage: tools/build_compiler_exe.sh [-o <name>] [--no-pack]
 
 Builds the selfhost Nyash parser as a native EXE using the LLVM harness,
-and stages a runnable bundle with required plugin (FileBox) and nyash.toml.
+and stages a runnable bundle with required plugin (FileBox) and hako.toml (compat: nyash.toml).
 
 Options:
   -o <name>   Output executable name (default: nyash_compiler)
@@ -45,15 +45,15 @@ if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
   # Legacy inkwell needs LLVM_SYS_180_PREFIX
   _LLVMPREFIX=$(llvm-config-18 --prefix)
   LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-    cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+    [ "${NYASH_SKIP_REBUILD:-0}" = "1" ] || cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
 else
   # llvm-harness (default) doesn't need LLVM_SYS_180_PREFIX
-  cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+  [ "${NYASH_SKIP_REBUILD:-0}" = "1" ] || cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
 fi
 
 # 2) Emit + link compiler.nyash → EXE
 echo "[2/4] Emitting + linking selfhost compiler ..."
-tools/build_llvm.sh apps/selfhost/compiler/compiler.nyash -o "$OUT"
+NYASH_BENCH_SKIP_NYASH_BUILD=${NYASH_BENCH_SKIP_NYASH_BUILD:-1} tools/build_llvm.sh apps/selfhost-compiler/compiler.hako -o "$OUT"
 
 if [[ "$PACK" == "0" ]]; then
   echo "✅ Built: ./$OUT"
@@ -61,9 +61,6 @@ if [[ "$PACK" == "0" ]]; then
 fi
 
 # 3) Build FileBox plugin (required when reading files)
-echo "[3/4] Building FileBox plugin ..."
-unset NYASH_DISABLE_PLUGINS || true
-cargo build -p nyash-filebox-plugin --release >/dev/null
 
 # 4) Stage dist/ bundle
 echo "[4/4] Staging dist bundle ..."
@@ -75,8 +72,8 @@ cp -f "$OUT" "$DIST/"
 # Copy plugin binary (platform-specific extension). Copy entire release dir for safety.
 cp -a plugins/nyash-filebox-plugin/target/release/. "$DIST/plugins/nyash-filebox-plugin/target/release/" || true
 
-# Minimal nyash.toml for runtime (FileBox only)
-cat > "$DIST/nyash.toml" << 'TOML'
+# Minimal hako.toml for runtime (FileBox only) — compat nyash.toml is also written
+cat > "$DIST/hako.toml" << 'TOML'
 [libraries]
 [libraries."libnyash_filebox_plugin"]
 boxes = ["FileBox"]
@@ -94,10 +91,59 @@ close = { method_id = 4 }
 fini  = { method_id = 4294967295 }
 TOML
 
+# Write compatibility file
+cp -f "$DIST/hako.toml" "$DIST/nyash.toml"
+
 echo "✅ Done: $DIST"
 echo "   Usage:"
-echo "     echo 'return 1+2*3' > $DIST/tmp/sample.nyash"
-echo "     (cd $DIST && ./$(basename "$OUT") tmp/sample.nyash > sample.json)"
+echo "     echo 'return 1+2*3' > $DIST/tmp/sample.hako"
+echo "     (cd $DIST && ./$(basename "$OUT") tmp/sample.hako > sample.json)"
+echo "     head -n1 sample.json"
+
+exit 0
+if [[ "${NYASH_SKIP_PLUGIN_BUILD:-0}" == "1" ]]; then
+  echo "[3/4] Skipping FileBox plugin build (NYASH_SKIP_PLUGIN_BUILD=1)"
+else
+  echo "[3/4] Building FileBox plugin ..."
+  unset NYASH_DISABLE_PLUGINS || true
+  cargo build -p nyash-filebox-plugin --release >/dev/null
+fi
+# 4) Stage dist/ bundle
+echo "[4/4] Staging dist bundle ..."
+DIST="dist/nyash_compiler"
+rm -rf "$DIST"
+mkdir -p "$DIST/plugins/nyash-filebox-plugin/target/release" "$DIST/tmp"
+cp -f "$OUT" "$DIST/"
+
+# Copy plugin binary (platform-specific extension). Copy entire release dir for safety.
+cp -a plugins/nyash-filebox-plugin/target/release/. "$DIST/plugins/nyash-filebox-plugin/target/release/" || true
+
+# Minimal hako.toml for runtime (FileBox only) — compat nyash.toml is also written
+cat > "$DIST/hako.toml" << 'TOML'
+[libraries]
+[libraries."libnyash_filebox_plugin"]
+boxes = ["FileBox"]
+path = "./plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin"
+
+[libraries."libnyash_filebox_plugin".FileBox]
+type_id = 6
+
+[libraries."libnyash_filebox_plugin".FileBox.methods]
+birth = { method_id = 0 }
+open  = { method_id = 1, args = ["path", "mode"] }
+read  = { method_id = 2 }
+write = { method_id = 3, args = ["data"] }
+close = { method_id = 4 }
+fini  = { method_id = 4294967295 }
+TOML
+
+# Write compatibility file
+cp -f "$DIST/hako.toml" "$DIST/nyash.toml"
+
+echo "✅ Done: $DIST"
+echo "   Usage:"
+echo "     echo 'return 1+2*3' > $DIST/tmp/sample.hako"
+echo "     (cd $DIST && ./$(basename "$OUT") tmp/sample.hako > sample.json)"
 echo "     head -n1 sample.json"
 
 exit 0

@@ -1,0 +1,47 @@
+// ret_resolve_simple.hako — RetResolveSimpleBox
+// Responsibility: Resolve "ret" for a single block instruction segment robustly.
+// Inputs: inst_seg (string of objects), regs (MapBox), last_cmp_dst/val (ints)
+// Output: i64 value or null when no ret is present
+
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+
+static box RetResolveSimpleBox {
+  _to_i64(s) { return StringHelpers.to_i64(s) }
+  _load_reg(regs, id) {
+    local v = regs.get("" + id)
+    if v == null { return 0 }
+    local s = "" + v
+    if StringHelpers.is_numeric_str(s) == 1 { return me._to_i64(s) }
+    return 0
+  }
+  // Try explicit op:"ret"
+  _resolve_explicit(inst_seg, regs, last_cmp_dst, last_cmp_val) {
+    local rpos = inst_seg.indexOf("\"op\":\"ret\"")
+    if rpos < 0 { return null }
+    local rseg = inst_seg.substring(rpos, inst_seg.size())
+    local rid = JsonFragBox.get_int(rseg, "value")
+    if rid == null { return null }
+    if rid == last_cmp_dst { return last_cmp_val }
+    return me._load_reg(regs, rid)
+  }
+  // Try v1-style {"kind":"Ret","value":N} (no op key)
+  _resolve_kind(inst_seg, regs, last_cmp_dst, last_cmp_val) {
+    local kpos = inst_seg.indexOf("\"kind\":\"Ret\"")
+    if kpos < 0 { return null }
+    local kseg = inst_seg.substring(kpos, inst_seg.size())
+    local rid = JsonFragBox.get_int(kseg, "value")
+    if rid == null { return null }
+    if rid == last_cmp_dst { return last_cmp_val }
+    return me._load_reg(regs, rid)
+  }
+  resolve(inst_seg, regs, last_cmp_dst, last_cmp_val) {
+    if inst_seg == null { return null }
+    local v = me._resolve_explicit(inst_seg, regs, last_cmp_dst, last_cmp_val)
+    if v != null { return v }
+    return me._resolve_kind(inst_seg, regs, last_cmp_dst, last_cmp_val)
+  }
+}
+
+static box RetResolveSimpleMain { main(args){ return 0 } }

@@ -20,9 +20,9 @@ echo "[phi-trace] running quick smoke (loop_if_phi/ternary_nested/phi_mix/heavy_
 # v2: 代表ケースを数本実行して PHI トレースを採取
 echo "[phi-trace] executing samples with LLVM harness..." >&2
 SAMPLES=(
-  "apps/tests/llvm_phi_mix.nyash"
-  "apps/tests/loop_if_phi.nyash"
-  "apps/tests/llvm_if_phi_ret.nyash"
+  "apps/tests/llvm_phi_mix.hako"
+  "apps/tests/loop_if_phi.hako"
+  "apps/tests/llvm_if_phi_ret.hako"
 )
 for f in "${SAMPLES[@]}"; do
   if [ -f "$f" ]; then

@@ -1,0 +1,52 @@
+// minivm_probe.hako — Mini‑VM JSON v0 の a/b/r を観測する軽量プローブ
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
+using "selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
+
+static box MiniVmProbe {
+  probe_compare(mjson) {
+    local regs = map({})
+    local seg = JsonFragBox.block0_segment(mjson)
+    if seg.size() == 0 { return map({}) }
+    local pos = 0
+    loop(true) {
+      if pos >= seg.size() { break }
+      // Use escape-aware scanner to get next instruction object
+      local mm = InstructionScannerBox.next(seg, pos)
+      if mm == null { break }
+      local s = mm.get("start")
+      local i = mm.get("end")
+      local obj = seg.substring(s, i)
+      local op = JsonFragBox.get_str(obj, "op")
+      match op {
+        "const" => { OpHandlersBox.handle_const(obj, regs) }
+        "binop" => { OpHandlersBox.handle_binop(obj, regs) }
+        "compare" => {
+          local kind = JsonFragBox.get_str(obj, "cmp")
+          local lhs = JsonFragBox.get_int(obj, "lhs")
+          local rhs = JsonFragBox.get_int(obj, "rhs")
+          local as2 = "" + regs.get(""+lhs)
+          local bs2 = "" + regs.get(""+rhs)
+          local a = JsonFragBox._str_to_int(as2)
+          local b = JsonFragBox._str_to_int(bs2)
+          local r = match kind {
+            "Eq" => { if a == b { 1 } else { 0 } }
+            "Ne" => { if a != b { 1 } else { 0 } }
+            "Lt" => { if a < b { 1 } else { 0 } }
+            "Gt" => { if a > b { 1 } else { 0 } }
+            "Le" => { if a <= b { 1 } else { 0 } }
+            "Ge" => { if a >= b { 1 } else { 0 } }
+            _ => 0
+          }
+          return map({ a: a, b: b, r: r })
+        }
+        _ => {}
+      }
+      pos = i
+    }
+    return map({ a: 0, b: 0, r: 0 })
+  }
+}
+
+static box MiniVmProbeStub { main(args) { return 0 } }

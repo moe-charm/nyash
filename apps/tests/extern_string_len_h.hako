@@ -1,0 +1,10 @@
+// Verify extern string len_h via length() method and Result line
+static box Main {
+  main() {
+    local s = "ab"
+    local n = s.size()
+    print("Result: " + n)
+    return 0
+  }
+}
+

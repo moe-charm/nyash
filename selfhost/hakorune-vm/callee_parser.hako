@@ -1,0 +1,157 @@
+// CalleeParserBox - Extract callee information from MirCall JSON
+// Single Responsibility: Parse callee field and extract type/name
+
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box CalleeParserBox {
+  // Extract callee type from mir_call object
+  // mir_call_json: JSON string like '{"callee":{"type":"Global","name":"print"},...}'
+  // Returns: "Global" / "Extern" / "Method" / "ModuleFunction" / null on error
+  extract_type(mir_call_json) {
+    // Find "callee" field
+    local callee_key = "\"callee\":"
+    local callee_start = mir_call_json.indexOf(callee_key)
+    if callee_start < 0 {
+      return null
+    }
+    callee_start = callee_start + callee_key.size()
+
+    // Find callee object end (simplified: find next "type" field)
+    local type_key = "\"type\":\""
+    local type_start = StringOps.index_of_from(mir_call_json, type_key, callee_start)
+    if type_start < 0 {
+      return null
+    }
+    type_start = type_start + type_key.size()
+
+    // Extract type value
+    local type_end = StringOps.index_of_from(mir_call_json, "\"", type_start)
+    if type_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(type_start, type_end)
+  }
+
+  // Extract callee name from mir_call object
+  // mir_call_json: JSON string like '{"callee":{"type":"Global","name":"print"},...}'
+  // Returns: function name string / null on error
+  extract_name(mir_call_json) {
+    // Find "name" field (within callee object)
+    local name_key = "\"name\":\""
+    local name_start = mir_call_json.indexOf(name_key)
+    if name_start < 0 {
+      return null
+    }
+    name_start = name_start + name_key.size()
+
+    // Extract name value
+    local name_end = StringOps.index_of_from(mir_call_json, "\"", name_start)
+    if name_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(name_start, name_end)
+  }
+
+  // Extract full callee object as JSON string (for complex cases)
+  // mir_call_json: JSON string like '{"callee":{...},"args":[...],...}'
+  // Returns: callee JSON substring
+  extract_callee_object(mir_call_json) {
+    // Find "callee" field
+    local callee_key = "\"callee\":"
+    local callee_start = mir_call_json.indexOf(callee_key)
+    if callee_start < 0 {
+      return null
+    }
+    local obj_start = callee_start + callee_key.size()
+
+    // Find object end (simple: find matching })
+    // Note: This is simplified and assumes no nested objects in callee
+    local obj_end = StringOps.index_of_from(mir_call_json, "}", obj_start)
+    if obj_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(obj_start, obj_end + 1)
+  }
+
+  // Extract receiver ValueId from Method callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Method","receiver":1,"method":"size"},...}'
+  // Returns: receiver ValueId (integer) / null on error
+  extract_receiver(mir_call_json) {
+    // Find "receiver" field
+    local receiver_key = "\"receiver\":"
+    local receiver_start = mir_call_json.indexOf(receiver_key)
+    if receiver_start < 0 {
+      return null
+    }
+    receiver_start = receiver_start + receiver_key.size()
+
+    // Extract receiver value (integer)
+    local digits = StringHelpers.read_digits(mir_call_json, receiver_start)
+    if digits == "" {
+      return null
+    }
+
+    return StringHelpers.to_i64(digits)
+  }
+
+  // Extract method name from Method callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Method","receiver":1,"method":"size"},...}'
+  // Returns: method name string / null on error
+  extract_method(mir_call_json) {
+    // Find "method" field
+    local method_key = "\"method\":\""
+    local method_start = mir_call_json.indexOf(method_key)
+    if method_start < 0 {
+      return null
+    }
+    method_start = method_start + method_key.size()
+
+    // Extract method value
+    local method_end = StringOps.index_of_from(mir_call_json, "\"", method_start)
+    if method_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(method_start, method_end)
+  }
+
+  // Extract box_type from Constructor callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Constructor","box_type":"ArrayBox"},...}'
+  // Returns: box_type string / null on error
+  extract_box_type(mir_call_json) {
+    // Find "box_type" field
+    local box_type_key = "\"box_type\":\""
+    local box_type_start = mir_call_json.indexOf(box_type_key)
+    if box_type_start < 0 {
+      return null
+    }
+    box_type_start = box_type_start + box_type_key.size()
+
+    // Extract box_type value
+    local box_type_end = StringOps.index_of_from(mir_call_json, "\"", box_type_start)
+    if box_type_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(box_type_start, box_type_end)
+  }
+
+  // Extract value id from Value callee
+  // mir_call_json: '{"callee":{"type":"Value","value":5}, ...}'
+  // Returns: value register id (integer) / null on error
+  extract_value_id(mir_call_json) {
+    local val_key = "\"value\":"
+    local val_start = mir_call_json.indexOf(val_key)
+    if val_start < 0 { return null }
+    val_start = val_start + val_key.size()
+    // Read digits
+    local digits = StringHelpers.read_digits(mir_call_json, val_start)
+    if digits == "" { return null }
+    return StringHelpers.to_i64(digits)
+  }
+}

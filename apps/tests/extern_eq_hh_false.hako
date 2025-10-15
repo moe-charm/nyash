@@ -1,0 +1,9 @@
+// Verify string equality (false) via eq_hh mapping (==) returns 0
+static box Main {
+  main() {
+    local ok = ("a" == "b")
+    print("Result: " + ok) // expect 0
+    return 0
+  }
+}
+

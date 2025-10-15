@@ -1,5 +1,92 @@
 # VM Plugin Integration仕様書
 
+Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI (formerly Nyash ABI)”.
+
+## Policy & Lifecycle — Final Rules (Phase 15.7)
+
+### Strict Plugin Policy（HAKO_PLUGIN_POLICY=force）
+
+- plugins が ON かつ対象 Box に Plugin provider が存在する場合、VM ルーターは builtin へのフォールバックを禁止して Fail‑Fast します。
+- 未実装・未知メソッドは即時エラーとなり、原因が隠蔽されません。
+- 代表エラー: `plugin strict: builtin fallback disabled for MapBox.noSuchMethod(0 args)`
+- 推奨運用:
+  - plugins プロファイルやCIの一部で Strict を有効化（フォールバック検出）。
+  - 互換や観測を優先する quick プロファイルでは `auto` を維持。
+
+### Length 系の統一（String/Array）
+
+- String/Array の `size/len/length` は Extern に正規化して実装を一本化します。
+  - String: `Extern("nyrt.string.length")` — 受けは String 値（BoxRef の場合は文字列化）
+  - Array:  `Extern("nyrt.array.size")` — 受けは Array（HostHandle 経路: slot 102）
+- Builder 側:
+  - 受けの materialize は EmitGuard（finalize_call_operands）で一度だけ実施し、正規化（normalize_*）では再materializeしない。
+  - これにより、未定義 ValueId の生成（use-before-def）を防止。
+- VM 側:
+  - Method(String/Array).length 系は早期Externに橋渡しする（安全弁）。
+  - Extern 実装は HostHandle/legacy の双方を吸収する。
+
+### SetBox — Extern 経路（Map ベース）
+
+Set は Map の意味論（Eq/Hash/決定性）を再利用する。VM は Extern("nyrt.set.*") で受け、内部的に Map に委譲する。
+
+Extern I/O（最小）
+- `nyrt.set.add(recv:Set, v:any) -> Void`（NullBox）
+- `nyrt.set.remove(recv:Set, v:any) -> Void`（NullBox）
+- `nyrt.set.has(recv:Set, v:any) -> Bool`
+- `nyrt.set.size(recv:Set) -> i64`
+- `nyrt.set.clear(recv:Set) -> Void`（NullBox）
+- `nyrt.set.toArray(recv:Set) -> Array`
+
+実装方針
+- HostHandle あり: `recv` を Map の HostHandle として扱い、`set/get/has/size/clear/keys` を利用（Unit 値で add/remove を表現）。
+- legacy 互換: 内部 MapBox を保持する SetBox でも同一の外部 Extern を経由（ABI 安定）。
+- Strict（policy=force）下でも挙動は同一（フォールバック禁止）。
+ - プロバイダ: `plugins/nyash-set-plugin` が `SetBox` を提供。`hako.toml`/`nyash.toml` の `[libraries."libnyash_set_plugin.so".SetBox]` で type_id とメソッドIDを定義。
+
+
+## Capabilities (Policy Hooks)
+
+See `docs/reference/plugin-system/capabilities.md` for capability bit definitions (IO/NET/ENV/TIME/...).
+- Deterministic runs deny IO/NET boxes.
+- Plugins should set `NyashTypeBoxFfi.capabilities` appropriately.
+
+
+- Plugin Policy: default ON (auto). If no plugins are configured in hako.toml/nyash.toml, nothing is loaded (no side‑effects). CI などで完全遮断したい場合のみ `NYASH_DISABLE_PLUGINS=1` を使う。
+- Creation: `new T(args…)` is always followed by `birth(me,args…)` by VM. When `birth` is not implemented, it is treated as no‑op (idempotent). Builder の auto‑birth は既定OFF。
+- Plugin Init: two idempotent stages are allowed (optional)
+  - Load‑time: `nyash_plugin_init()` called once per library when present
+  - First‑birth: plugin may call `ensure_ready()` guarded by `Once`
+- Provider Resolution: single order — `PluginProvider(T) → BuiltinProvider(T) → Registry/Fallback(T) → error`. Before resolving, the registry performs on‑demand re‑probe for `T` to avoid timing issues.
+  - プラグイン設定で `boxes = [T]` が宣言されている場合は plugin-only とみなし、プラグイン経路が失敗したらそのままエラーを返す（ビルトインフォールバック禁止）。
+  - `HAKO_PLUGIN_ON_STRICT=1`（互換: `NYASH_PLUGIN_ON_STRICT=1`）を指定すると、最終フォールバックも抑止して Fail-Fast する。
+- Boot Disabled Non‑cache: boot() no longer caches “disabled” as success (allows later retry when policy flips to ON). Operationally we run with policy=auto by default so this path is rarely used.
+- Stage-2 handles: `Map.keys()/values()` は既定で HostHandle(ArrayBox) を返す（Phase 15.7+）。
+  - 互換フラグ `NYASH_PLUGIN_MAP_ARRAY_HANDLE` は移行期の歴史的フラグ（未設定でも有効）。
+  - values() の要素には PluginHandle(tag=8)（例: ArrayBox）が含まれ得る。Host 側は tag=8/9 を decode し、グローバルハンドルキャッシュで identity を再利用する。
+  - Router の文字列シム（keysS/valuesS→Array 正規化）は撤退済み（Phase 15.7+）。
+
+
+## 📦 Phase 15.7–15.75 Structural Boxes（HostHandleRouter フェーズイン）
+
+- `src/runtime/method_router_box/method_ref.rs` が methodRef 疑似メソッドを担当。VM ルーターは最初にここへ委譲し、型チェックと CallableBox 生成を一箇所で行う。 (詳細: docs/reference/plugin-system/callable-box-guide.md)
+- `src/runtime/method_router_box/map_callable.rs` に Map.call/Map.callAsync の糖衣実装を隔離。プラグインは get/set 群だけ実装すれば良く、call 系は VM 側で一貫化。
+- `src/runtime/codec/codec_box.rs` は TLV エンコード/デコードの単一窓口。Host/Plugin ハンドル、コア Box の扱いをここで統制し、plugin_ffi_common と同じポリシーを維持する。
+- ディレクトリ README (`src/runtime/codec/README.md`) で境界の責務を明示。将来 helper を増やす場合もこの箱を経由する。
+
+### HostHandleRouter（段階導入）
+
+- 入口: `src/runtime/host_handle_router/mod.rs` に HostHandle 経由メソッドを slot で受ける薄いルーターを配置。
+- 対応スロット（15.75 現在）:
+  - ArrayBox: `len → 102`
+  - MapBox: `size → 200`, `has → 202`, `get → 203`, `set → 204`
+  - StringBox: `len → 300`
+- VM からの強制経路（開発用）
+  - `NYASH_MAP_FORCE_HOST=1` で Map.size/has/get/set を HostHandleRouter に強制。
+  - `NYASH_ARRAY_FORCE_HOST=1` で Array.size/get/set を HostHandleRouter に強制（`NYASH_ARRAY_SIZE_FORCE_HOST` は互換）。
+  - `NYASH_STRING_SIZE_FORCE_HOST=1` で String.size/len を HostHandleRouter に強制。
+- 目的: VM 内蔵の per‑type 分岐（型名ハードコード/ダウンキャスト）を段階撤退し、ABI 境界を一本化すること。
+- 互換性: 内蔵/外付け（動的）いずれも `Arc<dyn NyashBox>` を HostHandle 経由で扱うため、パッケージ方式に依存しない。
+
 ## 🎯 概要
 
 NyashのVMバックエンドとプラグインシステム（BID-FFI v1）の統合に関する技術仕様。Everything is Box哲学に基づき、**すべてのBox型（ビルトイン、ユーザー定義、プラグイン）**をVMで統一的に扱えるようにする。
@@ -501,3 +588,34 @@ impl VM {
 ### 返り値（v2.2）
 - プラグインが `tag=8` を返した場合、Loaderは `type_id` からBox型名を逆引きし `PluginBoxV2` を構築
 - 同一ライブラリでなくてもOK（構成ファイル全体から探索）
+
+## Hako ABI Notes — StringBox（plugin‑on 経路）
+
+- 目的: plugin‑on 環境で、受けがホスト String の場合でも TypeBox v2 の StringBox へ正しく橋渡しする。
+- 受けが String のときの呼び出し順序（VM → プラグイン）
+  - size/length/indexOf/lastIndexOf/substring/charAt などの BoxCall に対して、VM は一時的にプラグイン側の StringBox を作成して呼び出す。
+  - 初期化は `birth(s: String)` を優先し、未実装の場合は `fromUtf8(s: String|Bytes)` を利用する。
+  - `size()` 呼び出しは内部で `length()` に正規化される（コレクション API を size 統一で見せつつ、ABI は length を保持）。
+
+### StringBox（TypeBox v2）最小 API
+
+- length(0) -> i64（size の別名）
+- isEmpty(0) -> bool
+- substring(2) -> String
+- indexOf(1..2) -> i64
+- lastIndexOf(1..2) -> i64
+- charAt(1) -> String
+- fromUtf8(1) -> Handle(StringBox)（新規作成）
+
+### 引数エンコード（TLV）と Plugin Handle
+
+- VM→プラグインの引数エンコードは以下の順序で行う。
+  1) PluginBoxV2 は `tag=8 (type_id:u32, instance_id:u32)` として渡す（ハンドル）。
+  2) 数値は i64、文字列は UTF‑8（tag=6）、バイト列は tag=7。
+  3) 上記に当てはまらない Box は `toString()` を UTF‑8 として渡す（暫定）。
+- これにより、`Map.set("k", array)` → `Map.get("k")` で、ArrayBox の「実体同一（identity）」が保持される。
+
+### 返り値の型復元
+
+- プラグインが `tag=8` を返した場合、Loader は `type_id` → `box_type` をメタデータから逆引きし、`PluginBoxV2 { box_type, instance_id }` を生成する。
+  - これにより `MapBox.get()` の戻りが ArrayBox であっても、後続の `a2.size()` は正しく ArrayBox へルーティングされる。

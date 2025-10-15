@@ -6,9 +6,43 @@ use super::*;
 use crate::runner::json_v0_bridge;
 use nyash_rust::parser::NyashParser;
 use std::{fs, process};
+#[cfg(feature = "parser-c-abi")]
+use std::ffi::CString;
+#[cfg(feature = "parser-c-abi")]
+use std::os::raw::c_char;
+
+#[cfg(feature = "parser-c-abi")]
+#[repr(C)]
+struct HakoParseResult {
+    abi_version: u32,
+    struct_size: u32,
+    success: u32,
+    stmt_count: u32,
+    kind: *const c_char,
+    error_msg: *const c_char,
+}
+#[cfg(feature = "parser-c-abi")]
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+enum HakoParseMode { RUST=0, HAKO=1, BOTH=2 }
+#[cfg(feature = "parser-c-abi")]
+extern "C" {
+    fn parse_source_dual(src: *const c_char, mode: HakoParseMode) -> *mut HakoParseResult;
+    fn free_parse_result(r: *mut HakoParseResult);
+}
+#[cfg(feature = "parser-c-abi")]
+fn cstr_to_string(ptr: *const c_char) -> String {
+    if ptr.is_null() { return String::new(); }
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
+}
 
 /// Thin file dispatcher: select backend and delegate to mode executors
 pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
+    crate::runner_plugin_init::init_bid_plugins();
+    // Deprecation: warn on legacy .nyash extension (prefer .hako)
+    if filename.ends_with(".nyash") {
+        eprintln!("[deprecate] The .nyash extension is deprecated; please use .hako (see docs/guides/naming-and-extensions.md).");
+    }
     // Selfhost pipeline (Ny -> JSON v0) behind env gate
     if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
         if runner.try_run_selfhost_pipeline(filename) {
@@ -18,7 +52,50 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
     }
 
-    // Direct v0 bridge when requested via CLI/env
+    // Optional: Stage-4 header parity check via C-ABI harness (no-op unless requested)
+    #[cfg(feature = "parser-c-abi")]
+    {
+        if let Some(mode_s) = std::env::var("SMOKES_PARSER_MODE").ok() {
+            let mode = match mode_s.as_str() { "both" => Some(HakoParseMode::BOTH), "hako" => Some(HakoParseMode::HAKO), _ => None };
+            if let Some(m) = mode {
+                if let Ok(code) = fs::read_to_string(filename) {
+                    if let Ok(ccode) = CString::new(code) {
+                        unsafe {
+                            let res = parse_source_dual(ccode.as_ptr(), m);
+                            if !res.is_null() {
+                                let r = &*res;
+                                if r.success == 0 {
+                                    eprintln!("[parser-header] parity check failed: {}", cstr_to_string(r.error_msg));
+                                }
+                                free_parse_result(res);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Direct v0 bridge (raw JSON) when requested via env (dev-only)
+    if std::env::var("NYASH_JSON_V0_DIRECT").ok().as_deref() == Some("1") {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        };
+        match json_v0_bridge::parse_json_v0_to_module(&code) {
+            Ok(module) => {
+                crate::cli_v!("🚀 Nyash MIR Interpreter - (json_v0 direct) Executing file: {} 🚀", filename);
+                runner.execute_mir_module(&module);
+                return;
+            }
+            Err(e) => {
+                eprintln!("❌ Direct JSON v0 parse error: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
+    // Direct v0 bridge when requested via CLI/env (source v0 mini-grammar)
     let groups = runner.config.as_groups();
     let use_ny_parser = groups.parser.parser_ny
         || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
@@ -71,6 +148,28 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         return;
     }
 
+    // Dump parsed AST as canonical JSON v0 and exit (pre-macro)
+    if groups.debug.dump_ast_json {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("❌ Error reading file {}: {}", filename, e);
+                process::exit(1);
+            }
+        };
+        let ast = match NyashParser::parse_from_string(&code) {
+            Ok(ast) => ast,
+            Err(e) => {
+                eprintln!("❌ Parse error: {}", e);
+                process::exit(1);
+            }
+        };
+        let j = crate::r#macro::ast_json::ast_to_json(&ast);
+        let s = crate::common::json_canonical::to_canonical_string(&j);
+        println!("{}", s);
+        return;
+    }
+
     // Dump expanded AST as JSON v0 and exit
     if runner.config.dump_expanded_ast_json {
         let code = match fs::read_to_string(filename) {
@@ -87,6 +186,25 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         } else { ast };
         let j = crate::r#macro::ast_json::ast_to_json(&expanded);
         println!("{}", j.to_string());
+        return;
+    }
+
+    // Emit parsed AST as canonical JSON v0 to file and exit (pre-macro)
+    if let Some(out_path) = &groups.emit.emit_ast_json {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        };
+        let ast = match NyashParser::parse_from_string(&code) {
+            Ok(ast) => ast,
+            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+        };
+        let j = crate::r#macro::ast_json::ast_to_json(&ast);
+        let s = crate::common::json_canonical::to_canonical_string(&j);
+        if let Err(e) = std::fs::write(out_path, s.as_bytes()) {
+            eprintln!("❌ Failed to write {}: {}", out_path, e);
+            process::exit(1);
+        }
         return;
     }
 
@@ -123,16 +241,27 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
     }
 
-    // Backend selection
-    match groups.backend.backend.as_str() {
+    // Backend selection (normalize; fallback unknown/empty to "vm")
+    let mut backend_norm = groups.backend.backend.trim().to_string();
+    if backend_norm.is_empty() || backend_norm == "." { backend_norm = "vm".to_string(); }
+    match backend_norm.as_str() {
         "mir" => {
-            crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
-            runner.execute_mir_mode(filename);
-        }
+            let eng = std::env::var("HAKO_NYVM_ENGINE").ok().unwrap_or_else(|| "hakorune".to_string());
+            if eng.eq_ignore_ascii_case("mini") {
+                crate::cli_v!("🚀 Nyash Mini‑VM (MIR Interpreter) - Executing file: {} 🚀", filename);
+                runner.execute_mir_mode(filename);
+            } else {
+                crate::cli_v!("🚀 Hakorune VM (Ny) bridge - Executing file: {} 🚀", filename);
+                if let Err(e) = runner.execute_hakorune_vm_bridge(filename) {
+                    eprintln!("❌ nyvm(hakorune) bridge error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        },
         "vm" => {
             crate::cli_v!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-            // Prefer lightweight in-crate MIR interpreter as VM fallback
-            runner.execute_vm_fallback_interpreter(filename);
+            // Unified VM engine (Phase‑A): default=fallback
+            runner.execute_vm_engine(filename);
         }
         #[cfg(feature = "cranelift-jit")]
         "jit-direct" => {
@@ -153,13 +282,75 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             runner.execute_llvm_mode(filename);
         }
         other => {
-            eprintln!("❌ Unknown backend: {}. Use 'vm' or 'llvm'.", other);
-            std::process::exit(2);
+            eprintln!("[warn] Unknown backend: {} → falling back to 'vm'", other);
+            runner.execute_vm_engine(filename);
         }
     }
 }
 
 impl NyashRunner {
+    /// Execute VM engine from in-memory source (no wrapper temp files)
+    pub(crate) fn execute_vm_engine_from_source(&self, source_inline: &str, pseudo_filename: &str) {
+        use crate::runner::vm_pipeline;
+        use std::process;
+
+        let result = (|| {
+            // Stage 1: (skipped) load from file → we already have inline source
+            let source = source_inline.to_string();
+
+            // Stage 2: Resolve `using` and preludes based on pseudo filename context
+            let (source, preludes, aliases) =
+                vm_pipeline::resolve_preludes_and_aliases(self, &source, pseudo_filename)?;
+
+            // Stage 3: Parse main source and merge with preludes
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+
+            // Stage 4: Apply macros and desugar aliases
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
+
+            // Stage 5: Register user-defined boxes from the AST
+            vm_pipeline::register_user_boxes_from_ast(&ast);
+
+            // Stage 6: Compile to MIR and execute
+            vm_pipeline::compile_and_execute_mir(ast, self.config.no_optimize)
+        })();
+
+        if let Err(e) = result {
+            eprintln!("❌ Pipeline error: {}", e);
+            process::exit(1);
+        }
+    }
+    /// Compile Nyash file to MIR and execute via selected VM engine (unified entry)
+    pub(crate) fn execute_vm_engine(&self, filename: &str) {
+        use crate::runner::vm_pipeline;
+        use std::process;
+
+        let result = (|| {
+            // Stage 1: Load and preprocess source
+            let source = vm_pipeline::load_and_preprocess_source(filename)?;
+
+            // Stage 2: Resolve `using` and preludes
+            let (source, preludes, aliases) =
+                vm_pipeline::resolve_preludes_and_aliases(self, &source, filename)?;
+
+            // Stage 3: Parse main source and merge with preludes
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+
+            // Stage 4: Apply macros and desugar aliases
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
+
+            // Stage 5: Register user-defined boxes from the AST
+            vm_pipeline::register_user_boxes_from_ast(&ast);
+
+            // Stage 6: Compile to MIR and execute
+            vm_pipeline::compile_and_execute_mir(ast, self.config.no_optimize)
+        })();
+
+        if let Err(e) = result {
+            eprintln!("❌ Pipeline error: {}", e);
+            process::exit(1);
+        }
+    }
     pub(crate) fn execute_mir_module(&self, module: &crate::mir::MirModule) {
         // If CLI requested MIR JSON emit, write to file and exit immediately.
         let groups = self.config.as_groups();
@@ -188,22 +379,44 @@ impl NyashRunner {
         }
         use crate::backend::MirInterpreter;
         use crate::box_trait::{BoolBox, IntegerBox, StringBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::FloatBox;
         use crate::mir::MirType;
 
         let mut interp = MirInterpreter::new();
         match interp.execute_module(module) {
             Ok(result) => {
+                // Gate C: when requested, print bare numeric and return (quiet mode)
+                if std::env::var("NYASH_GATE_C_OUTPUT_NUMERIC").ok().as_deref() == Some("1") {
+                    if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                        println!("{}", ib.value);
+                    } else {
+                        let s = result.to_string_box().value;
+                        if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                    }
+                    return;
+                }
                 println!("✅ MIR interpreter execution completed!");
                 if let Some(func) = module.functions.get("main") {
                     let (ety, sval) = match &func.signature.return_type {
                         MirType::Float => {
-                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                                ("Float", format!("{}", fb.value))
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Float", format!("{}", ib.value as f64))
-                            } else {
-                                ("Float", result.to_string_box().value)
+                            #[cfg(feature = "legacy-boxes")]
+                            {
+                                if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                                    ("Float", format!("{}", fb.value))
+                                } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                    ("Float", format!("{}", ib.value as f64))
+                                } else {
+                                    ("Float", result.to_string_box().value)
+                                }
+                            }
+                            #[cfg(not(feature = "legacy-boxes"))]
+                            {
+                                if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                    ("Float", format!("{}", ib.value as f64))
+                                } else {
+                                    ("Float", result.to_string_box().value)
+                                }
                             }
                         }
                         MirType::Integer => {
@@ -242,5 +455,52 @@ impl NyashRunner {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+
+impl NyashRunner {
+    pub(crate) fn execute_hakorune_vm_bridge(&self, filename: &str) -> Result<(), String> {
+        use crate::runner::vm_pipeline;
+        let (module_json, _ret_ty) = {
+            let source = vm_pipeline::load_and_preprocess_source(filename).map_err(|e| e.to_string())?;
+            let (source, preludes, aliases) = vm_pipeline::resolve_preludes_and_aliases(self, &source, filename).map_err(|e| e.to_string())?;
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes).map_err(|e| e.to_string())?;
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases).map_err(|e| e.to_string())?;
+            let mut mirc = crate::mir::MirCompiler::with_options(!self.config.no_optimize);
+            let cr = mirc.compile(ast).map_err(|e| format!("MIR compile error: {}", e))?;
+            let tf = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+            let p = tf.path().to_path_buf();
+            crate::runner::mir_json_emit::emit_mir_json_for_harness(&cr.module, &p).map_err(|e| e.to_string())?;
+            let json = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+            let json_for_bridge = match serde_json::from_str::<serde_json::Value>(&json) {
+                Ok(root) => {
+                    if let Some(funcs) = root.get("functions").and_then(|v| v.as_array()) {
+                        if let Some(first) = funcs.get(0) {
+                            serde_json::to_string(first).unwrap_or(json.clone())
+                        } else { json.clone() }
+                    } else { json.clone() }
+                }
+                Err(_) => json.clone(),
+            };
+            (json_for_bridge, cr.module.functions.get("main").map(|f| f.signature.return_type.clone()))
+        };
+        
+        // Escape JSON via serde_json to embed safely in Ny source
+        let esc = serde_json::to_string(&module_json).map_err(|e| e.to_string())?;
+        let wrapper = format!(
+            "using \"selfhost/hakorune-vm/hakorune_vm_core.hako\" as HakoruneVmCore
+static box Main {{
+  main() {{
+    local j = {}
+    return HakoruneVmCore.run(j)
+  }}
+}}
+",
+            esc
+        );
+
+        self.execute_vm_engine_from_source(&wrapper, "<nyvm-bridge>");
+        Ok(())
     }
 }

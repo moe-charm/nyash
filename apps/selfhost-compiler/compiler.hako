@@ -1,0 +1,3 @@
+// Selfhost compiler MVP (M1): emit minimal Program JSON v0
+// Bridge expects: { version: 0, kind: "Program", body: [...] }
+print("{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":7}}]}")

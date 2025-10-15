@@ -252,4 +252,18 @@ box Person {}
 
 ---
 
+## 🔗 **関連Phase**
+
+**⚠️ Phase 16実装完了後の状況（2025-10-06）**:
+- ✅ Rust実装完了（2025-09-19）
+- ❌ **バグ発見**: フル機能にバグあり
+- ✅ **暫定対応**: `.hako`で単純置き換えマクロ実装中（`apps/macros/`）
+- 🔜 **Phase 20**: セルフホスティング後にフル機能を.hakoで再実装
+
+**Next Steps**:
+- 現在: Phase 15.7完了待ち（セルフホスティング実現）
+- その後: [Phase 20: マクロフル機能Hakorune実装](../phase-20-macro-full-features/README.md)
+
+---
+
 **Next**: [実装詳細](./IMPLEMENTATION.md) | [技術仕様](./TECHNICAL_SPEC.md)

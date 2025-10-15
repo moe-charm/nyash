@@ -25,11 +25,17 @@ def lower_unop(
     Lower MIR unary op:
       - kind: 'neg' | 'not' | 'bitnot'
     """
+    # Fail-Fast: src must be present
+    if src is None:
+        fn_name = getattr(getattr(builder, 'function', None), 'name', 'unknown')
+        bb_name = getattr(current_block, 'name', 'bb?')
+        raise TypeError(f"lower_unop: src=None (kind={kind}, fn={fn_name}, bb={bb_name}). Upstream MIR JSON missing operand.")
+
     # Try to use local SSA first
     val = vmap.get(src)
     # If unknown, resolve as i64 (resolver may localize through PHI)
     if val is None:
-        val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map)
+        val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
     # Logical NOT: prefer i1 when available; otherwise compare == 0
     if kind in ('not', 'logical_not', '!'):
         # If already i1, xor with 1
@@ -75,4 +81,3 @@ def lower_unop(
         return
     # Fallback: store 0
     vmap[dst] = ir.Constant(ir.IntType(64), 0)
-

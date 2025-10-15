@@ -72,28 +72,28 @@ run() {
 }
 
 # Core minimal (existing harness sample)
-run "$ROOT_DIR/examples/llvm11_core_smoke.nyash"
+run "$ROOT_DIR/examples/llvm11_core_smoke.hako"
 
 # Async/await (LLVM only)
-run "$ROOT_DIR/apps/tests/async-await-min/main.nyash"
-run "$ROOT_DIR/apps/tests/async-spawn-instance/main.nyash"
-NYASH_AWAIT_MAX_MS=100 run "$ROOT_DIR/apps/tests/async-await-timeout-fixed/main.nyash"
+run "$ROOT_DIR/apps/tests/async-await-min/main.hako"
+run "$ROOT_DIR/apps/tests/async-spawn-instance/main.hako"
+NYASH_AWAIT_MAX_MS=100 run "$ROOT_DIR/apps/tests/async-await-timeout-fixed/main.hako"
 
 # Control-flow: nested loop break/continue and loop+if phi pattern
-run "$ROOT_DIR/apps/tests/nested_loop_inner_break_isolated.nyash"
-run "$ROOT_DIR/apps/tests/nested_loop_inner_continue_isolated.nyash"
-run "$ROOT_DIR/apps/tests/loop_if_phi.nyash"
+run "$ROOT_DIR/apps/tests/nested_loop_inner_break_isolated.hako"
+run "$ROOT_DIR/apps/tests/nested_loop_inner_continue_isolated.hako"
+run "$ROOT_DIR/apps/tests/loop_if_phi.hako"
 
 # Peek expression
-run "$ROOT_DIR/apps/tests/peek_expr_block.nyash"
+run "$ROOT_DIR/apps/tests/peek_expr_block.hako"
 
 # Try/cleanup control-flow without actual throw
-run "$ROOT_DIR/apps/tests/try_finally_break_inner_loop.nyash"
+run "$ROOT_DIR/apps/tests/try_finally_break_inner_loop.hako"
 
 # Optional: if-merge (ret-merge) tests
 if [[ "$WITH_IFMERGE" == "1" ]]; then
-  run "$ROOT_DIR/apps/tests/ternary_basic.nyash"
-  run "$ROOT_DIR/apps/tests/ternary_nested.nyash"
+  run "$ROOT_DIR/apps/tests/ternary_basic.hako"
+  run "$ROOT_DIR/apps/tests/ternary_nested.hako"
 fi
 
 echo "[curated-llvm] OK"

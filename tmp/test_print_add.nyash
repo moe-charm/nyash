@@ -1,1 +1,0 @@
-static box Main { main(args) { print(12+34) return 0 } }

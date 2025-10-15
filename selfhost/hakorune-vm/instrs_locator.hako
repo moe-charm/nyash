@@ -1,0 +1,97 @@
+// instrs_locator.hako — InstrsLocatorBox
+// Responsibility: locate instructions[] in block JSON (empty allowed)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+using "selfhost/hakorune-vm/json_normalize_box.hako" as JsonNormalizeBox
+
+static box InstrsLocatorBox {
+  locate(block_json) {
+    local key = r#""instructions""#
+    local k = JsonCursorBox.index_of_from(block_json, key, 0)
+    if k < 0 {
+      local meta0 = new MapBox()
+      meta0.set("found", 0)
+      meta0.set("single", 0)
+      meta0.set("content", "")
+      return Result.Ok(meta0)
+    }
+    local i = k + key.size()
+    // find ':' then '['
+    loop(i < block_json.size()) {
+      local ch = block_json.substring(i,i+1)
+      if ch == ":" { i = i + 1  break }
+      if ch == " " || ch == "
+" || ch == "
+" || ch == "	" { i = i + 1  continue }
+      return Result.Err("instructions key format invalid")
+    }
+    loop(i < block_json.size()) {
+      local ch = block_json.substring(i,i+1)
+      if ch == " " || ch == "
+" || ch == "
+" || ch == "	" { i = i + 1  continue }
+      if ch == "[" { break }
+      return Result.Err("instructions array not found")
+    }
+    local arr_end = JsonScanGuardBox.seek_array_end(block_json, i, 200000)
+    if arr_end < 0 { return Result.Err("instructions array end not found") }
+    // pointers inside block_json
+    local start = i + 1
+    local endi = arr_end
+    // empty fast path
+    local j = start
+    loop(j < endi) {
+      local ch = block_json.substring(j, j+1)
+      if ch == " " || ch == "
+" || ch == "
+" || ch == "	" { j = j + 1  continue }
+      break
+    }
+    if j >= endi {
+      local meta1 = new MapBox()
+      meta1.set("found", 1)
+      meta1.set("single", 0)
+      meta1.set("content", "")
+      return Result.Ok(meta1)
+    }
+    // slice content
+    local content = block_json.substring(start, endi)
+    // normalize if large
+    if content.size() > 8192 { content = JsonNormalizeBox.normalize(content, 500000) }
+    // detect single-object fast path
+    local single_flag = 0
+    {
+      local cs = 0
+      local ce = content.size() - 1
+      loop(cs <= ce) {
+        local ch2 = content.substring(cs, cs+1)
+        if ch2 == " " || ch2 == "
+" || ch2 == "
+" || ch2 == "	" { cs = cs + 1  continue }
+        break
+      }
+      loop(ce >= cs) {
+        local ch3 = content.substring(ce, ce+1)
+        if ch3 == " " || ch3 == "
+" || ch3 == "
+" || ch3 == "	" { ce = ce - 1  continue }
+        break
+      }
+      if cs <= ce {
+        local first = content.substring(cs, cs+1)
+        local last = content.substring(ce, ce+1)
+        if first == "{" && last == "}" {
+          local sep = JsonCursorBox.index_of_from(content, "},", cs)
+          if sep < 0 { single_flag = 1 }
+        }
+      }
+    }
+    local meta = new MapBox()
+    meta.set("found", 1)
+    meta.set("single", single_flag)
+    meta.set("content", content)
+    return Result.Ok(meta)
+  }
+}

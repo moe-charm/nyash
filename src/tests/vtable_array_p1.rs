@@ -1,10 +1,12 @@
 #[test]
 fn vtable_array_contains_indexof_join() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
     };
+    use crate::mir::definitions::Callee;
+
     std::env::set_var("NYASH_ABI_VTABLE", "1");
 
     // contains: ["a","b"].contains("b") == true; contains("c") == false
@@ -19,11 +21,8 @@ fn vtable_array_contains_indexof_join() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let sa = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -40,24 +39,10 @@ fn vtable_array_contains_indexof_join() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![sa],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, sa], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![sb],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, sb], effects: EffectMask::PURE });
     let sc = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -68,25 +53,11 @@ fn vtable_array_contains_indexof_join() {
     let got1 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(got1),
-            box_val: arr,
-            method: "contains".into(),
-            args: vec![sb],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(got1), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.contains/1".into())), args: vec![arr, sb], effects: EffectMask::PURE });
     let got2 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(got2),
-            box_val: arr,
-            method: "contains".into(),
-            args: vec![sc],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(got2), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.contains/1".into())), args: vec![arr, sc], effects: EffectMask::PURE });
     // return got1.equals(true) && got2.equals(false) as 1 for pass
     // Instead, just return 0 or 1 using simple branch-like comparison via toString
     // We check: got1==true -> "true", got2==false -> "false" and return 1 if both match else 0
@@ -116,25 +87,11 @@ fn vtable_array_contains_indexof_join() {
     let len1 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(len1),
-            box_val: s1,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(len1), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![s1], effects: EffectMask::PURE });
     let len2 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(len2),
-            box_val: s2,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(len2), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![s2], effects: EffectMask::PURE });
     // len1 + len2
     let sum = f.next_value_id();
     f.get_block_mut(bb)
@@ -166,11 +123,8 @@ fn vtable_array_contains_indexof_join() {
     let a2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a2,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a2, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let sx = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -194,46 +148,18 @@ fn vtable_array_contains_indexof_join() {
         });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "push".into(),
-            args: vec![sx],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a2, sx], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "push".into(),
-            args: vec![sy],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a2, sy], effects: EffectMask::PURE });
     let i1 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(i1),
-            box_val: a2,
-            method: "indexOf".into(),
-            args: vec![sy],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(i1), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.indexOf/1".into())), args: vec![a2, sy], effects: EffectMask::PURE });
     let i2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(i2),
-            box_val: a2,
-            method: "indexOf".into(),
-            args: vec![sz],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(i2), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.indexOf/1".into())), args: vec![a2, sz], effects: EffectMask::PURE });
     let sum2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -264,11 +190,8 @@ fn vtable_array_contains_indexof_join() {
     let a3 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a3,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a3, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let a = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
@@ -292,34 +215,13 @@ fn vtable_array_contains_indexof_join() {
         });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![a],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, a], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![b],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, b], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![c],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, c], effects: EffectMask::PURE });
     let sep = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
@@ -330,14 +232,7 @@ fn vtable_array_contains_indexof_join() {
     let joined = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(joined),
-            box_val: a3,
-            method: "join".into(),
-            args: vec![sep],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(joined), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.join/1".into())), args: vec![a3, sep], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::Return {

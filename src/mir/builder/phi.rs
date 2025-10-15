@@ -9,11 +9,12 @@ impl MirBuilder {
     /// Merge all variables modified in then/else relative to pre_if_snapshot.
     /// In PHI-off mode inserts edge copies from branch exits to merge. In PHI-on mode emits Phi.
     /// `skip_var` allows skipping a variable already merged elsewhere (e.g., bound to an expression result).
+    /// `then_exit_block_opt` and `else_exit_block_opt` are None if the branch terminates (return/throw).
     pub(super) fn merge_modified_vars(
         &mut self,
-        _then_block: super::BasicBlockId,
+        _then_block: super::BasicBlockId,  // Kept for backward compatibility
         else_block: super::BasicBlockId,
-        then_exit_block: super::BasicBlockId,
+        then_exit_block_opt: Option<super::BasicBlockId>,
         else_exit_block_opt: Option<super::BasicBlockId>,
         pre_if_snapshot: &std::collections::HashMap<String, super::ValueId>,
         then_map_end: &std::collections::HashMap<String, super::ValueId>,
@@ -40,32 +41,28 @@ impl MirBuilder {
                 .as_ref()
                 .and_then(|m| m.get(name.as_str()).copied())
                 .unwrap_or(pre);
-            // フェーズM: 常にPHI命令を使用（no_phi_mode撤廃）
-            // incoming の predecessor は "実際に merge に遷移してくる出口ブロック" を使用する
-            let then_pred = then_exit_block;
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            let merged = self.value_gen.next();
-            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-            }
-            self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
-            // VarMapGuard (dev-only concept; 挙動不変): ParserBox.* 内では `me` の ValueId を
-            // 他名へそのまま束縛しない。Copy を一枚噛ませた別IDに束縛して識別性を保つ。
-            let bind_val = if let Some(fun) = self.current_function.as_ref() {
-                if fun.signature.name.starts_with("ParserBox.") && name != "me" {
-                    if let Some(&me_vid) = self.variable_map.get("me") {
-                        // if either incoming was `me`,または merged==me と見做せる状況は Copy を噛ませる
-                        if then_v == me_vid || else_v == me_vid {
-                            let loc = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
-                            crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
-                            loc
+
+            // Use PhiMergeHelper to merge values from reachable predecessors
+            if let Some(merged) = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self, then_exit_block_opt, then_v, else_exit_block_opt, else_v, else_block, Some(&name), None
+            )? {
+                // VarMapGuard (dev-only concept; 挙動不変): ParserBox.* 内では `me` の ValueId を
+                // 他名へそのまま束縛しない。Copy を一枚噛ませた別IDに束縛して識別性を保つ。
+                let bind_val = if let Some(fun) = self.current_function.as_ref() {
+                    if fun.signature.name.starts_with("ParserBox.") && name != "me" {
+                        if let Some(&me_vid) = self.variable_map.get("me") {
+                            // if either incoming was `me`,または merged==me と見做せる状況は Copy を噛ませる
+                            if then_v == me_vid || else_v == me_vid {
+                                let loc = self.value_gen.next();
+                                self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
+                                crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
+                                loc
+                            } else { merged }
                         } else { merged }
                     } else { merged }
-                } else { merged }
-            } else { merged };
-            self.variable_map.insert(name, bind_val);
+                } else { merged };
+                self.variable_map.insert(name, bind_val);
+            }
         }
 
         // Ensure pinned synthetic slots ("__pin$...") have a block-local definition at the merge,
@@ -80,15 +77,13 @@ impl MirBuilder {
                 .as_ref()
                 .and_then(|m| m.get(pin_name.as_str()).copied())
                 .unwrap_or(*pre_val);
-            let then_pred = then_exit_block;
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            let merged = self.value_gen.next();
-            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+
+            // Use PhiMergeHelper to merge pinned values from reachable predecessors
+            if let Some(merged) = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self, then_exit_block_opt, then_v, else_exit_block_opt, else_v, else_block, Some(pin_name), None
+            )? {
+                self.variable_map.insert(pin_name.clone(), merged);
             }
-            self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
-            self.variable_map.insert(pin_name.clone(), merged);
         }
         Ok(())
     }
@@ -96,7 +91,7 @@ impl MirBuilder {
     /// This handles variable reassignment patterns and ensures a single exit value.
     pub(super) fn normalize_if_else_phi(
         &mut self,
-        then_block: BasicBlockId,
+        _then_block: BasicBlockId,  // Kept for backward compatibility
         else_block: BasicBlockId,
         then_exit_block_opt: Option<BasicBlockId>,
         else_exit_block_opt: Option<BasicBlockId>,
@@ -138,38 +133,34 @@ impl MirBuilder {
                 // Else doesn't assign: use pre-if value if available
                 pre_then_var_value.unwrap_or(else_value_raw)
             };
-            // predecessor を then/else の exit ブロックに揃える
-            let then_pred = then_exit_block_opt.unwrap_or(then_block);
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            // Emit Phi for the assigned variable and bind it
-            let inputs = vec![(then_pred, then_value_for_var), (else_pred, else_value_for_var)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+
+            // Use PhiMergeHelper to merge values from reachable predecessors
+            if let Some(merged) = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self, then_exit_block_opt, then_value_for_var, else_exit_block_opt, else_value_for_var, else_block, Some(&var_name), Some(result_val)
+            )? {
+                self.variable_map = pre_if_var_map.clone();
+                let bind_val = if let Some(fun) = self.current_function.as_ref() {
+                    if fun.signature.name.starts_with("ParserBox.") && var_name != "me" {
+                        if let Some(&me_vid) = self.variable_map.get("me") {
+                            if then_value_for_var == me_vid || else_value_for_var == me_vid {
+                                let loc = self.value_gen.next();
+                                self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
+                                crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
+                                loc
+                            } else { merged }
+                        } else { merged }
+                    } else { merged }
+                } else { merged };
+                self.variable_map.insert(var_name, bind_val);
+            } else {
+                // No reachable predecessors: reset to pre-if state
+                self.variable_map = pre_if_var_map.clone();
             }
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
-            self.variable_map = pre_if_var_map.clone();
-            let bind_val = if let Some(fun) = self.current_function.as_ref() {
-                if fun.signature.name.starts_with("ParserBox.") && var_name != "me" {
-                    if let Some(&me_vid) = self.variable_map.get("me") {
-                        if then_value_for_var == me_vid || else_value_for_var == me_vid {
-                            let loc = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Copy { dst: loc, src: result_val })?;
-                            crate::mir::builder::metadata::propagate::propagate(self, result_val, loc);
-                            loc
-                        } else { result_val }
-                    } else { result_val }
-                } else { result_val }
-            } else { result_val };
-            self.variable_map.insert(var_name, bind_val);
         } else {
             // No variable assignment pattern detected – just emit Phi for expression result
-            let then_pred = then_exit_block_opt.unwrap_or(then_block);
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            let inputs = vec![(then_pred, then_value_raw), (else_pred, else_value_raw)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-            }
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+            let _ = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self, then_exit_block_opt, then_value_raw, else_exit_block_opt, else_value_raw, else_block, None, Some(result_val)
+            )?;
             // Merge variable map conservatively to pre-if snapshot (no new bindings)
             self.variable_map = pre_if_var_map.clone();
         }

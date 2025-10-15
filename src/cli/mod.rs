@@ -13,6 +13,7 @@ pub struct CliConfig {
     pub file: Option<String>,
     pub debug_fuel: Option<usize>,
     pub dump_ast: bool,
+    pub dump_ast_json: bool,
     pub dump_mir: bool,
     pub verify_mir: bool,
     pub mir_verbose: bool,
@@ -50,6 +51,9 @@ pub struct CliConfig {
     pub parser_ny: bool,
     pub ny_parser_pipe: bool,
     pub json_file: Option<String>,
+    // Gate C (NyVM direct)
+    pub nyvm_pipe: bool,
+    pub nyvm_json_file: Option<String>,
     pub gc_mode: Option<String>,
     pub build_path: Option<String>,
     pub build_app: Option<String>,
@@ -58,14 +62,20 @@ pub struct CliConfig {
     pub build_profile: Option<String>,
     pub build_target: Option<String>,
     pub cli_usings: Vec<String>,
+    pub entry: Option<String>,
     pub emit_mir_json: Option<String>,
+    pub emit_ast_json: Option<String>,
     pub emit_exe: Option<String>,
     pub emit_exe_nyrt: Option<String>,
     pub emit_exe_libs: Option<String>,
     pub macro_expand_child: Option<String>,
     pub dump_expanded_ast_json: bool,
     pub macro_ctx_json: Option<String>,
+    // Tools/doctor helpers
+    pub which_tool: Option<String>,
+    pub doctor_tools: bool,
 }
+
 
 pub use groups::{BackendConfig, BuildConfig, CliGroups, DebugConfig, EmitConfig, InputConfig, JitConfig, ParserPipeConfig};
 
@@ -74,10 +84,11 @@ impl CliConfig {
 
     pub fn as_groups(&self) -> CliGroups {
         CliGroups {
-            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone() },
+            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone(), entry: self.entry.clone() },
             debug: DebugConfig {
                 debug_fuel: self.debug_fuel,
                 dump_ast: self.dump_ast,
+                dump_ast_json: self.dump_ast_json,
                 dump_mir: self.dump_mir,
                 verify_mir: self.verify_mir,
                 mir_verbose: self.mir_verbose,
@@ -118,6 +129,7 @@ impl CliConfig {
             emit: EmitConfig {
                 emit_cfg: self.emit_cfg.clone(),
                 emit_mir_json: self.emit_mir_json.clone(),
+                emit_ast_json: self.emit_ast_json.clone(),
                 emit_exe: self.emit_exe.clone(),
                 emit_exe_nyrt: self.emit_exe_nyrt.clone(),
                 emit_exe_libs: self.emit_exe_libs.clone(),
@@ -126,6 +138,8 @@ impl CliConfig {
                 parser_ny: self.parser_ny,
                 ny_parser_pipe: self.ny_parser_pipe,
                 json_file: self.json_file.clone(),
+                nyvm_pipe: self.nyvm_pipe,
+                nyvm_json_file: self.nyvm_json_file.clone(),
             },
             gc_mode: self.gc_mode.clone(),
             compile_wasm: self.compile_wasm,
@@ -145,6 +159,7 @@ impl Default for CliConfig {
             file: None,
             debug_fuel: Some(100000),
             dump_ast: false,
+            dump_ast_json: false,
             dump_mir: false,
             verify_mir: false,
             mir_verbose: false,
@@ -182,6 +197,8 @@ impl Default for CliConfig {
             parser_ny: false,
             ny_parser_pipe: false,
             json_file: None,
+            nyvm_pipe: false,
+            nyvm_json_file: None,
             build_path: None,
             build_app: None,
             build_out: None,
@@ -190,12 +207,16 @@ impl Default for CliConfig {
             build_target: None,
             cli_usings: Vec::new(),
             emit_mir_json: None,
+            emit_ast_json: None,
             emit_exe: None,
             emit_exe_nyrt: None,
             emit_exe_libs: None,
             macro_expand_child: None,
             dump_expanded_ast_json: false,
             macro_ctx_json: None,
+            entry: None,
+            which_tool: None,
+            doctor_tools: false,
         }
     }
 }

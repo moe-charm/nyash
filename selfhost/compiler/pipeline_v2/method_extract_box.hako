@@ -1,0 +1,13 @@
+// MethodExtractBox — Stage‑1 JSON から Return(Method recv, method, args) を抽出（整数引数のみ; recvは無視）
+// Delegation to Stage1IntArgsExtractBox (unified implementation)
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as Unified
+
+static box MethodExtractBox {
+  // Returns { method: String, args: [Int,...] } or null
+  extract_return_method_ints(ast_json) {
+    return Unified.extract_return_method_ints(ast_json)
+  }
+}
+
+static box MethodExtractStub { main(args) { return 0 } }
+

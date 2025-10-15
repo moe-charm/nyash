@@ -1,0 +1,6 @@
+function main() {
+    print("UPPER:hello world")
+    print("lower stays lower")
+    return 0
+}
+

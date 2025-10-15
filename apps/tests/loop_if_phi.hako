@@ -1,0 +1,14 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local i = 1
+    local sum = 0
+    loop(i <= 5) {
+      if (i % 2 == 1) { sum = sum + i } else { sum = sum + 0 }
+      i = i + 1
+    }
+    console.println("sum=" + sum)
+    return 0
+  }
+}
+

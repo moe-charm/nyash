@@ -1,0 +1,137 @@
+// 🔧 LISP基本操作関数実装
+// atom?, equal?, null? など
+
+NIL = 0
+
+// atom? - アトム（非リスト）かどうかをチェック
+function atomP(obj) {
+    if obj == NIL { return true }  // nilはアトム
+    
+    // 数値はアトム
+    if obj == 0 { return true }
+    if obj == 1 { return true }
+    if obj == 2 { return true }
+    if obj == 3 { return true }
+    if obj == 4 { return true }
+    if obj == 5 { return true }
+    if obj == 6 { return true }
+    if obj == 7 { return true }
+    if obj == 8 { return true }
+    if obj == 9 { return true }
+    
+    // 文字列はアトム
+    if obj == "a" { return true }
+    if obj == "b" { return true }
+    if obj == "c" { return true }
+    if obj == "" { return true }
+    if obj == "nil" { return true }
+    if obj == "foo" { return true }
+    if obj == "bar" { return true }
+    
+    // SymbolBoxはアトム（簡易実装）
+    // 実際には型チェックが必要だが、Nyashでは限定的
+    // ConsBoxでなければアトムと仮定
+    return false  // ConsBox以外は全てアトム扱い
+}
+
+// equal? - 深い等価性チェック
+function equalP(a, b) {
+    // 同じオブジェクトなら等価
+    if a == b { return true }
+    
+    // nilのチェック
+    if a == NIL and b == NIL { return true }
+    if a == NIL or b == NIL { return false }
+    
+    // アトム同士の比較
+    if atomP(a) and atomP(b) {
+        return a == b
+    }
+    
+    // 両方がリストの場合（再帰的に比較）
+    if not atomP(a) and not atomP(b) {
+        // car部分を比較
+        if not equalP(car(a), car(b)) {
+            return false
+        }
+        // cdr部分を比較
+        return equalP(cdr(a), cdr(b))
+    }
+    
+    // 片方がアトム、片方がリストなら等価でない
+    return false
+}
+
+// null? - nilかどうかをチェック
+function nullP(obj) {
+    return obj == NIL
+}
+
+// length - リストの長さを計算
+function lengthList(lst) {
+    if lst == NIL { return 0 }
+    if atomP(lst) { return 0 }  // アトムは長さ0
+    return 1 + lengthList(cdr(lst))
+}
+
+// append - 2つのリストを連結
+function append(lst1, lst2) {
+    if lst1 == NIL { return lst2 }
+    return cons(car(lst1), append(cdr(lst1), lst2))
+}
+
+// reverse - リストを逆順にする
+function reverse(lst) {
+    return reverseHelper(lst, NIL)
+}
+
+function reverseHelper(lst, acc) {
+    if lst == NIL { return acc }
+    return reverseHelper(cdr(lst), cons(car(lst), acc))
+}
+
+// ConsBoxとSymbolBoxのインポート（概念的）
+// 実際のファイルでは include を使用する想定
+
+// テスト用の簡易cons/car/cdr（仮実装）
+function cons(a, d) {
+    // ConsBoxが利用可能な場合
+    result = "ConsBox実装が必要"
+    return result
+}
+
+function car(pair) {
+    if pair == NIL { return NIL }
+    return "car実装が必要"
+}
+
+function cdr(pair) {
+    if pair == NIL { return NIL }
+    return "cdr実装が必要"
+}
+
+// テスト
+print("=== LISP Basic Operations Test ===")
+print("")
+
+// atomP テスト
+print("1. atomP tests:")
+print("   atomP(42): " + atomP(42))
+print("   atomP(NIL): " + atomP(NIL))
+print("   atomP('hello'): " + atomP("hello"))
+
+print("")
+print("2. equalP tests:")
+print("   equalP(42, 42): " + equalP(42, 42))
+print("   equalP(42, 43): " + equalP(42, 43))
+print("   equalP(NIL, NIL): " + equalP(NIL, NIL))
+print("   equalP('a', 'a'): " + equalP("a", "a"))
+
+print("")
+print("3. nullP tests:")
+print("   nullP(NIL): " + nullP(NIL))
+print("   nullP(42): " + nullP(42))
+
+print("")
+print("✅ Basic operations test done!")
+print("💡 Next: Implement with real ConsBox integration")

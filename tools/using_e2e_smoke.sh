@@ -21,7 +21,7 @@ using acme.util
 static box Main {
   init { }
   main(args) {
-    // using line should be accepted when NYASH_ENABLE_USING=1
+    // using line should be accepted when NYASH_USING=1
     return 0
   }
 }
@@ -29,7 +29,7 @@ NYCODE
 fi
 
 set +e
-NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_CLI_VERBOSE=1 "$BIN" --backend vm "$APP" > /tmp/nyash-using-e2e.out
+NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_CLI_VERBOSE=1 "$BIN" --backend vm "$APP" > /tmp/nyash-using-e2e.out
 CODE=$?
 set -e
 # Accept either explicit "Result: 0" line (VM path) or zero exit (PyVM-only path)

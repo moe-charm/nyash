@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 /*! 🚌 MessageBus - Process-wide Message Routing Singleton
  *
  * ## 📝 概要

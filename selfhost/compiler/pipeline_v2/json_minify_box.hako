@@ -1,0 +1,37 @@
+// json_minify_box.hako — strip insignificant whitespace from JSON text
+// Note: preserves characters inside string literals, including escaped quotes
+
+static box JsonMinifyBox {
+  minify(text) {
+    if text == null { return null }
+    local s = "" + text
+    local out = ""
+    local i = 0
+    local n = s.size()
+    local in_str = 0
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" {
+          out = out + ch
+          i = i + 1
+          if i < n { out = out + s.substring(i, i+1) }
+        } else {
+          out = out + ch
+          if ch == "\"" { in_str = 0 }
+        }
+      } else {
+        if ch == "\"" { in_str = 1  out = out + ch }
+        else {
+          // skip whitespace outside strings
+          if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { }
+          else { out = out + ch }
+        }
+      }
+      i = i + 1
+    }
+    return out
+  }
+}
+
+static box JsonMinifyStub { main(args) { return 0 } }

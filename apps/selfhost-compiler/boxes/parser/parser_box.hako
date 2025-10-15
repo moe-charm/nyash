@@ -1,0 +1,237 @@
+// ParserBox — Stage‑1 JSON v0 generator (coordinator, delegates to specialized boxes)
+// Responsibility: Coordinate parsing, manage state, delegate to specialized boxes
+// API: parse_program2(src) -> JSON
+
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_utils_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_ident_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/using/using_collector_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_expr_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_stmt_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
+
+box ParserBox {
+  gpos
+  usings_json
+  stage3
+
+  birth() {
+    me.gpos = 0
+    me.usings_json = "[]"
+    me.stage3 = 0
+    return 0
+  }
+
+  stage3_enable(flag) {
+    if flag == null { flag = 0 }
+    if flag == 0 { me.stage3 = 0 } else { me.stage3 = 1 }
+    return 0
+  }
+
+  stage3_enabled() {
+    if me.stage3 == 1 { return 1 }
+    return 0
+  }
+
+  // === State management ===
+  gpos_set(i) { me.gpos = i return 0 }
+  gpos_get() { return me.gpos }
+
+  // === JSON utilities ===
+  esc_json(s) {
+    local out = ""
+    local i = 0
+    local n = s.size()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" }
+      else { if ch == "\"" { out = out + "\\\"" }
+      else { out = out + ch } }
+      i = i + 1
+    }
+    return out
+  }
+
+  // === Delegation to ParserStringUtilsBox ===
+  is_digit(ch) { return ParserStringUtilsBox.is_digit(ch) }
+
+  is_space(ch) { return ParserStringUtilsBox.is_space(ch) }
+
+  is_alpha(ch) { return ParserStringUtilsBox.is_alpha(ch) }
+
+  starts_with(src, i, pat) { return ParserStringUtilsBox.starts_with(src, i, pat) }
+
+  index_of(src, i, pat) { return ParserStringUtilsBox.index_of(src, i, pat) }
+
+  trim(s) { return ParserStringUtilsBox.trim(s) }
+
+  starts_with_kw(src, i, kw) { return ParserStringUtilsBox.starts_with_kw(src, i, kw) }
+
+  i2s(v) { return ParserStringUtilsBox.i2s(v) }
+
+  to_int(s) { return ParserStringUtilsBox.to_int(s) }
+
+  skip_ws(src, i) { return ParserStringUtilsBox.skip_ws(src, i) }
+
+  // === Delegation to scanner boxes ===
+  read_ident2(src, i) { return ParserIdentScanBox.scan_ident(src, i) }
+
+  read_string_lit(src, i) {
+    local pair = ParserStringScanBox.scan(src, i)
+    local at = pair.lastIndexOf("@")
+    local content = pair.substring(0, at)
+    local pos = 0
+    if at >= 0 { pos = me.to_int(pair.substring(at+1, pair.size())) }
+    else { pos = i }
+    me.gpos_set(pos)
+    return content
+  }
+
+  // === using system ===
+  add_using(kind, target, alias) {
+    local cur = me.usings_json
+    if cur == null || cur.size() == 0 { cur = "[]" }
+
+    local name = ""
+    local path = null
+
+    if kind == "path" {
+      path = target
+      if alias != null {
+        name = alias
+      } else {
+        local p = target
+        local idx = -1
+        local t = 0
+        loop(t < p.size()) {
+          if p.substring(t,t+1) == "/" { idx = t }
+          t = t + 1
+        }
+        if idx >= 0 { p = p.substring(idx+1, p.size()) }
+
+        if p.size() > 5 && me.starts_with(p, p.size()-5, ".hako") == 1 {
+          p = p.substring(0, p.size()-5)
+        } else {
+          if p.size() > 6 && me.starts_with(p, p.size()-6, ".nyash") == 1 {
+            p = p.substring(0, p.size()-6)
+          }
+        }
+        name = p
+      }
+    } else {
+      name = target
+      if alias != null { name = alias }
+    }
+
+    local entry = "{\"name\":\"" + me.esc_json(name) + "\""
+    if path != null { entry = entry + ",\"path\":\"" + me.esc_json(path) + "\"" }
+    entry = entry + "}"
+
+    if cur == "[]" {
+      me.usings_json = "[" + entry + "]"
+      return 0
+    }
+
+    local pos = cur.lastIndexOf("]")
+    if pos < 0 {
+      me.usings_json = "[" + entry + "]"
+      return 0
+    }
+
+    me.usings_json = cur.substring(0, pos) + "," + entry + "]"
+    return 0
+  }
+
+  extract_usings(src) {
+    me.usings_json = UsingCollectorBox.collect(src)
+    return 0
+  }
+
+  get_usings_json() {
+    return me.usings_json
+  }
+
+  // === Delegation to ParserExprBox ===
+  parse_expr2(src, i) {
+    local expr = new ParserExprBox()
+    return expr.parse_expr2(src, i, me)
+  }
+
+  // === Delegation to ParserStmtBox ===
+  parse_stmt2(src, i) {
+    local stmt = new ParserStmtBox()
+    return stmt.parse(src, i, me)
+  }
+
+  // === Delegation to ParserControlBox ===
+  parse_block2(src, i) {
+    local ctrl = new ParserControlBox()
+    return ctrl.parse_block(src, i, me)
+  }
+
+  // === Top-level program parser ===
+  parse_program2(src) {
+    local i = me.skip_ws(src, 0)
+    local body = "["
+    local first = 1
+    local cont_prog = 1
+
+    loop(cont_prog == 1) {
+      i = me.skip_ws(src, i)
+
+      if i >= src.size() {
+        cont_prog = 0
+      } else {
+        local start_i = i
+        local s = me.parse_stmt2(src, i)
+        i = me.gpos_get()
+
+        // Progress guard
+        if i <= start_i {
+          if i < src.size() { i = i + 1 }
+          else { i = src.size() }
+          me.gpos_set(i)
+        }
+
+        // consume optional semicolons
+        local done2 = 0
+        local guard2 = 0
+        local max2 = 100000
+
+        loop(done2 == 0) {
+          if guard2 > max2 { done2 = 1 }
+          else { guard2 = guard2 + 1 }
+
+          local before2 = i
+          i = me.skip_ws(src, i)
+
+          if i < src.size() && src.substring(i, i+1) == ";" {
+            i = i + 1
+          } else {
+            done2 = 1
+          }
+
+          if i == before2 { done2 = 1 }
+        }
+
+        if s.size() > 0 {
+          if first == 1 {
+            body = body + s
+            first = 0
+          } else {
+            body = body + "," + s
+          }
+        }
+      }
+    }
+
+    body = body + "]"
+    return "{\"version\":0,\"kind\":\"Program\",\"body\":" + body + "}"
+  }
+}
+
+static box ParserStub {
+  main(args) {
+    return 0
+  }
+}

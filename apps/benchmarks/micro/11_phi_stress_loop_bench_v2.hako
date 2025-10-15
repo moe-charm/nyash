@@ -1,0 +1,50 @@
+// PHI Stress Loop — 5 seconds fixed-time benchmark
+static box Main {
+    main() {
+        print("PHI Stress Loop Benchmark - 5 seconds")
+        print("")
+
+        local start_time
+        local end_time
+        local iterations
+        local elapsed_ms
+        local ops_per_sec
+        local us_per_op
+        local sum
+
+        start_time = TimerBox.now_ms()
+        end_time = start_time + 5000
+        iterations = 0
+        sum = 0
+
+        loop(TimerBox.now_ms() < end_time) {
+            // Three nested counters; keep them tight to stress PHI
+            local i = 0
+            loop(i < 10) {
+                local j = 0
+                loop(j < 10) {
+                    local k = 0
+                    loop(k < 10) {
+                        sum = sum + 1
+                        k = k + 1
+                    }
+                    j = j + 1
+                }
+                i = i + 1
+            }
+            iterations = iterations + 1
+        }
+
+        elapsed_ms = TimerBox.now_ms() - start_time
+        ops_per_sec = iterations * 1000 / elapsed_ms
+        us_per_op = elapsed_ms * 1000 / iterations
+
+        print("Iterations: " + iterations)
+        print("Elapsed: " + elapsed_ms + " ms")
+        print("Ops/sec: " + ops_per_sec)
+        print("µs/op: " + us_per_op)
+        print("Accumulated sum: " + sum)
+
+        return 0
+    }
+}

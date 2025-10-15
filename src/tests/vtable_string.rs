@@ -1,6 +1,6 @@
 #[test]
 fn vtable_string_substring_concat() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
@@ -26,11 +26,8 @@ fn vtable_string_substring_concat() {
     let sb = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb,
-            box_type: "StringBox".into(),
-            args: vec![s],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
+                auto_birth: None });
     let i1 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -48,14 +45,7 @@ fn vtable_string_substring_concat() {
     let sub = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(sub),
-            box_val: sb,
-            method: "substring".into(),
-            args: vec![i1, i4],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(sub), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.substring/2".into())), args: vec![sb, i1, i4], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(sub) });
@@ -84,11 +74,8 @@ fn vtable_string_substring_concat() {
     let ab = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: ab,
-            box_type: "StringBox".into(),
-            args: vec![a],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: ab, box_type: "StringBox".into(), args: vec![a],
+                auto_birth: None });
     let c = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -99,14 +86,7 @@ fn vtable_string_substring_concat() {
     let joined = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(joined),
-            box_val: ab,
-            method: "concat".into(),
-            args: vec![c],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(joined), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.concat/1".into())), args: vec![ab, c], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return {

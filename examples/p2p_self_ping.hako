@@ -1,0 +1,26 @@
+// 📡 P2P Self Ping Smoke
+// Purpose: Minimal, deterministic P2PBox demo without external timing.
+// Shows send(to=self) loopback traces and universal methods.
+
+print("🚀 P2P Self Ping Smoke Start")
+
+// Create node 'alice' on inprocess transport
+alice = new P2PBox("alice", "inprocess")
+
+// Show basic info
+print("node=" + alice.getNodeId() + ", transport=" + alice.getTransportType())
+
+// Create an IntentBox and send to self
+msg = new IntentBox("ping", "{}")
+res = alice.send("alice", msg)
+print("send result=" + res.toString())
+
+// Read back last received traces (populated for self-loop)
+print("last.from=" + alice.getLastFrom())
+print("last.intent=" + alice.getLastIntentName())
+
+// Show debug helpers
+print("nodes=" + alice.debugNodes())
+print("bus=" + alice.debugBusId())
+
+print("✅ P2P Self Ping Smoke Done")

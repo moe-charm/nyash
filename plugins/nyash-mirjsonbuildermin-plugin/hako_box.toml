@@ -1,0 +1,45 @@
+[box]
+type_name = "MirJsonBuilderMin"
+type_id = 72
+provider = "nyash-mirjsonbuildermin-plugin"
+
+[[methods]]
+name = "birth"
+slot = 0
+arity = 0
+[[methods]]
+name = "start_module"
+slot = 1
+arity = 0
+[[methods]]
+name = "start_function"
+slot = 2
+arity = 1
+[[methods]]
+name = "start_block"
+slot = 3
+arity = 1
+[[methods]]
+name = "add_const"
+slot = 4
+arity = 2
+[[methods]]
+name = "add_compare"
+slot = 5
+arity = 4
+[[methods]]
+name = "add_ret"
+slot = 6
+arity = 1
+[[methods]]
+name = "end_all"
+slot = 7
+arity = 0
+[[methods]]
+name = "to_string"
+slot = 8
+arity = 0
+[[methods]]
+name = "fini"
+slot = 4294967295
+arity = 0

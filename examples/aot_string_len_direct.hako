@@ -1,0 +1,6 @@
+// Direct JIT test for String.length()
+static box Main {
+  getLen(s) {
+    return s.length()
+  }
+}

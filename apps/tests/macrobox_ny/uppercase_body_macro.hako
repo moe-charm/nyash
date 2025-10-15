@@ -1,0 +1,6 @@
+box MacroBoxSpec {
+    static function expand(ast) {
+        return uppercase_print(ast)
+    }
+}
+

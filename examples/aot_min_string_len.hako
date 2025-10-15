@@ -1,0 +1,22 @@
+// Minimal function for AOT/JIT plugin_invoke with String.length()
+// Run JIT demo:
+//   NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//     ./target/release/nyash --backend vm examples/aot_min_string_len.nyash
+// Generate .o (if compiled):
+//   NYASH_AOT_OBJECT_OUT=target/aot_objects \ 
+//   NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//     ./target/release/nyash --backend vm examples/aot_min_string_len.nyash
+
+static box Main {
+  len1(s) {
+    // Receiver is a parameter (JIT-friendly)
+    return s.length()
+  }
+  main() {
+    local s
+    s = new StringBox()
+    // Warm up: call len1 once to compile
+    return me.len1(s)
+  }
+}
+

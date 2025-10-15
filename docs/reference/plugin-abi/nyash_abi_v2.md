@@ -101,6 +101,12 @@ Notes
 - Keep result payloads small; prefer handles (tag=8) for large data and stream APIs.
 - Use UTF‑8 strings (tag=6) for human‑readable values; use bytes (tag=7) otherwise.
 
+Core Collection Boxes (type_id)
+- MapBox: 11
+- ArrayBox: 12
+- StringBox: 10
+- SetBox: 15
+
 Method Tables (TLV Contracts)
 - RegexBox
   - birth(0): returns `handle` (RegexBox)

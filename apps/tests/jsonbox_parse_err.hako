@@ -1,0 +1,12 @@
+static box Main {
+  main(args) {
+    // invalid JSON (missing value after kind)
+    local json = "{\"kind\": }"
+    local doc = new JsonDocBox()
+    doc.parse(json)
+    local err = doc.error()
+    if err == "" { print("OK") } else { print("ERR") }
+    return 0
+  }
+}
+

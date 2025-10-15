@@ -1,0 +1,24 @@
+// AOT Python math.sqrt(16) demo
+// Demonstrates import/getattr/call chain
+static box Main {
+  init { py, math, sqrt_func, result }
+  
+  main() {
+    // Create Python runtime
+    me.py = new PyRuntimeBox()
+    
+    // Import math module
+    me.math = me.py.import("math")
+    
+    // Get sqrt function from math module
+    me.sqrt_func = me.py.getattr(me.math, "sqrt")
+    
+    // Call sqrt(16)
+    local sixteen
+    sixteen = new IntegerBox(16)
+    me.result = me.py.call(me.sqrt_func, sixteen)
+    
+    // Return the result (should be 4.0)
+    return me.result
+  }
+}

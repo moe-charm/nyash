@@ -1,0 +1,69 @@
+[type.StringBox]
+type_id = 10
+methods = [
+  { name = "len", arities = [0], slot = 300 },
+  { name = "length", arities = [0], slot = 300 },
+  { name = "size", arities = [0], slot = 300 },
+  { name = "isEmpty", arities = [0], slot = 312 },
+  { name = "substring", arities = [2], slot = 301 },
+  { name = "charAt", arities = [1], slot = 314 },
+  { name = "indexOf", arities = [1,2], slot = 303 },
+  { name = "lastIndexOf", arities = [1,2], slot = 313 },
+  { name = "concat", arities = [1], slot = 302 },
+  { name = "replace", arities = [2], slot = 304 },
+  { name = "trim", arities = [0], slot = 305 },
+  { name = "toUpper", arities = [0], slot = 306 },
+  { name = "toLower", arities = [0], slot = 307 },
+  { name = "toString", arities = [0], slot = 308 },
+  { name = "stringify", arities = [0], slot = 309 },
+  { name = "startsWith", arities = [1], slot = 310 },
+  { name = "endsWith", arities = [1], slot = 311 },
+]
+
+[type.ArrayBox]
+type_id = 12
+methods = [
+  { name = "get", arities = [1], slot = 100 },
+  { name = "set", arities = [2], slot = 101 },
+  { name = "len", arities = [0], slot = 102 },
+  { name = "length", arities = [0], slot = 102 },
+  { name = "size", arities = [0], slot = 102 },
+  { name = "push", arities = [1], slot = 103 },
+  { name = "pop", arities = [0], slot = 104 },
+  { name = "clear", arities = [0], slot = 105 },
+  { name = "contains", arities = [1], slot = 106 },
+  { name = "indexOf", arities = [1], slot = 107 },
+  { name = "join", arities = [1], slot = 108 },
+  { name = "sort", arities = [0], slot = 109 },
+  { name = "reverse", arities = [0], slot = 110 },
+  { name = "slice", arities = [2], slot = 111 },
+  { name = "toJSON", arities = [0], slot = 112 },
+  { name = "methodRef", arities = [2], slot = 113 },
+]
+
+[type.MapBox]
+type_id = 11
+methods = [
+  { name = "size", arities = [0], slot = 200 },
+  { name = "len", arities = [0], slot = 201 },
+  { name = "has", arities = [1], slot = 202 },
+  { name = "get", arities = [1], slot = 203 },
+  { name = "set", arities = [2], slot = 204 },
+  { name = "delete", arities = [1], slot = 205 },
+  { name = "remove", arities = [1], slot = 205 },
+  { name = "keys", arities = [0], slot = 206 },
+  { name = "values", arities = [0], slot = 207 },
+  { name = "clear", arities = [0], slot = 208 },
+  { name = "toJSON", arities = [0], slot = 209 },
+  { name = "call", arities = [2], slot = 210 },
+  { name = "callAsync", arities = [2], slot = 211 },
+]
+
+[type.CallableBox]
+type_id = 50
+methods = [
+  { name = "arity", arities = [0], slot = 500 },
+  { name = "call", arities = [1], slot = 501 },
+  { name = "callAsync", arities = [1], slot = 502 },
+  { name = "toString", arities = [0], slot = 503 },
+]

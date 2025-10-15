@@ -5,20 +5,20 @@
 //! types and manual implementations for special cases.
 
 use crate::box_trait::{BoolBox, IntegerBox, StringBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::FloatBox;
 use crate::operator_traits::{NyashAdd, NyashMul};
 use crate::impl_static_numeric_ops;
 
 // ===== Macro-generated static implementations =====
 
-/// Static numeric operations for IntegerBox
-///
-/// Generates implementations for: Add, Sub, Mul, Div with zero-division error handling
+// Static numeric operations for IntegerBox
+// Generates implementations for: Add, Sub, Mul, Div with zero-division error handling
 impl_static_numeric_ops!(IntegerBox, 0);
 
-/// Static numeric operations for FloatBox
-///
-/// Generates implementations for: Add, Sub, Mul, Div with zero-division error handling
+// Static numeric operations for FloatBox
+// Generates implementations for: Add, Sub, Mul, Div with zero-division error handling
+#[cfg(feature = "legacy-boxes")]
 impl_static_numeric_ops!(FloatBox, 0.0);
 
 // ===== Manual static implementations for special cases =====

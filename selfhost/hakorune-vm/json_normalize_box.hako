@@ -1,0 +1,34 @@
+// json_normalize_box.hako — JsonNormalizeBox
+// Responsibility: drop whitespace outside strings to reduce scan cost (dev-only)
+
+using "selfhost/shared/json/core/string_scan.hako" as StringScanBox
+
+static box JsonNormalizeBox {
+  normalize(seg, budget) {
+    if seg == null { return "" }
+    local n = seg.size()
+    local i = 0
+    local out = ""
+    local steps = 0
+    loop(i < n) {
+      if steps >= budget { return seg } // give up, return original
+      steps = steps + 1
+      local ch = StringScanBox.read_char(seg, i)
+      if ch == "\"" {
+        // copy string verbatim (escape-aware)
+        local j = StringScanBox.find_quote(seg, i+1)
+        if j < 0 { return seg }
+        out = out + seg.substring(i, j+1)
+        i = j + 1
+        continue
+      }
+      // drop spaces outside strings
+      if ch == " " || ch == "
+" || ch == "
+" || ch == "	" { i = i + 1  continue }
+      out = out + ch
+      i = i + 1
+    }
+    return out
+  }
+}

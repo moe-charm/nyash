@@ -1,0 +1,37 @@
+// map_kv_string_to_array.hako — Adapter to convert keysS/valuesS string to ArrayBox
+// Responsibility: Provide split helpers (String -> ArrayBox) for MapBox keys/values
+
+static box MapKvStringToArrayAdapter {
+  // Split a newline-joined String into an ArrayBox of strings.
+  // Empty or null-like input yields empty ArrayBox.
+  split_lines(s) {
+    local out = new ArrayBox()
+    if s == null { return out }
+    // Simple scan: split by "\n"
+    local i = 0
+    local start = 0
+    local n = s.size()
+    loop(i < n) {
+      if s.substring(i, i+1) == "\n" {
+        out.push(s.substring(start, i))
+        start = i + 1
+      }
+      i = i + 1
+    }
+    // tail
+    if start <= n { out.push(s.substring(start, n)) }
+    return out
+  }
+
+  // Adapt Map.keysS() -> ArrayBox
+  adapt_keysS(map) {
+    local ks = map.keysS()
+    return me.split_lines(ks)
+  }
+
+  // Adapt Map.valuesS() -> ArrayBox
+  adapt_valuesS(map) {
+    local vs = map.valuesS()
+    return me.split_lines(vs)
+  }
+}

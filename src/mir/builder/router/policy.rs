@@ -14,6 +14,16 @@ pub enum Route {
 /// - User boxes: names not ending with "Box" → BoxCall
 /// - Otherwise Unified
 pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arity: usize) -> Route {
+    // Global override for experiments: force Unified route (env only; default OFF)
+    if std::env::var("NYASH_ROUTER_FORCE_UNIFIED").ok().as_deref() == Some("1") {
+        if router_trace_enabled() {
+            eprintln!(
+                "[router] route={:?} reason={} recv={} method={} arity={} certainty={:?}",
+                Route::Unified, "force_env", box_name, method, arity, certainty
+            );
+        }
+        return Route::Unified;
+    }
     let mut reason = "unified";
     let route = if box_name == "UnknownBox" {
         reason = "unknown_recv";
@@ -38,9 +48,20 @@ pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arit
         // Extra defensive: debug/file boxes shouldn't own string APIs; prefer BoxCall bridge.
         reason = "nonstring-box-string-like";
         Route::BoxCall
-    } else if matches!(box_name, "StringBox" | "ArrayBox" | "MapBox") {
-        reason = "core_box";
-        Route::BoxCall
+    } else if crate::runtime::type_registry::is_core_box(box_name) {
+        // Core boxes default to BoxCall to preserve legacy behavior.
+        // Exception: length-like (size/len/length, arity=0) on String/Array route to Unified
+        // so builder can normalize to stable externs (avoids recv SSA fragility).
+        if ((box_name == "StringBox") || (box_name == "ArrayBox"))
+            && arity == 0
+            && matches!(method, "size" | "len" | "length")
+        {
+            reason = "core_box_len_unified";
+            Route::Unified
+        } else {
+            reason = "core_box";
+            Route::BoxCall
+        }
     } else if !box_name.ends_with("Box") {
         reason = "user_instance";
         Route::BoxCall

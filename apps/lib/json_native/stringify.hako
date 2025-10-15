@@ -1,0 +1,148 @@
+// JSON.stringify for MapBox/ArrayBox (Ny implementation)
+using "apps/lib/json_native/utils/escape.hako" as EscapeUtils
+
+static box JSON {
+  // Public minimal API
+  stringify(o) {
+    if o == null { return "null" }
+    if o.toJSON != null {
+      local tj = o.toJSON()
+      if tj != null { return tj.toString() }
+    }
+    // Fallback: primitive or container heuristics
+    return me._stringify_value(o)
+  }
+  stringify_map(m) {
+    if m == null { return "{}" }
+    if m.toJSON != null {
+      local tj = m.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "{" { return s }
+      }
+    }
+    return me._stringify_map(m)
+  }
+  stringify_array(a) {
+    if a == null { return "[]" }
+    if a.toJSON != null {
+      local tj = a.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "[" { return s }
+      }
+    }
+    return me._stringify_array(a)
+  }
+
+  // Internal helpers
+  _quote_string(s) {
+    if s == null { return "\"\"" }
+    // Accept raw Ny string; ensure it's plain string
+    local body = EscapeUtils.escape_string(s)
+    return "\"" + body + "\""
+  }
+
+  _stringify_value(v) {
+    // Heuristic: try common primitives via toString(); box types handled by callers
+    // String: wrap with quotes and escape
+    // Integer/Bool: rely on toString() stable form
+    // Null: serialize as null
+    // Map/Array: delegate to specific paths (callers)
+    // Note: This function expects callers to dispatch Map/Array
+    if v == null { return "null" }
+    // Best-effort: detect true/false strings
+    local s = v.toString()
+    if s == "true" || s == "false" { return s }
+    // Integer-like? Accept leading '-' and digits
+    local i = 0
+    local n = s.size()
+    local neg = 0
+    if n > 0 && s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local ok = (n > neg)
+    loop(i < n) {
+      local ch = s.substring(i,i+1)
+      if !(ch >= "0" && ch <= "9") { ok = 0  break }
+      i = i + 1
+    }
+    if ok == 1 { return s }
+    return me._quote_string(s)
+  }
+
+  _stringify_array(a) {
+    if a == null { return "[]" }
+    // Prefer native toJSON when available (safer)
+    {
+      local tj = a.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "[" { return s }
+      }
+    }
+    // Fallback: iterate assuming ArrayBox API only for the receiver (avoid size/keys on elements)
+    local out = "["
+    local n = a.size()
+    local i = 0
+    loop(i < n) {
+      if i > 0 { out = out + "," }
+      local e = a.get(i)
+      // Try element.toJSON first; otherwise stringify as primitive safely
+      local appended = 0
+      if e != null && e.toJSON != null {
+        local ej = e.toJSON()
+        if ej != null {
+          local es = ej.toString()
+          if es.size() > 0 {
+            local h = es.substring(0,1)
+            if h == "{" || h == "[" { out = out + es  appended = 1 }
+          }
+        }
+      }
+      if appended == 0 { out = out + me._stringify_value(e) }
+      i = i + 1
+    }
+    out = out + "]"
+    return out
+  }
+
+  _stringify_map(m) {
+    if m == null { return "{}" }
+    // Prefer native toJSON when available (safer)
+    {
+      local tj = m.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "{" { return s }
+      }
+    }
+    // Fallback: iterate assuming MapBox API only for the receiver; avoid keys()/size() on values
+    local out = "{"
+    local ks = m.keys()
+    if ks == null { return "{}" }
+    local n = ks.size()
+    local i = 0
+    loop(i < n) {
+      if i > 0 { out = out + "," }
+      local k = ks.get(i)
+      local kv = k.toString()
+      out = out + me._quote_string(kv) + ":"
+      local v = m.get(kv)
+      // Prefer value.toJSON() when it looks like JSON, else treat as primitive
+      local appended = 0
+      if v != null && v.toJSON != null {
+        local vj = v.toJSON()
+        if vj != null {
+          local vs = vj.toString()
+          if vs.size() > 0 {
+            local h = vs.substring(0,1)
+            if h == "{" || h == "[" { out = out + vs  appended = 1 }
+          }
+        }
+      }
+      if appended == 0 { out = out + me._stringify_value(v) }
+      i = i + 1
+    }
+    out = out + "}"
+    return out
+  }
+}

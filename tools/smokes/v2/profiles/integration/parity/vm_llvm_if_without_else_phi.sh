@@ -2,8 +2,7 @@
 # vm_llvm_if_without_else_phi.sh - VM vs LLVM parity for if without else (false-edge PHI)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
-
+require_llvm_or_skip || exit 0
 require_env || exit 2
 preflight_plugins || exit 2
 

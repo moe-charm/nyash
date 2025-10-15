@@ -1,8 +1,0 @@
-// builder/rewrite/known.nyash — Instance→Function rewrite (no-op scaffold)
-
-static box RewriteKnown {
-  // Try a safe Known rewrite when unique and allowed.
-  // Scaffold returns input unchanged; actual logic guarded later.
-  try_apply(stage1_json) { return stage1_json }
-}
-

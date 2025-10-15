@@ -6,6 +6,7 @@
  */
 
 use super::WasmError;
+use crate::backend::wasm::wasm_all_extern_signatures;
 
 /// Runtime import definitions for WASM modules
 pub struct RuntimeImports {
@@ -50,6 +51,15 @@ impl RuntimeImports {
             params: vec!["i32".to_string(), "i32".to_string()],
             result: None,
         });
+
+        for sig in wasm_all_extern_signatures() {
+            self.imports.push(ImportFunction {
+                module: sig.module,
+                name: sig.name,
+                params: sig.params,
+                result: sig.result,
+            });
+        }
 
         // Phase 9.7: Box FFI/ABI imports per BID specifications
 
@@ -217,6 +227,19 @@ impl RuntimeImports {
                         js.push_str("      const str = new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len));\n");
                         js.push_str("      console.log(str);\n");
                         js.push_str("    },\n");
+                    }
+                    "time_now_ms" => {
+                        js.push_str("    time_now_ms: () => (Date.now() >>> 0),\n");
+                    }
+                    "array_size" => {
+                        js.push_str(
+                            "    array_size: (_handle) => { throw new Error('nyrt.array.size not implemented for WASM runtime'); },\n",
+                        );
+                    }
+                    "map_size" => {
+                        js.push_str(
+                            "    map_size: (_handle) => { throw new Error('nyrt.map.size not implemented for WASM runtime'); },\n",
+                        );
                     }
                     "console_log" => {
                         js.push_str("    console_log: (ptr, len) => {\n");

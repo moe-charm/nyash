@@ -120,24 +120,7 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
         return Ok(());
     }
 
-    // Console convenience: treat println as env.console.log
-    if method == "println" {
-        return super::externcall::lower_externcall(
-            codegen,
-            cursor,
-            resolver,
-            cur_bid,
-            func,
-            vmap,
-            dst,
-            &"env.console".to_string(),
-            &"log".to_string(),
-            args,
-            bb_map,
-            preds,
-            block_end_values,
-        );
-    }
+    // Console convenience removed: use explicit Call callee=Extern("env.console.log") at MIR
 
     // getField/setField
     if fields::try_handle_field_method(

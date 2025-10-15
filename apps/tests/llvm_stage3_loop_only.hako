@@ -1,0 +1,14 @@
+// Stage-3 smoke (LLVM): loop control only (break/continue) — expected Result: 3
+static box Main {
+  main() {
+    local counter = 0
+    loop (true) {
+      counter = counter + 1
+      if counter == 3 { break }
+      continue
+    }
+    print("Result: " + counter)
+    return 0
+  }
+}
+

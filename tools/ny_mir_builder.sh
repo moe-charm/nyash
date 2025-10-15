@@ -67,7 +67,7 @@ else
   cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
 fi
 if [[ "$EMIT" == "exe" ]]; then
-  (cd crates/nyrt && cargo build --release -j 24 >/dev/null)
+  (cd crates/hako_kernel && cargo build --release -j 24 >/dev/null)
 fi
 
 mkdir -p "$PWD/target/aot_objects"
@@ -97,7 +97,8 @@ case "$EMIT" in
     if [[ "$VERIFY" == "1" ]]; then export NYASH_LLVM_VERIFY=1; fi
     if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
       cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+        BIN="./target/release/hakorune"; [ -x "$BIN" ] || BIN="./target/release/hako"; [ -x "$BIN" ] || BIN="./target/release/nyash"
+        "$BIN" --backend llvm --ny-parser-pipe >/dev/null || true
     else
       cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 \
         ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
@@ -134,11 +135,11 @@ case "$EMIT" in
     fi
     if [[ ! -f "$OBJ" ]]; then echo "error: failed to produce object $OBJ" >&2; exit 4; fi
     # Link with NyRT
-    NYRT_BASE=${NYRT_DIR:-"$PWD/crates/nyrt"}
+    NYRT_BASE=${NYRT_DIR:-"$PWD/crates/hako_kernel"}
     cc "$OBJ" \
       -L target/release \
       -L "$NYRT_BASE/target/release" \
-      -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive \
+      -Wl,--whole-archive -lhako_kernel -Wl,--no-whole-archive \
       -lpthread -ldl -lm -o "$OUT"
     [[ "$QUIET" == "0" ]] && echo "OK exe:$OUT"
     ;;
@@ -146,4 +147,3 @@ case "$EMIT" in
 esac
 
 exit 0
-

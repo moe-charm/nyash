@@ -1,5 +1,6 @@
 //! Control-flow entrypoints (if/loop/try/throw) centralized here.
-use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
+use crate::mir::EffectMask;
 use crate::ast::ASTNode;
 
 impl super::MirBuilder {
@@ -169,13 +170,13 @@ impl super::MirBuilder {
         }
         if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
             let v = self.build_expression(expression)?;
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: None,
-                iface_name: "env.debug".to_string(),
-                method_name: "trace".to_string(),
-                args: vec![v],
-                effects: EffectMask::PURE.add(Effect::Debug),
-            })?;
+            #[allow(deprecated)]
+            // Route to unified global print for debug traces as well
+            self.emit_unified_call(
+                None,
+                super::builder_calls::CallTarget::Global("print".to_string()),
+                vec![v],
+            )?;
             return Ok(v);
         }
         let exception_value = self.build_expression(expression)?;

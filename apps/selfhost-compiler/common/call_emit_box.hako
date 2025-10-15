@@ -1,0 +1,37 @@
+// call_emit_box.hako — CallEmitBox: construct MIR(JSON v0) nodes for call-family ops
+// Responsibility: return MapBox nodes for call/boxcall/mir_call variants.
+// Notes:
+// - Args are expected as an ArrayBox of integer register ids.
+// - Callers may optionally attach  (string like "[1,2]") for legacy rebuild paths.
+
+static box CallEmitBox {
+  make_call(name, arg_ids, dst) {
+    return {op: "call", name: name, args: arg_ids, dst: dst}
+  }
+
+  make_boxcall(method, recv_id, arg_ids, dst) {
+    return {op: "boxcall", method: method, recv: recv_id, args: arg_ids, dst: dst}
+  }
+
+  // MIR v1 experimental variants
+  make_mir_call_global(name, arg_ids, dst) {
+    local callee = {type: "Global", name: name}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
+  }
+  make_mir_call_extern(name, arg_ids, dst) {
+    local callee = {type: "Extern", name: name}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
+  }
+
+  make_mir_call_method(method, recv_id, arg_ids, dst) {
+    local callee = {type: "Method", method: method, receiver: recv_id}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
+  }
+
+  make_mir_call_constructor(box_type, arg_ids, dst) {
+    local callee = {type: "Constructor", box_type: box_type}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
+  }
+}
+
+static box CallEmitBoxStub { main(args) { return 0 } }

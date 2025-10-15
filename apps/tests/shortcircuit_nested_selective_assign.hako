@@ -1,0 +1,13 @@
+static box Main {
+  main(args) {
+    local x = 0
+    local a = true
+    local b = false
+    // a && (b || ((x = 1) > 0))
+    if (a && (b || ((x = 1) > 0))) {
+      // x は 1 に設定済み
+    } else { }
+    return x
+  }
+}
+

@@ -1,0 +1,47 @@
+// Fibonacci(12) Benchmark - 5 seconds fixed time
+static box Main {
+    fib(n) {
+        if n <= 1 {
+            return n
+        }
+        return me.fib(n - 1) + me.fib(n - 2)
+    }
+
+    main() {
+        print("Fibonacci(12) Benchmark - 5 seconds")
+        print("")
+
+        local start_time
+        local end_time
+        local iterations
+        local elapsed_ms
+        local ops_per_sec
+        local us_per_op
+        local result
+
+        // Start benchmark
+        start_time = TimerBox.now_ms()
+        end_time = start_time + 5000
+        iterations = 0
+        result = 0
+
+        loop(TimerBox.now_ms() < end_time) {
+            result = me.fib(12)
+            iterations = iterations + 1
+        }
+
+        // Calculate stats
+        elapsed_ms = TimerBox.now_ms() - start_time
+        ops_per_sec = iterations * 1000 / elapsed_ms
+        us_per_op = elapsed_ms * 1000 / iterations
+
+        // Print results
+        print("Iterations: " + iterations)
+        print("Elapsed: " + elapsed_ms + " ms")
+        print("Ops/sec: " + ops_per_sec)
+        print("µs/op: " + us_per_op)
+        print("Last result: " + result)
+
+        return 0
+    }
+}

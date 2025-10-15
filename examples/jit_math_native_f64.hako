@@ -1,0 +1,33 @@
+// JIT HostCall PoC: math.* with native f64
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 \
+//   NYASH_JIT_EVENTS=1 NYASH_JIT_NATIVE_F64=1 \
+//     ./target/release/nyash --backend vm examples/jit_math_native_f64.nyash
+
+box Runner {
+  birth() {
+    // no-op constructor
+  }
+  calc_sin(x) {
+    local m
+    m = new MathBox()
+    return m.sin(x)
+  }
+  calc_min(a, b) {
+    local m
+    m = new MathBox()
+    return m.min(a, b)
+  }
+}
+
+static box Main {
+  main() {
+    local r, m, pi2
+    r = new Runner()
+    // pi/2 ≒ 1.5707963267948966
+    pi2 = 1.5707963267948966
+    print(r.calc_sin(pi2))
+    print(r.calc_min(3.0, 5.0))
+    return 0
+  }
+}

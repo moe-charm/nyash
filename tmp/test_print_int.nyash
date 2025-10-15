@@ -1,6 +1,0 @@
-static box Main {
-  main(args) {
-    print(12)
-    return 0
-  }
-}

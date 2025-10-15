@@ -32,7 +32,7 @@ Nyash Plugin Tester - 開発者向けツールガイド
 ## 【Phase 15.5新機能】Safety Check - ChatGPT推奨安全性チェック
 
 ### 概要
-**ChatGPT5 Pro最高評価（⭐⭐⭐⭐⭐）**の安全性チェック機能。StringBox問題など、nyash.toml設定とプラグイン実装の不整合を自動検出。
+**ChatGPT5 Pro最高評価（⭐⭐⭐⭐⭐）**の安全性チェック機能。StringBox問題など、hako.toml（互換: nyash.toml）設定とプラグイン実装の不整合を自動検出。
 
 ### 使用方法
 
@@ -53,7 +53,7 @@ cd tools/plugin-tester
 ```
 
 #### オプション
-- `-c, --config <CONFIG>`: nyash.tomlファイルパス（デフォルト: `../../nyash.toml`）
+- `-c, --config <CONFIG>`: hako.toml ファイルパス（デフォルト互換: `../../nyash.toml`）
 - `-l, --library <LIBRARY>`: チェック対象ライブラリ名（未指定時は全体）
 - `-b, --box-type <BOX_TYPE>`: チェック対象Box型（未指定時は全体）
 
@@ -63,7 +63,7 @@ cd tools/plugin-tester
 **0-3番スロット（toString/type/equals/clone）の保護**
 ```
 🚨 UNIVERSAL SLOT CONFLICT: Method 'get' claims universal slot 1 (reserved for 'type')
-   Fix: Change method_id in nyash.toml to 4 or higher
+   Fix: Change method_id in hako.toml (compat: nyash.toml) to 4 or higher
 ```
 
 #### 2. StringBox問題専用検出
@@ -79,7 +79,7 @@ cd tools/plugin-tester
 ```
 🚨 E_METHOD DETECTED: Method 'get' (id=1) returns E_METHOD - NOT IMPLEMENTED!
    This is exactly what caused StringBox.get() to fail!
-   Fix: Implement method 'get' in plugin or remove from nyash.toml
+   Fix: Implement method 'get' in plugin or remove from hako.toml (compat: nyash.toml)
 ```
 
 #### 4. TLV応答検証機能
@@ -113,7 +113,7 @@ Library: libnyash_string_plugin.so
 ### 実証結果
 - ✅ **100%検出精度**: 手動発見した問題を完全自動検出
 - ✅ **事故防止**: StringBox問題の再発完全防止
-- ✅ **実用検証**: 実際のnyash.tomlで8個の問題を自動検出・修正指示
+- ✅ **実用検証**: 実際の hako.toml（互換: nyash.toml）で8個の問題を自動検出・修正指示
 
 BID-FFI 前提（v1）
 - 必須シンボル: `nyash_plugin_abi`, `nyash_plugin_init`, `nyash_plugin_invoke`, `nyash_plugin_shutdown`
@@ -150,4 +150,3 @@ TLV（Type-Length-Value）概要（簡易）
 
 備考
 - 本説明書は `C:\git\nyash-project\nyash\docs\説明書\reference\plugin-tester.md` に配置されます（Windowsパス例）。
-

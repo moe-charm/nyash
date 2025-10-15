@@ -1,0 +1,102 @@
+// instruction_scanner.hako — InstructionScannerBox
+// Minimal JSON v0 instruction object scanner with tolerant parsing.
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+
+static box InstructionScannerBox {
+  _tprint(msg) { if call("String.indexOf/2", msg, "[ERROR]") >= 0 { print(msg) } }
+
+  index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
+
+  find_balanced_object_end(json, idx) { return JsonCursorBox.seek_obj_end(json, idx) }
+
+
+  normalize_delimiters(seg) {
+    if seg == null { return "" }
+    local out = ""
+    local i = 0
+    local n = seg.size()
+    loop (i < n) {
+      local ch = seg.substring(i, i+1)
+      if i+2 <= n {
+        local two = seg.substring(i, i+2)
+        if two == "}," {
+          if i+2 < n && seg.substring(i+2, i+3) == "{" { out = out + "}|{"  i = i + 3  continue }
+        }
+      }
+      out = out + ch
+      i = i + 1
+    }
+    return out
+  }
+
+  _extract_op(obj) {
+    // Prefer explicit op key with escape-aware string end detection
+    local k1 = "\"op\":\""
+    local p1 = obj.indexOf(k1)
+    if p1 >= 0 {
+      local i = p1 + k1.size()           // start of value (right after opening quote)
+      local j = JsonCursorBox.scan_string_end(obj, i - 1)
+      if j > i { return obj.substring(i, j) }
+    }
+    // v1 style
+    local kk = "\"kind\":\""
+    local pk = obj.indexOf(kk)
+    if pk >= 0 {
+      local i2 = pk + kk.size()
+      local j2 = JsonCursorBox.scan_string_end(obj, i2 - 1)
+      if j2 > i2 {
+        local k = obj.substring(i2, j2)
+        if k == "Const" { return "const" }
+        if k == "Ret" { return "ret" }
+        if k == "Compare" { return "compare" }
+        if k == "Branch" { return "branch" }
+        if k == "Jump" { return "jump" }
+      }
+    }
+    // compare v1 shorthand
+    local ko = "\"operation\":\""
+    local po = obj.indexOf(ko)
+    if po >= 0 { return "compare" }
+    // last-resort heuristics
+    // Use dual-key probe to handle both plain and escaped forms when needed
+    if me._has_key(obj, "lhs") == 1 and me._has_key(obj, "rhs") == 1 { return "compare" }
+    if me._has_key(obj, "cond") == 1 { return "branch" }
+    if me._has_key(obj, "target") == 1 { return "jump" }
+    // Detect explicit ret first
+    if obj.indexOf("\"op\":\"ret\"") >= 0 { return "ret" }
+    // Detect v1-style Ret without op key: presence of top-level "value" and absence of other discriminator keys
+    if me._has_key(obj, "value") == 1 {
+      if me._has_key(obj, "lhs") == 0 && me._has_key(obj, "rhs") == 0 && me._has_key(obj, "cond") == 0 && me._has_key(obj, "target") == 0 && me._has_key(obj, "src") == 0 && me._has_key(obj, "op_kind") == 0 {
+        return "ret"
+      }
+    }
+    // Const fallback (typed value object)
+    if obj.indexOf("\"value\":{\"type\":\"i64\"") >= 0 { return "const" }
+    return ""
+  }
+
+  // Dual-key existence probe (plain/escaped)
+  _has_key(seg, key) {
+    if seg == null { return 0 }
+    local plain = "\"" + key + "\""
+    local escaped = "\\\"" + key + "\\\""
+    local pos = JsonCursorBox.find_key_dual(seg, plain, escaped, 0)
+    if pos >= 0 { return 1 } else { return 0 }
+  }
+
+  // Return a map {start,end,op} for next object starting at/after pos, or null if none
+  next(seg, pos) {
+    if seg == null { return null }
+    if pos < 0 { pos = 0 }
+    local start = me.index_of_from(seg, "{", pos)
+    if start < 0 { return null }
+    local endp = me.find_balanced_object_end(seg, start)
+    if endp < 0 { return null }
+    endp = endp + 1
+    local obj = seg.substring(start, endp)
+    local op = me._extract_op(obj)
+    return map({ start: start, end: endp, op: op })
+  }
+}

@@ -4,7 +4,7 @@ use super::*;
 impl NyashRunner {
     /// Run a file through independent JIT engine (no VM execute loop)
     pub(crate) fn run_file_jit_direct(&self, filename: &str) {
-        use nyash_rust::{mir::MirCompiler, parser::NyashParser};
+        use nyash_rust::mir::MirCompiler;
         use std::fs;
         let emit_err = |phase: &str, code: &str, msg: &str| {
             if std::env::var("NYASH_JIT_STATS_JSON").ok().as_deref() == Some("1")
@@ -26,9 +26,19 @@ impl NyashRunner {
             Ok(s) => s,
             Err(e) => { emit_err("read_file", "IO", &format!("{}", e)); std::process::exit(1); }
         };
-        let ast = match NyashParser::parse_from_string(&code) {
-            Ok(a) => a,
-            Err(e) => { emit_err("parse", "SYNTAX", &format!("{}", e)); std::process::exit(1); }
+        let ast = {
+            let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+            if use_facade {
+                match nyash_rust::front::parser_layer::facade::parse_source_to_ast(&code) {
+                    Ok(a) => a,
+                    Err(e) => { emit_err("parse", "SYNTAX", &e.message); std::process::exit(1); }
+                }
+            } else {
+                match nyash_rust::parser::NyashParser::parse_from_string(&code) {
+                    Ok(a) => a,
+                    Err(e) => { emit_err("parse", "SYNTAX", &format!("{}", e)); std::process::exit(1); }
+                }
+            }
         };
         let mut mc = MirCompiler::new();
         let cr = match mc.compile(ast) {

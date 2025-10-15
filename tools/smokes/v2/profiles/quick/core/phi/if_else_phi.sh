@@ -21,9 +21,8 @@ test_if_else_phi() {
   print(x)
   '
   local output
-  output=$(run_nyash_vm -c "$script" 2>&1)
+  output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "B" "$output" "if_else_phi"
 }
 
 run_test "if_else_phi" test_if_else_phi
-

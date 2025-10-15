@@ -1,0 +1,13 @@
+// Factorial Benchmark - Simple (LLVM測定用・print不使用)
+static box Main {
+    factorial(n) {
+        if n <= 1 {
+            return 1
+        }
+        return n * me.factorial(n - 1)
+    }
+
+    main() {
+        return me.factorial(20)
+    }
+}

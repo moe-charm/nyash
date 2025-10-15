@@ -1,0 +1,10 @@
+// module.hako — demo manifest (preview-only parser)
+static box Module {
+  init {
+    name: "demo.modhako"
+    version: "1.0.0"
+    exports: map({
+      hello: "hello_box.hako"
+    })
+  }
+}

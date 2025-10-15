@@ -1,0 +1,69 @@
+// test_null_vs_zero.hako — Test null vs 0 comparison issue
+// Phase 3: Investigate MapBox.get() null behavior
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== Phase 3: MapBox null vs 0 Tests ===")
+
+    // Test 3.1: MapBox.get() returns null vs 0
+    print("\nTest 3.1: MapBox.get() null behavior")
+    local map = new MapBox()
+
+    local result1 = map.get("nonexistent")
+    print("map.get('nonexistent') = " + StringHelpers.int_to_str(result1))
+
+    if result1 == null {
+      print("result1 IS null")
+    } else {
+      print("result1 is NOT null")
+    }
+
+    if result1 != 0 {
+      print("result1 != 0 is TRUE")
+    } else {
+      print("result1 != 0 is FALSE")
+    }
+
+    // Test 3.2: null assignment vs 0 assignment
+    print("\nTest 3.2: null assignment vs 0 assignment")
+    local a = null
+    local b = 0
+
+    print("a (null) value: " + StringHelpers.int_to_str(a))
+    print("b (0) value: " + StringHelpers.int_to_str(b))
+
+    if a != 0 {
+      print("a (null) != 0 is TRUE")
+    } else {
+      print("a (null) != 0 is FALSE")
+    }
+
+    if b != 0 {
+      print("b (0) != 0 is TRUE")
+    } else {
+      print("b (0) != 0 is FALSE")
+    }
+
+    // Test 3.3: null-to-zero conversion
+    print("\nTest 3.3: null-to-zero conversion pattern")
+    local map2 = new MapBox()
+    local value = map2.get("missing")
+
+    if value == null {
+      value = 0
+    }
+
+    print("After null check, value = " + StringHelpers.int_to_str(value))
+
+    if value != 0 {
+      print("[BUG] value is 0 but (value != 0) is TRUE!")
+      return 1
+    }
+    print("[PASS] null-to-zero conversion works")
+
+    print("\n✅ All Phase 3 tests PASSED!")
+    return 0
+  }
+}

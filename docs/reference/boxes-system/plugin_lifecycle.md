@@ -1,6 +1,6 @@
 # プラグインBoxのライフサイクル（v2）と nyash.toml 定義
 
-本書は、プラグインBox（PluginBoxV2）の生成（birth）と終了（fini）の流れ、`singleton` オプション、ならびに nyash.toml v2 における `methods` 定義の役割をまとめたものです。
+本書は、プラグインBox（PluginBoxV2）の生成（birth）と終了（fini）の流れ、`singleton` オプション、ならびに hako.toml（互換: nyash.toml）における `methods` 定義の役割をまとめたものです。
 
 ---
 
@@ -13,7 +13,7 @@
 
 ## 2. 生成（birth）の流れ
 1. `unified registry` が `PluginLoaderV2::create_box(box_type, args)` を呼び出す。
-2. `PluginLoaderV2` は `nyash.toml` から `type_id` と `methods` を読み込む。
+2. `PluginLoaderV2` は `hako.toml`（互換: nyash.toml）から `type_id` と `methods` を読み込む。
 3. `invoke_fn(type_id, method_id=0 /* birth */, instance_id=0, ...)` を呼び、戻り値（出力TLV）の先頭4バイトから `instance_id` を取得。
 4. `PluginBoxV2 { box_type, inner: Arc<PluginHandleInner> }` を生成して返す。
    - `PluginHandleInner` は `{ type_id, instance_id, invoke_fn, fini_method_id, finalized }` を保持し、参照カウント（Arc）で共有される。
@@ -34,7 +34,7 @@
 
 ---
 
-## 4. nyash.toml v2 の定義例（methods + singleton）
+## 4. hako.toml（互換: nyash.toml） の定義例（methods + singleton）
 
 ```toml
 [libraries]

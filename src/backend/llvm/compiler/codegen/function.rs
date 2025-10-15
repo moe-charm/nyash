@@ -141,6 +141,7 @@ pub(super) fn lower_one_function<'ctx>(
                     dst,
                     box_type,
                     args,
+                    auto_birth: _,
                 } => {
                     instructions::lower_newbox(
                         codegen,
@@ -275,32 +276,7 @@ pub(super) fn lower_one_function<'ctx>(
                         defined_in_block.insert(*d);
                     }
                 }
-                MirInstruction::ExternCall {
-                    dst,
-                    iface_name,
-                    method_name,
-                    args,
-                    effects: _,
-                } => {
-                    instructions::lower_externcall(
-                        codegen,
-                        &mut cursor,
-                        &mut resolver,
-                        *bid,
-                        func,
-                        &mut vmap,
-                        dst,
-                        iface_name,
-                        method_name,
-                        args,
-                        &bb_map,
-                        &preds,
-                        &block_end_values,
-                    )?;
-                    if let Some(d) = dst {
-                        defined_in_block.insert(*d);
-                    }
-                }
+                // ExternCall retired — unified Call(callee=Extern) is handled elsewhere
                 MirInstruction::UnaryOp { dst, op, operand } => {
                     instructions::lower_unary(
                         codegen,

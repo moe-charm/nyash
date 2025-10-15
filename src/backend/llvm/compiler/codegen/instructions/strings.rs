@@ -203,8 +203,8 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
         }
     }
 
-    // length/len fast-path
-    if method == "length" || method == "len" {
+    // length/len/size fast-path
+    if method == "length" || method == "len" || method == "size" {
         let i64t = codegen.context.i64_type();
         // Ensure handle for receiver (i8* -> i64 via from_i8_string)
         let recv_h = {
@@ -281,6 +281,76 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                 .left()
                 .ok_or("len_h returned void".to_string())?;
             vmap.insert(*d, rv);
+        }
+        return Ok(true);
+    }
+
+    // isEmpty(): strlen == 0
+    if method == "isEmpty" {
+        let i64t = codegen.context.i64_type();
+        // Ensure handle for receiver (i8* -> i64 via from_i8_string)
+        let recv_h = {
+            if let Some(crate::mir::MirType::String) = func.metadata.value_types.get(box_val) {
+                let p = resolver.resolve_ptr(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    *box_val,
+                    bb_map,
+                    preds,
+                    block_end_values,
+                    vmap,
+                )?;
+                let fnty = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                let callee = codegen
+                    .module
+                    .get_function("nyash.box.from_i8_string")
+                    .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b.build_call(callee, &[p.into()], "str_ptr_to_handle"))
+                    .map_err(|e| e.to_string())?;
+                let rv = call
+                    .try_as_basic_value()
+                    .left()
+                    .ok_or("from_i8_string returned void".to_string())?;
+                rv.into_int_value()
+            } else {
+                resolver.resolve_i64(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    *box_val,
+                    bb_map,
+                    preds,
+                    block_end_values,
+                    vmap,
+                )?
+            }
+        };
+        // call i64 @nyash.string.len_h(i64)
+        let fnty = i64t.fn_type(&[i64t.into()], false);
+        let callee = codegen
+            .module
+            .get_function("nyash.string.len_h")
+            .unwrap_or_else(|| codegen.module.add_function("nyash.string.len_h", fnty, None));
+        let call = cursor
+            .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "strlen_h_for_empty"))
+            .map_err(|e| e.to_string())?;
+        if let Some(d) = dst {
+            let rv = call
+                .try_as_basic_value()
+                .left()
+                .ok_or("len_h returned void".to_string())?;
+            let zero = i64t.const_zero();
+            let eq = codegen
+                .builder
+                .build_int_compare(inkwell::IntPredicate::EQ, rv.into_int_value(), zero, "sempty_cmp")
+                .map_err(|e| e.to_string())?;
+            let as_i64 = codegen
+                .builder
+                .build_int_z_extend(eq, i64t, "sempty_zext")
+                .map_err(|e| e.to_string())?;
+            vmap.insert(*d, as_i64.into());
         }
         return Ok(true);
     }

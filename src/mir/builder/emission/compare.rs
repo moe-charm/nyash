@@ -11,14 +11,3 @@ pub fn emit_to(b: &mut MirBuilder, dst: ValueId, op: CompareOp, lhs: ValueId, rh
     Ok(())
 }
 
-// Convenience wrappers (明示関数名が読みやすい箇所用)
-#[inline]
-pub fn emit_eq_to(b: &mut MirBuilder, dst: ValueId, lhs: ValueId, rhs: ValueId) -> Result<(), String> {
-    emit_to(b, dst, CompareOp::Eq, lhs, rhs)
-}
-
-#[inline]
-pub fn emit_ne_to(b: &mut MirBuilder, dst: ValueId, lhs: ValueId, rhs: ValueId) -> Result<(), String> {
-    emit_to(b, dst, CompareOp::Ne, lhs, rhs)
-}
-

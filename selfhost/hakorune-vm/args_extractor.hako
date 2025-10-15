@@ -1,0 +1,127 @@
+// ArgsExtractorBox - Extract and load arguments from MirCall JSON
+// Single Responsibility: Parse args array, load values from registers
+
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box ArgsExtractorBox {
+  // Extract args array from mir_call object and load values from registers
+  // mir_call_json: JSON string like '{"args":[1,2,3],...}'
+  // regs: register MapBox
+  // Returns: ArrayBox containing argument values (in order)
+  extract_and_load(mir_call_json, regs) {
+    // Create result array
+    local args_array = new ArrayBox()
+
+    // Find "args" field
+    local args_key = "\"args\":["
+    local args_start = mir_call_json.indexOf(args_key)
+    if args_start < 0 {
+      // No args field, return empty array
+      return args_array
+    }
+    args_start = args_start + args_key.size()
+
+    // Find array end
+    local args_end = StringOps.index_of_from(mir_call_json, "]", args_start)
+    if args_end < 0 {
+      // Malformed args array, return empty
+      return args_array
+    }
+
+    // Extract args array content (between [ and ])
+    local args_content = mir_call_json.substring(args_start, args_end)
+
+    // If empty array, return immediately
+    if args_content.size() == 0 {
+      return args_array
+    }
+
+    // Parse comma-separated ValueIds
+    local pos = 0
+    local content_len = args_content.size()
+
+    loop(pos < content_len) {
+      // Skip whitespace
+      loop(pos < content_len) {
+        local ch = args_content.substring(pos, pos + 1)
+        if ch != " " && ch != "\t" && ch != "\n" && ch != "\r" {
+          break
+        }
+        pos = pos + 1
+      }
+
+      if pos >= content_len {
+        break
+      }
+
+      // Find next comma or end
+      local next_comma = StringOps.index_of_from(args_content, ",", pos)
+      local value_end = 0
+      if next_comma < 0 {
+        value_end = content_len
+      } else {
+        value_end = next_comma
+      }
+
+      // Extract ValueId string
+      local value_str = args_content.substring(pos, value_end)
+
+      // Convert to integer (ValueId)
+      local value_id = StringHelpers.to_i64(value_str)
+
+      // Load value from register
+      local arg_value = ValueManagerBox.get(regs, value_id)
+
+      // Add to result array
+      args_array.push(arg_value)
+
+      // Move to next argument
+      if next_comma < 0 {
+        break
+      }
+      pos = next_comma + 1
+    }
+
+    return args_array
+  }
+
+  // Get argument count without loading values
+  // mir_call_json: JSON string like '{"args":[1,2,3],...}'
+  // Returns: number of arguments
+  count_args(mir_call_json) {
+    // Find "args" field
+    local args_key = "\"args\":["
+    local args_start = mir_call_json.indexOf(args_key)
+    if args_start < 0 {
+      return 0
+    }
+    args_start = args_start + args_key.size()
+
+    // Find array end
+    local args_end = StringOps.index_of_from(mir_call_json, "]", args_start)
+    if args_end < 0 {
+      return 0
+    }
+
+    // Extract args array content
+    local args_content = mir_call_json.substring(args_start, args_end)
+    if args_content.size() == 0 {
+      return 0
+    }
+
+    // Count commas + 1
+    local count = 1
+    local pos = 0
+    loop(pos < args_content.size()) {
+      local ch = args_content.substring(pos, pos + 1)
+      if ch == "," {
+        count = count + 1
+      }
+      pos = pos + 1
+    }
+
+    return count
+  }
+}

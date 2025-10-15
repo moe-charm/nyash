@@ -1,0 +1,40 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "externcall",
+              "dst": 1,
+              "func": "nyrt_print",
+              "args": [2],
+              "comment": "print('Hello, WASM!')"
+            },
+            {
+              "op": "const",
+              "dst": 3,
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 3
+            }
+          ]
+        }
+      ],
+      "constants": {
+        "2": {
+          "type": "string",
+          "value": "Hello, WASM!"
+        }
+      }
+    }
+  ]
+}

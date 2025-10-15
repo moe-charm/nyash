@@ -1,0 +1,19 @@
+// @jit-debug
+// @plugin-builtins
+
+// MapBox end-to-end via InvokePolicy/Observe
+// - Exercises: size/get/has/set on plugin-builtins path
+
+static box Main {
+  main() {
+    local m, ok, v, sz
+    m = new MapBox()
+    m.set(1, 100)
+    m.set(2, 200)
+    ok = m.has(1)
+    v = m.get(1)
+    sz = m.size()
+    return sz  // expect: 2
+  }
+}
+

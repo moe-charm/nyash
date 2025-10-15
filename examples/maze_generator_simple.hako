@@ -1,0 +1,192 @@
+// 🌀 シンプルな迷路ジェネレーター - outboxキーワード活用デモ
+// より単純なアルゴリズムで確実に動く迷路を生成
+
+print("=== Simple Maze Generator with outbox ===")
+
+// Cellの定義（迷路の1マス）
+box Cell {
+    init { x, y, isWall }
+    
+    Cell(x_pos, y_pos, wall_flag) {
+        me.x = x_pos
+        me.y = y_pos
+        me.isWall = wall_flag
+    }
+    
+    makePassage() {
+        me.isWall = false
+    }
+    
+    makeWall() {
+        me.isWall = true
+    }
+}
+
+// 迷路Box定義
+box Maze {
+    init { width, height, cells }
+    
+    Maze(w, h) {
+        me.width = w
+        me.height = h
+        me.cells = new MapBox()
+        
+        // 初期化：全部壁にする
+        local y, x, key, cell
+        y = 0
+        loop(y < h) {
+            x = 0
+            loop(x < w) {
+                key = x + "," + y
+                cell = new Cell(x, y, true)  // 初期状態は壁
+                me.cells.set(key, cell)
+                x = x + 1
+            }
+            y = y + 1
+        }
+    }
+    
+    // 座標からCellを取得
+    getCell(x, y) {
+        local key
+        key = x + "," + y
+        return me.cells.get(key)
+    }
+    
+    // シンプルな迷路生成
+    generateSimple() {
+        print("Generating simple maze...")
+        
+        // 奇数座標を通路にする（単純なグリッドパターン）
+        local y, x, cell
+        y = 1
+        loop(y < me.height - 1) {
+            x = 1
+            loop(x < me.width - 1) {
+                // 両方とも奇数なら通路
+                if isOddSimple(x) && isOddSimple(y) {
+                    cell = me.getCell(x, y)
+                    cell.makePassage()
+                }
+                x = x + 1
+            }
+            y = y + 1
+        }
+        
+        // 偶数行の奇数列に通路を追加（縦の通路）
+        y = 2
+        loop(y < me.height - 1) {
+            x = 1
+            loop(x < me.width - 1) {
+                if isEvenSimple(y) && isOddSimple(x) {
+                    // 50%の確率で通路にする（疑似ランダム）
+                    if shouldMakePassage(x, y) {
+                        cell = me.getCell(x, y)
+                        cell.makePassage()
+                    }
+                }
+                x = x + 2
+            }
+            y = y + 2
+        }
+        
+        // 奇数行の偶数列に通路を追加（横の通路）
+        y = 1
+        loop(y < me.height - 1) {
+            x = 2
+            loop(x < me.width - 1) {
+                if isOddSimple(y) && isEvenSimple(x) {
+                    // 50%の確率で通路にする（疑似ランダム）
+                    if shouldMakePassage(x + 1, y + 1) {
+                        cell = me.getCell(x, y)
+                        cell.makePassage()
+                    }
+                }
+                x = x + 2
+            }
+            y = y + 2
+        }
+    }
+    
+    // 迷路を表示
+    display() {
+        print("\nGenerated Maze:")
+        local y, x, line, cell
+        y = 0
+        loop(y < me.height) {
+            line = ""
+            x = 0
+            loop(x < me.width) {
+                cell = me.getCell(x, y)
+                if cell.isWall {
+                    line = line + "■"
+                } else {
+                    line = line + "  "
+                }
+                x = x + 1
+            }
+            print(line)
+            y = y + 1
+        }
+    }
+}
+
+// MazeFactory定義
+box MazeFactory {
+    init { dummy }
+}
+
+// static関数でoutboxを使用
+static function MazeFactory.createSimple(width, height) {
+    print("MazeFactory.createSimple called with size: " + width + "x" + height)
+    
+    // outbox変数で迷路オブジェクトを作成
+    outbox maze
+    maze = new Maze(width, height)
+    
+    // 迷路を生成
+    maze.generateSimple()
+    
+    return maze  // 所有権を呼び出し側に移転
+}
+
+// ヘルパー関数（簡易版）
+function isOddSimple(n) {
+    // 2で割った余りが1かチェック（簡易実装）
+    local div2
+    div2 = n * 0  // 0で初期化
+    loop(div2 * 2 + 1 <= n) {
+        div2 = div2 + 1
+    }
+    return (n == div2 * 2 + 1)
+}
+
+function isEvenSimple(n) {
+    // 2で割った余りが0かチェック（簡易実装）
+    local div2
+    div2 = n * 0  // 0で初期化
+    loop(div2 * 2 < n) {
+        div2 = div2 + 1
+    }
+    return (n == div2 * 2)
+}
+
+// 疑似ランダムで通路にするか決定
+function shouldMakePassage(x, y) {
+    // 座標ベースの疑似ランダム
+    local seed
+    seed = (x * 7 + y * 13) - ((x * 7 + y * 13) >= 100) * 100
+    return seed < 50
+}
+
+// メイン実行
+print("\n--- Small Maze (11x7) ---")
+maze1 = MazeFactory.createSimple(11, 7)
+maze1.display()
+
+print("\n--- Medium Maze (21x11) ---")
+maze2 = MazeFactory.createSimple(21, 11)
+maze2.display()
+
+print("\n=== Simple Maze Generator completed! ===")
+print("Note: Outbox successfully transfers maze ownership!")

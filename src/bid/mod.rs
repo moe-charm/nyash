@@ -1,7 +1,6 @@
 // BID-FFI: Box Interface Definition with Foreign Function Interface
 // Everything is Box philosophy meets practical FFI/ABI design!
 
-pub mod bridge;
 pub mod error;
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 pub mod loader;
@@ -14,7 +13,6 @@ pub mod types;
 // pub mod plugin_box;  // legacy - FileBox専用実装
 pub mod generic_plugin_box;
 
-pub use bridge::*;
 pub use error::*;
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 pub use loader::*;

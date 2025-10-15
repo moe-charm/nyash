@@ -1,11 +1,12 @@
 //! Nyash FixtureBox Plugin — Minimal stable fixture for tests
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - ✅ 2 lock() blocks in birth()/fini() → macro helpers
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
+// Import shared TLV codec + instance manager macros from hako_abi_impl
+use hako_abi_impl::define_instance_storage;
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_string};
 
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;
@@ -30,9 +31,8 @@ struct FixtureInstance {
     alive: bool,
 }
 
-static INSTANCES: Lazy<Mutex<HashMap<u32, FixtureInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (replaces 3 lines of boilerplate)
+define_instance_storage!(FixtureInstance);
 
 // ===== v1 legacy entry (kept for loader shim compatibility) =====
 #[no_mangle]
@@ -126,7 +126,7 @@ unsafe fn dispatch(
         METHOD_BIRTH => birth(result, result_len),
         METHOD_FINI => fini(instance_id),
         METHOD_ECHO => echo(args, args_len, result, result_len),
-        METHOD_GET => write_tlv_str("ok", result, result_len),
+        METHOD_GET => write_tlv_string("ok", result, result_len),
         _ => NYB_E_INVALID_METHOD,
     }
 }
@@ -138,12 +138,12 @@ unsafe fn birth(result: *mut u8, result_len: *mut usize) -> i32 {
     if preflight(result, result_len, 4) {
         return NYB_E_SHORT_BUFFER;
     }
-    let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    if let Ok(mut map) = INSTANCES.lock() {
-        map.insert(id, FixtureInstance { alive: true });
-    } else {
-        return NYB_E_PLUGIN_ERROR;
+
+    let id = allocate_instance_id();
+    if let Err(e) = store_instance(id, FixtureInstance { alive: true }) {
+        return e;
     }
+
     let bytes = id.to_le_bytes();
     std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
     *result_len = 4;
@@ -151,70 +151,23 @@ unsafe fn birth(result: *mut u8, result_len: *mut usize) -> i32 {
 }
 
 unsafe fn fini(instance_id: u32) -> i32 {
-    if let Ok(mut map) = INSTANCES.lock() {
-        map.remove(&instance_id);
-        NYB_SUCCESS
-    } else {
-        NYB_E_PLUGIN_ERROR
-    }
-}
-
-unsafe fn echo(args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
-    // Expect TLV with 1 argument: tag=6 (String)
-    if args.is_null() || args_len < 4 {
-        return NYB_E_INVALID_ARGS;
-    }
-    let slice = std::slice::from_raw_parts(args, args_len);
-    // Minimal TLV parse: skip header (ver/argc) and verify first entry is String
-    if slice.len() < 8 {
-        return NYB_E_INVALID_ARGS;
-    }
-    if slice[0] != 1 || slice[1] != 0 { /* ver=1 little endian */ }
-    // position 4.. is first entry; [tag, rsv, sz_lo, sz_hi, payload...]
-    let tag = slice[4];
-    if tag != 6 {
-        return NYB_E_INVALID_ARGS;
-    }
-    let sz = u16::from_le_bytes([slice[6], slice[7]]) as usize;
-    if 8 + sz > slice.len() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let payload = &slice[8..8 + sz];
-    let s = match std::str::from_utf8(payload) {
-        Ok(t) => t,
-        Err(_) => return NYB_E_INVALID_ARGS,
-    };
-    write_tlv_str(s, result, result_len)
-}
-
-fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let needed = 4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>();
-    let mut buf: Vec<u8> = Vec::with_capacity(needed);
-    buf.extend_from_slice(&1u16.to_le_bytes()); // ver
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes()); // argc
-    for (tag, payload) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
-        buf.extend_from_slice(payload);
-    }
-    unsafe {
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return NYB_E_SHORT_BUFFER;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
-        *result_len = needed;
-    }
+    remove_instance(instance_id);
     NYB_SUCCESS
 }
 
-fn write_tlv_str(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
+unsafe fn echo(args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+    // Use shared TLV codec to read string argument
+    let s = match read_arg_string(args, args_len, 0) {
+        Some(s) => s,
+        None => return NYB_E_INVALID_ARGS,
+    };
+    write_tlv_string(&s, result, result_len)
 }
+
+// Removed duplicate TLV functions - now using shared codec from hako_abi_impl:
+// - write_tlv_result() -> use hako_abi_impl::tlv::write_tlv_string
+// - write_tlv_str() -> use hako_abi_impl::tlv::write_tlv_string
+// - Manual TLV parsing in echo() -> use hako_abi_impl::tlv::read_arg_string
 
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe {

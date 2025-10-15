@@ -1,0 +1,12 @@
+// Simple test without await
+
+static box Main {
+    main() {
+        local x, y, result
+        x = 10
+        y = 20
+        result = x + y
+        print("Result: " + result.toString())
+        return result
+    }
+}

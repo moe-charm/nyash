@@ -13,6 +13,7 @@ Rationale
 Operational Rules (PHI‑on)
 - Merge blocks place PHIs first, with one incoming per predecessor, covering loop latches, break/continue exits, and structured control flow.
 - `verify_allow_no_phi()` mirrors `NYASH_MIR_NO_PHI`; with PHI‑on it stays strict and fails if SSA form is missing.
+- LLVM (llvmlite) unification: PhiHandler creates PHIs; `finalize_phis` only wires incomings and never creates new PHIs unless `NYASH_LLVM_PHI_ALLOW_CREATE=1` (opt‑in for legacy dumps).
 - Use `NYASH_LLVM_TRACE_PHI=1` to inspect wiring; traces now confirm the builder’s SSA layout instead of synthesizing it from edge copies.
 
 Fallback Mode (PHI‑off)

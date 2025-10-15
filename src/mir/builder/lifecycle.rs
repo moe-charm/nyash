@@ -1,4 +1,4 @@
-use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, BasicBlockId, ConstValue};
+use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, BasicBlockId};
 use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
@@ -19,10 +19,11 @@ impl super::MirBuilder {
                 } else {
                     for (mname, mast) in methods {
                         if let ASTNode::FunctionDeclaration { params, .. } = mast {
-                            self.static_method_index
-                                .entry(mname.clone())
-                                .or_insert_with(Vec::new)
-                                .push((name.clone(), params.len()));
+                            self.method_index.register_static_method(
+                                mname.clone(),
+                                name.clone(),
+                                params.len()
+                            );
                         }
                     }
                 }
@@ -92,10 +93,11 @@ impl super::MirBuilder {
                                     if let N::FunctionDeclaration { params, body, .. } = mast {
                                         let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
                                         self.lower_static_method_as_function(func_name, params.clone(), body.clone())?;
-                                        self.static_method_index
-                                            .entry(mname.clone())
-                                            .or_insert_with(Vec::new)
-                                            .push((name.clone(), params.len()));
+                                        self.method_index.register_static_method(
+                                            mname.clone(),
+                                            name.clone(),
+                                            params.len()
+                                        );
                                     }
                                 }
                             }
@@ -126,7 +128,11 @@ impl super::MirBuilder {
                                     if !*is_static {
                                         let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
                                         // Index instance method for rewrite gating
-                                        self.instance_method_index.insert((name.clone(), mname.clone(), params.len()));
+                                        self.method_index.register_instance_method(
+                                            name.clone(),
+                                            mname.clone(),
+                                            params.len()
+                                        );
                                         self.lower_method_as_function(
                                             func_name,
                                             name.clone(),
@@ -224,7 +230,7 @@ impl super::MirBuilder {
                 let insns = &bb.instructions;
                 let mut idx = 0usize;
                 while idx < insns.len() {
-                    if let MirInstruction::NewBox { dst, box_type, args } = &insns[idx] {
+                    if let MirInstruction::NewBox { dst, box_type, args, .. } = &insns[idx] {
                         // Skip StringBox (literal optimization path)
                         if box_type != "StringBox" {
                             let expect_tail = format!("{}.birth/{}", box_type, args.len());
@@ -232,27 +238,61 @@ impl super::MirBuilder {
                             let mut ok = false;
                             let mut j = idx + 1;
                             let mut last_const_name: Option<String> = None;
-                            while j < insns.len() && j <= idx + 3 {
+                            // Allow up to 4 ops ahead to tolerate a receiver copy (dst -> tmp) before birth()
+                            let mut recv_alias: Option<super::ValueId> = None;
+                            while j < insns.len() && j <= idx + 4 {
                                 match &insns[j] {
                                     MirInstruction::BoxCall { box_val, method, .. } => {
-                                        if method == "birth" && box_val == dst { ok = true; break; }
+                                        // accept birth on original dst or its immediate copy alias
+                                        let target = if let Some(a) = recv_alias { a } else { *dst };
+                                        if method == "birth" && *box_val == target { ok = true; break; }
                                     }
                                     MirInstruction::Const { value, .. } => {
                                         if let super::ConstValue::String(s) = value { last_const_name = Some(s.clone()); }
                                     }
-                                    MirInstruction::Call { func, .. } => {
-                                        // If immediately preceded by matching Const String, accept
+                                    MirInstruction::Copy { dst: d, src: s } => {
+                                        if s == dst { recv_alias = Some(*d); }
+                                    }
+                                    MirInstruction::Call { callee, args, .. } => {
+                                        // Accept unified ModuleFunction("Class.birth/N") with me == dst (or alias)
+                                        if let Some(ref c) = callee {
+                                            if let crate::mir::definitions::Callee::ModuleFunction(ref fname) = c {
+                                                if fname == &expect_tail {
+                                                    if let Some(first) = args.get(0) {
+                                                        let target = if let Some(a) = recv_alias { a } else { *dst };
+                                                        if *first == target { ok = true; break; }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Legacy: If immediately preceded by matching Const String, accept
                                         if let Some(prev) = last_const_name.as_ref() {
                                             if prev == &expect_tail { ok = true; break; }
                                         }
-                                        // Heuristic: in some forms, builder may reuse a shared const; best-effort only
                                     }
                                     _ => {}
                                 }
                                 j += 1;
                             }
                             if !ok {
-                                eprintln!("[warn] dev verify: NewBox {} at v{} not followed by birth() call (expect {})", box_type, dst, expect_tail);
+                                if !crate::config::env::cli_quiet() {
+                                    eprintln!(
+                                        "[warn] dev verify: NewBox {} at v{} not followed by birth() call (expect {})",
+                                        box_type,
+                                        dst,
+                                        expect_tail
+                                    );
+                                    if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                                        eprintln!(
+                                            "{}",
+                                            crate::common::diagnostics::dev_verify_newbox_missing_birth(
+                                                box_type,
+                                                &format!("v{}", dst.0),
+                                                &expect_tail,
+                                            )
+                                        );
+                                    }
+                                }
                                 warn_count += 1;
                             }
                         }
@@ -260,9 +300,59 @@ impl super::MirBuilder {
                     idx += 1;
                 }
             }
-            if warn_count > 0 {
+            if warn_count > 0 && !crate::config::env::cli_quiet() {
                 eprintln!("[warn] dev verify: NewBox→birth invariant warnings: {}", warn_count);
+                if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "{}",
+                        crate::common::diagnostics::dev_verify_birth_invariant_summary(warn_count)
+                    );
+                }
             }
+        }
+
+        // Normalize: ensure every basic block ends with a terminator (ret/jump/branch/throw)
+        // This guards against unterminated blocks observed in rc paths.
+        {
+            use crate::mir::{MirInstruction, types::MirType};
+            let mut fun = function.clone();
+            // Collect block ids first to satisfy borrow rules
+            let ids: Vec<_> = fun.blocks.keys().cloned().collect();
+            for bid in ids {
+                let mut need_fix = false;
+                if let Some(bb) = fun.get_block(bid) {
+                    if !bb.is_terminated() {
+                        need_fix = true;
+                    }
+                }
+                if need_fix {
+                    match fun.signature.return_type {
+                        MirType::Void | MirType::Unknown => {
+                            if let Some(bbm) = fun.get_block_mut(bid) {
+                                bbm.add_instruction(MirInstruction::Return { value: None });
+                            }
+                        }
+                        _ => {
+                            // Try to return the last defined value in the block; otherwise return 0
+                            let mut last_dst: Option<crate::mir::ValueId> = None;
+                            if let Some(bb) = fun.get_block(bid) {
+                                for inst in bb.instructions.iter().rev() {
+                                    if let Some(d) = inst.dst_value() { last_dst = Some(d); break; }
+                                }
+                            }
+                            let ret_val = if let Some(d) = last_dst {
+                                d
+                            } else {
+                                crate::mir::function_emission::emit_const_integer(&mut fun, bid, 0)
+                            };
+                            crate::mir::function_emission::emit_return_value(&mut fun, bid, ret_val);
+                        }
+                    }
+                }
+            }
+            // Recompute CFG after edits
+            fun.update_cfg();
+            function = fun;
         }
 
         module.add_function(function);
@@ -270,7 +360,7 @@ impl super::MirBuilder {
         // Dev stub: provide condition_fn when missing to satisfy predicate calls in JSON lexers
         // Returns integer 1 (truthy) and accepts one argument (unused).
         if module.functions.get("condition_fn").is_none() {
-            let mut sig = FunctionSignature {
+            let sig = FunctionSignature {
                 name: "condition_fn".to_string(),
                 params: vec![MirType::Integer], // accept one i64-like arg
                 return_type: MirType::Integer,
@@ -287,6 +377,46 @@ impl super::MirBuilder {
             module.add_function(f);
         }
 
-        Ok(module)
+        
+        // Final normalization: ensure every block in every function has a terminator
+        {
+            use crate::mir::{MirInstruction, types::MirType};
+            // Collect function names to avoid borrow issues
+            let fnames: Vec<String> = module.functions.keys().cloned().collect();
+            for fname in fnames {
+                if let Some(fun) = module.functions.get_mut(&fname) {
+                    let ids: Vec<_> = fun.blocks.keys().cloned().collect();
+                    for bid in ids {
+                        let need_fix = fun.get_block(bid).map(|bb| !bb.is_terminated()).unwrap_or(false);
+                        if need_fix {
+                            match fun.signature.return_type {
+                                MirType::Void | MirType::Unknown => {
+                                    if let Some(bbm) = fun.get_block_mut(bid) {
+                                        bbm.add_instruction(MirInstruction::Return { value: None });
+                                    }
+                                }
+                                _ => {
+                                    let mut last_dst: Option<crate::mir::ValueId> = None;
+                                    if let Some(bb) = fun.get_block(bid) {
+                                        for inst in bb.instructions.iter().rev() {
+                                            if let Some(d) = inst.dst_value() { last_dst = Some(d); break; }
+                                        }
+                                    }
+                                    let ret_val = if let Some(d) = last_dst {
+                                        d
+                                    } else {
+                                        crate::mir::function_emission::emit_const_integer(fun, bid, 0)
+                                    };
+                                    crate::mir::function_emission::emit_return_value(fun, bid, ret_val);
+                                }
+                            }
+                        }
+                    }
+                    fun.update_cfg();
+                }
+            }
+        }
+
+Ok(module)
     }
 }

@@ -36,19 +36,40 @@ impl ScopeTracker {
     pub fn pop_scope(&mut self) {
         if let Some(scope) = self.scopes.pop() {
             // Call fini in reverse order of creation
+            let mut total = 0usize;
+            let mut skipped = 0usize;
+            let mut finalized_inst = 0usize;
+            let mut finalized_plugin = 0usize;
+            // Call fini in reverse order of creation
             for arc_box in scope.into_iter().rev() {
+                total += 1;
+                // Skip if the value is still referenced elsewhere (e.g., return value)
+                if std::sync::Arc::strong_count(&arc_box) > 1 {
+                    skipped += 1;
+                    continue;
+                }
                 // InstanceBox: call fini()
                 if let Some(instance) = arc_box.as_any().downcast_ref::<InstanceBox>() {
                     let _ = instance.fini();
+                    finalized_inst += 1;
                     continue;
                 }
                 // PluginBoxV2: 明示ライフサイクルに合わせ、スコープ終了時にfini（自己責任運用）
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
                 if let Some(p) = arc_box.as_any().downcast_ref::<PluginBoxV2>() {
                     p.finalize_now();
+                    finalized_plugin += 1;
                     continue;
                 }
                 // Builtin and others: no-op for now
+            }
+            if crate::config::env::scope_stats_log() {
+                let roots_total = self.root_count_total();
+                let roots_regions = self.root_regions();
+                eprintln!(
+                    r#"{{"kind":"scope_pop","total":{},"skipped":{},"finalized_inst":{},"finalized_plugin":{},"roots":{},"root_regions":{}}}"#,
+                    total, skipped, finalized_inst, finalized_plugin, roots_total, roots_regions
+                );
             }
         }
 

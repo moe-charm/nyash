@@ -1,20 +1,10 @@
 // Expression lowering split from builder.rs to keep files lean
-use super::{ConstValue, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
 use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr, MethodCallExpr, FieldAccessExpr};
 
 impl super::MirBuilder {
     // Main expression dispatcher
     pub(super) fn build_expression_impl(&mut self, ast: ASTNode) -> Result<ValueId, String> {
-        if matches!(
-            ast,
-            ASTNode::Program { .. }
-                | ASTNode::If { .. }
-                | ASTNode::Loop { .. }
-                | ASTNode::TryCatch { .. }
-                | ASTNode::Throw { .. }
-        ) {
-            return self.build_expression_impl_legacy(ast);
-        }
         match ast {
             ASTNode::Literal { value, .. } => self.build_literal(value),
 
@@ -78,6 +68,27 @@ impl super::MirBuilder {
                 self.build_function_call(c.name, c.arguments)
             }
 
+            ASTNode::ExternCCall { symbol, arguments, .. } => {
+                // Build arguments
+                let mut args: Vec<ValueId> = Vec::with_capacity(arguments.len());
+                for a in arguments {
+                    args.push(self.build_expression_impl(a)?);
+                }
+                // Normalize args into SSA locals
+                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+                let full = format!("ffi.dynamic.{}", symbol);
+                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects("ffi.dynamic", &symbol);
+                let dst = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Call {
+                    dst: Some(dst),
+                    func: ValueId::new(0),
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Extern(full)),
+                    args,
+                    effects,
+                })?;
+                Ok(dst)
+            }
+
             ASTNode::Call {
                 callee, arguments, ..
             } => self.build_indirect_call_expression(*callee.clone(), arguments.clone()),
@@ -119,6 +130,23 @@ impl super::MirBuilder {
                 weak_fields,
                 ..
             } => {
+                // Dev lint: suggest flow for fieldless static boxes (staged)
+                if is_static
+                    && std::env::var("NYASH_LINT_STATIC_TO_FLOW").ok().as_deref() == Some("1")
+                {
+                    let has_fields = !fields.is_empty() || !weak_fields.is_empty();
+                    let has_ctors = !constructors.is_empty();
+                    if !has_fields && !has_ctors && name != "Main" {
+                        eprintln!(
+                            "[lint][flow] static box '{}' has no fields/ctors; consider 'flow {} {{ ... }}'",
+                            name, name
+                        );
+                    }
+                }
+                if is_static {
+                    // Record static/flow box name for later checks (e.g., forbid new Flow())
+                    self.static_box_names.insert(name.clone());
+                }
                 if is_static && name == "Main" {
                     // Special entry box: materialize main() as Program and lower others as static functions
                     self.build_static_main_box(name.clone(), methods.clone())
@@ -139,10 +167,11 @@ impl super::MirBuilder {
                                 body.clone(),
                             )?;
                             // Index static method for fallback resolution of bare calls
-                            self.static_method_index
-                                .entry(method_name.clone())
-                                .or_insert_with(Vec::new)
-                                .push((name.clone(), params.len()));
+                            self.method_index.register_static_method(
+                                method_name.clone(),
+                                name.clone(),
+                                params.len()
+                            );
                         }
                     }
                     // Return void for declaration context
@@ -208,11 +237,7 @@ impl super::MirBuilder {
 
             ASTNode::ArrayLiteral { elements, .. } => {
                 let arr_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst: arr_id,
-                    box_type: "ArrayBox".to_string(),
-                    args: vec![],
-                })?;
+                self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;
                 for e in elements {
                     let v = self.build_expression_impl(e)?;
                     self.emit_instruction(MirInstruction::BoxCall {
@@ -228,11 +253,7 @@ impl super::MirBuilder {
             }
             ASTNode::MapLiteral { entries, .. } => {
                 let map_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst: map_id,
-                    box_type: "MapBox".to_string(),
-                    args: vec![],
-                })?;
+                self.emit_instruction(MirInstruction::NewBox { dst: map_id, box_type: "MapBox".to_string(), args: vec![], auto_birth: None })?;
                 for (k, expr) in entries {
                     // const string key
                     let k_id = crate::mir::builder::emission::constant::emit_string(self, k);

@@ -1,0 +1,71 @@
+#!/bin/bash
+# selfhost_front_min_vm_llvm.sh — Minimal VM/LLVM parity check for selfhost samples.
+
+source "$(dirname "$0")/../../../lib/test_runner.sh"
+export SMOKES_USE_PYVM=0
+export SMOKES_FORCE_LLVM=1
+require_env || exit 2
+preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
+export NYASH_LLVM_USE_HARNESS=1
+export NYASH_NYRT_SILENT_RESULT=1
+
+# Gate selfhost front minimal parity in quick unless explicitly enabled
+if [ "${SMOKES_ENABLE_SELFHOST_FRONT:-0}" != "1" ]; then
+  echo "SKIP: selfhost_front_min_vm_llvm (set SMOKES_ENABLE_SELFHOST_FRONT=1 to run)" >&2
+  exit 0
+fi
+
+cases=(
+  "const:apps/tests/selfhost_min/const_ret.hako:Result: 42"
+  "if_merge:apps/tests/selfhost_min/if_merge.hako:Result: 10"
+  "loop_sum:apps/tests/selfhost_min/loop_sum.hako:Result: 15"
+  "call_static:apps/tests/selfhost_min/call_static.hako:Result: 7"
+)
+
+run_case() {
+  local label="$1"
+  local path="$2"
+  local expected="$3"
+
+  ensure_hako_toml
+
+  local out_vm
+  if [ "$label" = "call_static" ]; then
+    out_vm=$(NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 run_nyash_vm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  else
+    out_vm=$(run_nyash_vm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  fi
+  if [ -z "$out_vm" ]; then
+    log_error "${label}: missing Result line (VM)"
+    return 1
+  fi
+  compare_outputs "$expected" "$out_vm" "${label}_vm" || return 1
+
+  local out_llvm
+  if [ "$label" = "call_static" ]; then
+    out_llvm=$(NYASH_LLVM_USE_HARNESS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 run_nyash_llvm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  else
+    out_llvm=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  fi
+  if [ -z "$out_llvm" ]; then
+    log_warn "${label}: LLVM harness unavailable (SKIP)"
+  else
+    compare_outputs "$out_vm" "$out_llvm" "${label}_vm_vs_llvm" || return 1
+  fi
+  return 0
+}
+
+all_ok=0
+for entry in "${cases[@]}"; do
+  IFS=':' read -r label path expected <<< "$entry"
+  if ! run_case "$label" "$path" "$expected"; then
+    all_ok=1
+  fi
+done
+
+if [ $all_ok -ne 0 ]; then
+  exit 1
+fi
+
+exit 0

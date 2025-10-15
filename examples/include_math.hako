@@ -1,0 +1,6 @@
+static box Math {
+  add(a, b) {
+    return a + b
+  }
+}
+

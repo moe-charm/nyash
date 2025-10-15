@@ -1,0 +1,19 @@
+// Multi-PHI diamond demo
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_PHI_MIN=1
+
+static box Main {
+    main() {
+        local a, b, x, y
+        a = 2
+        b = 5
+        if (a < b) {
+            x = a + 1
+            y = b + 2
+        } else {
+            x = a + 3
+            y = b + 4
+        }
+        return x + y
+    }
+}
+

@@ -8,6 +8,20 @@ pub fn is_enabled_env() -> bool {
     if std::env::var("NYASH_FORCE_SUGAR").ok().as_deref() == Some("1") {
         return true;
     }
+    // Deprecated compat toggles (Phase‑out): warn (verbose only) when used
+    let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+    let dep_keys = [
+        "NYASH_ENABLE_ARRAY_LITERAL",
+        "NYASH_ENABLE_MAP_LITERAL",
+        "NYASH_ENABLE_MAP_IDENT_KEY",
+    ];
+    if verbose {
+        for k in dep_keys.iter() {
+            if std::env::var(k).is_ok() {
+                eprintln!("[env][deprecated] {} is deprecated; prefer NYASH_SYNTAX_SUGAR_LEVEL=basic|full", k);
+            }
+        }
+    }
     match std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok() {
         Some(v) => {
             let v = v.to_ascii_lowercase();

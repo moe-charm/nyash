@@ -1,0 +1,31 @@
+// ベンチマーク4: 関数呼び出しオーバーヘッド
+// 期待値: 1000
+//
+// 測定内容:
+// - Static method call overhead
+// - Call/Return stack operations
+// - 1000回の関数呼び出し
+
+static box Math {
+    add(a, b) {
+        return a + b
+    }
+}
+
+static box Main {
+    main() {
+        local sum
+        local i
+
+        sum = 0
+        i = 0
+
+        loop(i < 1000) {
+            sum = Math.add(sum, 1)
+            i = i + 1
+        }
+
+        print("Result: " + sum)
+        return 0
+    }
+}

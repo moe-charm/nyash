@@ -1,0 +1,63 @@
+// Proof of Concept: Universal methodRef for ALL Boxes
+// This test demonstrates what WILL work after implementing universal handler
+
+static box Main {
+  main() {
+    print("=== Universal methodRef Proof of Concept ===")
+
+    // Test 1: ArrayBox (CURRENTLY WORKS)
+    print("\n1. ArrayBox.methodRef (existing)")
+    local arr = new ArrayBox()
+    arr.push(10)
+    arr.push(20)
+    arr.push(30)
+
+    local cbArrSize = arr.methodRef("size", 0)
+    local arrSize = cbArrSize.call([])
+    print("  ArrayBox.size via methodRef: " + arrSize)
+
+    local cbArrGet = arr.methodRef("get", 1)
+    local args1 = new ArrayBox()
+    args1.push(1)
+    local arrItem = cbArrGet.call(args1)
+    print("  ArrayBox.get(1) via methodRef: " + arrItem)
+
+    // Test 2: MapBox (WILL WORK after universal handler)
+    print("\n2. MapBox.methodRef (after universal handler)")
+    local map = new MapBox()
+    map.set("key1", 100)
+    map.set("key2", 200)
+
+    // THIS WILL FAIL NOW (MapBox doesn't have methodRef slot)
+    // local cbMapSize = map.methodRef("size", 0)
+    // local mapSize = cbMapSize.call([])
+    // print("  MapBox.size via methodRef: " + mapSize)
+    print("  MapBox.methodRef - NOT YET IMPLEMENTED")
+    print("  (Will work automatically after universal handler)")
+
+    // Test 3: StringBox (WILL WORK after universal handler)
+    print("\n3. StringBox.methodRef (after universal handler)")
+    // THIS WILL FAIL NOW (primitive strings don't support methodRef)
+    // local str = "hello"
+    // local cbStrLen = str.methodRef("length", 0)
+    // local strLen = cbStrLen.call([])
+    // print("  String.length via methodRef: " + strLen)
+    print("  StringBox.methodRef - NOT YET IMPLEMENTED")
+    print("  (Will work automatically after universal handler)")
+
+    // Test 4: User-defined Boxes (WILL WORK after universal handler)
+    print("\n4. UserBox.methodRef (after universal handler)")
+    // local userBox = new MyCustomBox()
+    // local cbUserMethod = userBox.methodRef("customMethod", 2)
+    // local result = cbUserMethod.call([arg1, arg2])
+    print("  UserBox.methodRef - NOT YET IMPLEMENTED")
+    print("  (Will work automatically after universal handler)")
+
+    print("\n=== Summary ===")
+    print("CURRENT:  Only ArrayBox has methodRef")
+    print("PROPOSED: ALL Boxes get methodRef automatically")
+    print("IMPACT:   Zero code duplication, perfect scalability")
+
+    return 0
+  }
+}

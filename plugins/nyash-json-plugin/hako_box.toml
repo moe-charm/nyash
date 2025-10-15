@@ -1,0 +1,81 @@
+[box]
+name = "JsonPlugin"
+version = "0.1.0"
+description = "JSON parsing and traversal via Nyash TypeBox v2 (serde_json backend)"
+author = "Nyash Team"
+
+[provides]
+boxes = ["JsonDocBox", "JsonNodeBox"]
+
+[JsonDocBox]
+type_id = 70
+
+[JsonDocBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[JsonDocBox.methods.parse]
+id = 1
+args = [{ type = "string" }]
+returns = { type = "void" }
+
+[JsonDocBox.methods.root]
+id = 2
+args = []
+returns = { type = "handle", box = "JsonNodeBox" }
+
+[JsonDocBox.methods.error]
+id = 3
+args = []
+returns = { type = "string" }
+
+[JsonNodeBox]
+type_id = 71
+
+[JsonNodeBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[JsonNodeBox.methods.kind]
+id = 1
+args = []
+returns = { type = "string" }
+
+[JsonNodeBox.methods.get]
+id = 2
+args = [{ type = "string" }]
+returns = { type = "handle", box = "JsonNodeBox" }
+
+[JsonNodeBox.methods.size]
+id = 3
+args = []
+returns = { type = "i64" }
+
+[JsonNodeBox.methods.at]
+id = 4
+args = [{ type = "i64" }]
+returns = { type = "handle", box = "JsonNodeBox" }
+
+[JsonNodeBox.methods.str]
+id = 5
+args = []
+returns = { type = "string" }
+
+[JsonNodeBox.methods.int]
+id = 6
+args = []
+returns = { type = "i64" }
+
+[JsonNodeBox.methods.bool]
+id = 7
+args = []
+returns = { type = "bool" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+linux = "target/release/libnyash_json_plugin.so"
+macos = "target/release/libnyash_json_plugin.dylib"
+

@@ -1,0 +1,13 @@
+// Simple ConsoleBox test
+local c
+c = new ConsoleBox()
+
+// First, let's see if the box was created
+print("ConsoleBox created: " + c)
+
+// Now try to call methods
+c.println("Hello from ConsoleBox println!")
+c.log("Hello from log...")
+
+// Use traditional print too
+print("Traditional print works!")

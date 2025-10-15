@@ -1,0 +1,25 @@
+// json_inst_encode_box.hako — Encode one MIR instruction Map -> JSON text (single return)
+
+static box JsonInstEncodeBox {
+  _i(n) { return "" + n }
+  _q(s) { return s }
+
+  encode(node) {
+    if node == null { return "{}" }
+    local op = node.get("op")
+    return match op {
+      "const" => "{\"op\":\"const\",\"dst\":" + me._i(node.get("dst")) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._i(node.get("value").get("value")) + "}}"
+      "compare" => "{\"op\":\"compare\",\"cmp\":" + me._q(node.get("cmp")) + ",\"lhs\":" + me._i(node.get("lhs")) + ",\"rhs\":" + me._i(node.get("rhs")) + ",\"dst\":" + me._i(node.get("dst")) + "}"
+      "binop" => "{\"op\":\"binop\",\"op_kind\":" + me._q(node.get("op_kind")) + ",\"lhs\":" + me._i(node.get("lhs")) + ",\"rhs\":" + me._i(node.get("rhs")) + ",\"dst\":" + me._i(node.get("dst")) + "}"
+      "branch" => "{\"op\":\"branch\",\"cond\":" + me._i(node.get("cond")) + ",\"then\":" + me._i(node.get("then")) + ",\"else\":" + me._i(node.get("else_id")) + "}"
+      "jump" => "{\"op\":\"jump\",\"target\":" + me._i(node.get("target")) + "}"
+      "ret" => "{\"op\":\"ret\",\"value\":" + me._i(node.get("value")) + "}"
+      "copy" => "{\"op\":\"copy\",\"dst\":" + me._i(node.get("dst")) + ",\"src\":" + me._i(node.get("src")) + "}"
+      "call" => "{\"op\":\"call\",\"name\":" + me._q(node.get("name")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._i(node.get("dst")) + "}"
+      "boxcall" => "{\"op\":\"boxcall\",\"method\":" + me._q(node.get("method")) + ",\"recv\":" + me._i(node.get("recv")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._i(node.get("dst")) + "}"
+      "newbox" => "{\"op\":\"newbox\",\"box_type\":" + me._q(node.get("box_type")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._i(node.get("dst")) + "}"
+      "mir_call" => "{\"op\":\"mir_call\"}"
+      _ => "{}"
+    }
+  }
+}

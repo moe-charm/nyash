@@ -2,12 +2,20 @@
 
 Start here to learn Nyash language basics and find deeper references.
 
-- Syntax Cheat Sheet: quick-reference/syntax-cheatsheet.md
+- Syntax Cheat Sheet: ../reference/quick/syntax-cheatsheet.md
 - Full Language Reference (2025): reference/language/LANGUAGE_REFERENCE_2025.md
 - Phase 12.7 Grammar (match / ternary / sugar):
   - Overview: development/roadmap/phases/phase-12.7/grammar-specs/README.md
   - Tokens & Grammar: development/roadmap/phases/phase-12.7/ancp-specs/ANCP-Token-Specification-v1.md
 - Sugar transformations (?., ??, |> ...): tools/nyfmt/NYFMT_POC_ROADMAP.md
+
+## Syntax Sugar (実用の要点)
+- 既定ON（dev/prod共通）。`NYASH_SYNTAX_SUGAR_LEVEL={off|basic|full}` で切替。
+- 主な構文と正規化: guides/syntax-sugar.md を参照。
+  - `x |> f(a,b)` → `f(x,a,b)`、`x |> .m(a)` → `x.m(a)`、`x |> f(_,k)` は `_` を `x` で1回だけ置換
+  - `a?.b` / `x ?? y` は `match` に正規化
+  - Raw Strings（full）: `r"…"` / `r#"…"#` / `r##"…"##`
+  - 末尾カンマ / 数値セパレータ `_` は PreLex で安定化
 
 Common Constructs
 - Ternary operator: `cond ? then : else` (Phase 12.7); lowered to If-expression
@@ -53,6 +61,17 @@ When you need the implementation details
 - Parser: src/parser/expressions.rs, src/parser/statements.rs
 - Lowering to MIR: src/mir/builder/**
 Statement Separation (Semicolons)
-- Newline separates statements by default; semicolons are optional.
-- Use semicolons only when placing multiple statements on one line.
+- Newline separates statements by default; semicolons are accepted by default.
+- Use semicolons for multiple statements on one line; newline remains the preferred separator.
 - Minimal ASI rules: newline does not end a statement when the line ends with an operator/dot/comma, or while inside grouping.
+- Static box fields
+  ```nyash
+  static box Main {
+    // Field declarations accept optional type annotations in header-first form.
+    // Type names are currently accepted then ignored by the compiler.
+    console: ConsoleBox
+    main() { return 0 }
+  }
+  ```
+  - Supported forms: `name`, `name: Type`, `name: Type = expr` (initializer parsed, may be discarded at P0).
+  - Computed properties (`name: Type => expr`) are not supported inside static boxes in this phase.

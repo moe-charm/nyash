@@ -31,7 +31,7 @@ static box Main {
         local options = new MapBox()
         // foreach は未対応のため、index で明示ループ
         local i = 0
-        local n = args.length()
+        local n = args.size()
         loop(i < n) {
             local arg = args.get(i)
             if arg == "--upper" {

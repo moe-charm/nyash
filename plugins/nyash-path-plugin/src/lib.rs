@@ -1,5 +1,8 @@
 //! Nyash PathBox Plugin - minimal path ops (join, dirname, basename, extname, isAbs, normalize)
 
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_bool, write_tlv_string};
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ffi::CStr;
@@ -295,6 +298,9 @@ pub static nyash_typebox_PathBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     capabilities: 0,
 };
 
+// TLV functions (write_tlv_result, write_tlv_bool, write_tlv_string, read_arg_string)
+// now imported from hako_abi_impl
+
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe {
         if result_len.is_null() {
@@ -306,62 +312,4 @@ fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
         }
     }
     false
-}
-fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return E_ARGS;
-    }
-    let mut buf: Vec<u8> =
-        Vec::with_capacity(4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes());
-    for (tag, payload) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
-        buf.extend_from_slice(payload);
-    }
-    unsafe {
-        let needed = buf.len();
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return E_SHORT;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
-        *result_len = needed;
-    }
-    OK
-}
-fn write_tlv_bool(v: bool, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(1u8, &[if v { 1u8 } else { 0u8 }])], result, result_len)
-}
-fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
-}
-
-fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 6 || tag == 7 {
-                return Some(String::from_utf8_lossy(&buf[off + 4..off + 4 + size]).to_string());
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
 }

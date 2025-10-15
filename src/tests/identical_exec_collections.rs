@@ -22,11 +22,8 @@ mod tests {
         let arr = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: arr,
-                box_type: "ArrayBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
         let idx0 = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
@@ -43,35 +40,18 @@ mod tests {
             });
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: None,
-                box_val: arr,
-                method: "set".into(),
-                args: vec![idx0, s],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("ArrayBox.set/2".into())), args: vec![arr, idx0, s], effects: EffectMask::PURE });
         let alen = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(alen),
-                box_val: arr,
-                method: "len".into(),
-                args: vec![],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: Some(alen), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![arr], effects: EffectMask::PURE });
 
         // Map: m = NewBox(MapBox); m.set("k", 42); size = m.size(); has = m.has("k"); get = m.get("k")
         let m = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: m,
-                box_type: "MapBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![],
+                auto_birth: None });
         let k = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
@@ -88,25 +68,11 @@ mod tests {
             });
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: None,
-                box_val: m,
-                method: "set".into(),
-                args: vec![k, v],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.set/2".into())), args: vec![m, k, v], effects: EffectMask::PURE });
         let msize = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(msize),
-                box_val: m,
-                method: "size".into(),
-                args: vec![],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: Some(msize), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.size/0".into())), args: vec![m], effects: EffectMask::PURE });
         let mhas = f.next_value_id();
         let k2 = f.next_value_id();
         f.get_block_mut(bb)
@@ -117,14 +83,7 @@ mod tests {
             });
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(mhas),
-                box_val: m,
-                method: "has".into(),
-                args: vec![k2],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: Some(mhas), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.has/1".into())), args: vec![m, k2], effects: EffectMask::PURE });
         let mget = f.next_value_id();
         let k3 = f.next_value_id();
         f.get_block_mut(bb)
@@ -135,34 +94,17 @@ mod tests {
             });
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(mget),
-                box_val: m,
-                method: "get".into(),
-                args: vec![k3],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: Some(mget), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("MapBox.get/1".into())), args: vec![m, k3], effects: EffectMask::PURE });
 
         // String.len: sb = "hello"; slen = sb.len()
+        let sstr = f.next_value_id();
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const { dst: sstr, value: ConstValue::String("hello".into()) });
         let sb = f.next_value_id();
-        f.get_block_mut(bb)
-            .unwrap()
-            .add_instruction(MirInstruction::Const {
-                dst: sb,
-                value: ConstValue::String("hello".into()),
-            });
+        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![sstr], auto_birth: None });
         let slen = f.next_value_id();
-        f.get_block_mut(bb)
-            .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(slen),
-                box_val: sb,
-                method: "len".into(),
-                args: vec![],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Call { dst: Some(slen), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.len/0".into())), args: vec![sb], effects: EffectMask::PURE });
 
         // Return: alen + msize + (mhas?1:0) + slen + (mget coerced to int or 0)
         // Simplify: just return alen

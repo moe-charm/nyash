@@ -1,0 +1,104 @@
+using "apps/lib/json_native/stringify.hako" as JSON
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+// Shared MIR helpers (P1)
+using "selfhost/shared/mir/mir_schema_box.hako" as MirSchema
+using "selfhost/shared/mir/block_builder_box.hako" as BlockBuilder
+
+flow EmitMirFlowMap {
+  _i(n) { return n }
+
+  _empty_arr() { return new ArrayBox() }
+
+  _instr_const(dst, val) {
+    local v = {type: "i64", value: EmitMirFlowMap._i(val)}
+    return {op: "const", dst: EmitMirFlowMap._i(dst), value: v}
+  }
+  _instr_ret(val) {
+    return {op: "ret", value: EmitMirFlowMap._i(val)}
+  }
+  _instr_binop(kind, lhs, rhs, dst) {
+    return {op: "binop", op_kind: kind, lhs: EmitMirFlowMap._i(lhs), rhs: EmitMirFlowMap._i(rhs), dst: EmitMirFlowMap._i(dst)}
+  }
+  _instr_compare(cmp, lhs, rhs, dst) {
+    return {op: "compare", cmp: cmp, lhs: EmitMirFlowMap._i(lhs), rhs: EmitMirFlowMap._i(rhs), dst: EmitMirFlowMap._i(dst)}
+  }
+  _instr_branch(cond, then_id, else_id) {
+    return {op: "branch", cond: EmitMirFlowMap._i(cond), then: EmitMirFlowMap._i(then_id), "else": EmitMirFlowMap._i(else_id)}
+  }
+  _instr_jump(target) {
+    return {op: "jump", target: EmitMirFlowMap._i(target)}
+  }
+  _block(id, insts) {
+    return {id: EmitMirFlowMap._i(id), instructions: insts}
+  }
+  _single_function_main(blocks) {
+    local f = {name: "main", params: [], blocks: blocks}
+    local fns = [f]
+    return {functions: fns}
+  }
+
+  emit_return_int(v) {
+    // Route via shared BlockBuilder (P1). Keep output shape identical to legacy by
+    // returning only the { functions: [...] } wrapper.
+    local mod_full = BlockBuilder.const_ret(v)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  emit_binop(lhs, rhs, opk) {
+    // Shared builder (P2 prep)
+    local mod_full = BlockBuilder.binop(lhs, rhs, opk)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  // materialize: 0/1 (builder parity)
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) {
+    local mod_full = BlockBuilder.compare_branch(lhs, rhs, cmp)
+    if materialize != 0 {
+      local fns = mod_full.functions
+      if fns != null && fns.size && fns.size() > 0 {
+        local blocks = fns.get(0).get("blocks")
+        if blocks != null && blocks.size && blocks.size() > 0 {
+          local insts = blocks.get(0).get("instructions")
+          if insts != null { LocalSSABox.ensure_after_last_def_copy(insts, 3, 5) }
+        }
+      }
+    }
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  emit_loop_counter(limit) {
+    // Shared builder (P2 prep)
+    local mod_full = BlockBuilder.loop_counter(limit)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+
+  // P4: generic extern/global/method/constructor emitters (immediate values)
+  emit_extern_call(name, arg_vals) {
+    local mod_full = BlockBuilder.extern_call_ival_ret(name, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_global_call(name, arg_vals) {
+    local mod_full = BlockBuilder.global_call_ival_ret(name, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_method_call(method, recv_val, arg_vals) {
+    local mod_full = BlockBuilder.method_call_ival_ret(method, recv_val, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_constructor(box_type, arg_vals) {
+    local mod_full = BlockBuilder.constructor_call_ival_ret(box_type, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  // P5: ctor(ArrayBox)→size()→ret via shared builder
+  emit_array_ctor_then_size() {
+    local mod_full = BlockBuilder.ctor_then_size_ret()
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+}

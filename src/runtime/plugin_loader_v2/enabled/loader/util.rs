@@ -1,3 +1,3 @@
-pub(super) fn dbg_on() -> bool {
-    std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
-}
+/// Compatibility shims — delegate to DiagnosticsBox
+pub(crate) fn dbg_on() -> bool { crate::runtime::diagnostics::dbg_on() }
+pub(super) fn dbg_once(key: &str, msg: &str) { crate::runtime::diagnostics::dbg_once(key, msg) }

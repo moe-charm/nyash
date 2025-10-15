@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 #[cfg(test)]
 mod array_state_sharing_tests {
     use nyash_rust::box_trait::{IntegerBox, NyashBox, StringBox};

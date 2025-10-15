@@ -1,0 +1,18 @@
+// JIT branch wiring demo (10.7)
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1
+
+static box Main {
+    main() {
+        local a, b
+        a = 3
+        b = 5
+        if (a < b) {
+            print("then")
+            return 1
+        } else {
+            print("else")
+            return 2
+        }
+    }
+}
+

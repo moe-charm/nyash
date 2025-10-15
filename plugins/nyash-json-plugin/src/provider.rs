@@ -47,10 +47,17 @@ impl DocInst {
 }
 
 pub fn provider_kind() -> ProviderKind {
+    // Prefer Hako naming first, then Nyash legacy
+    match std::env::var("HAKO_MIRIO_PROVIDER").ok().as_deref() {
+        Some("yyjson") | Some("YYJSON") => return ProviderKind::Yyjson,
+        Some("scan") | Some("serde") | Some("SERDE") => return ProviderKind::Serde,
+        _ => {}
+    }
     match std::env::var("NYASH_JSON_PROVIDER").ok().as_deref() {
         Some("yyjson") | Some("YYJSON") => ProviderKind::Yyjson,
         _ => ProviderKind::Serde,
     }
+}
 }
 
 pub fn provider_parse(text: &str) -> Result<Value, String> {

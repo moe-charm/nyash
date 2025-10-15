@@ -1,0 +1,12 @@
+// Mixed f64 compare demo (int vs float)
+// Enable: NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1
+
+static box Main {
+  main() {
+    local a, b
+    a = 1.5 + 2.5
+    b = 3.5
+    // f64 compare
+    return a > b
+  }
+}

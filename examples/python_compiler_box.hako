@@ -1,0 +1,197 @@
+// PythonCompilerBox - C2: Python AST → Nyash変換ロジック
+// Rust製パーサープラグイン（C1）からのJSONを受け取って処理
+
+box PythonCompilerBox {
+    init { supportedNodes, corePyIR }
+    
+    birth() {
+        // サポートするノードタイプを定義
+        me.supportedNodes = new MapBox()
+        me.supportedNodes.set("Module", true)
+        me.supportedNodes.set("FunctionDef", true)
+        me.supportedNodes.set("Return", true)
+        me.supportedNodes.set("Constant", true)
+        me.supportedNodes.set("If", true)
+        me.supportedNodes.set("While", true)
+        me.supportedNodes.set("For", true)
+        me.supportedNodes.set("BinOp", true)
+        me.supportedNodes.set("Add", true)
+        me.supportedNodes.set("Sub", true)
+        me.supportedNodes.set("Mult", true)
+        me.supportedNodes.set("Div", true)
+    }
+    
+    // メインのコンパイル関数
+    compile(astJson) {
+        local console = new ConsoleBox()
+        
+        // JSONパース（現在はスタブ）
+        // TODO: JSONBoxが実装されたら使用
+        local ast = me.parseJson(astJson)
+        
+        if ast == null {
+            return me.error("Failed to parse AST JSON")
+        }
+        
+        // All-or-Nothingチェック
+        local checkResult = me.checkSupported(ast)
+        if not checkResult.isOk {
+            return me.error("Unsupported features: " + checkResult.unsupported)
+        }
+        
+        // CorePy IR生成
+        me.corePyIR = me.generateCorePyIR(ast)
+        
+        // Nyashコード生成
+        local nyashCode = me.generateNyash(me.corePyIR)
+        
+        return me.ok(nyashCode)
+    }
+    
+    // AST全体のサポートチェック
+    checkSupported(ast) {
+        local result = new MapBox()
+        result.set("isOk", true)
+        result.set("unsupported", new ArrayBox())
+        
+        // 再帰的にチェック（簡易版）
+        if ast.get("counts") {
+            local counts = ast.get("counts")
+            if counts.get("unsupported") > 0 {
+                result.set("isOk", false)
+                local unsupportedList = ast.get("unsupported")
+                result.set("unsupported", unsupportedList)
+            }
+        }
+        
+        return result
+    }
+    
+    // CorePy IR生成（中間表現）
+    generateCorePyIR(ast) {
+        local ir = new MapBox()
+        ir.set("version", "0.1")
+        ir.set("module", new MapBox())
+        
+        // シンプルな例：main関数のみ
+        local functions = new ArrayBox()
+        
+        local mainFunc = new MapBox()
+        mainFunc.set("name", "main")
+        mainFunc.set("params", new ArrayBox())
+        mainFunc.set("body", new ArrayBox())
+        
+        // return 0 を追加
+        local returnStmt = new MapBox()
+        returnStmt.set("type", "return")
+        returnStmt.set("value", 0)
+        mainFunc.get("body").push(returnStmt)
+        
+        functions.push(mainFunc)
+        ir.get("module").set("functions", functions)
+        
+        return ir
+    }
+    
+    // Nyashコード生成
+    generateNyash(ir) {
+        local code = new StringBox()
+        code.append("// Generated from Python by PythonCompilerBox\n")
+        code.append("// CorePy IR version: " + ir.get("version") + "\n\n")
+        
+        // static box Main生成
+        code.append("static box Main {\n")
+        
+        // 関数生成
+        local module = ir.get("module")
+        if module and module.get("functions") {
+            local functions = module.get("functions")
+            local i = 0
+            loop(i < functions.length()) {
+                local func = functions.get(i)
+                code.append(me.generateFunction(func))
+                i = i + 1
+            }
+        }
+        
+        code.append("}\n")
+        
+        return code.toString()
+    }
+    
+    // 個別関数の生成
+    generateFunction(func) {
+        local code = new StringBox()
+        
+        local name = func.get("name")
+        local params = func.get("params")
+        local body = func.get("body")
+        
+        // 関数シグネチャ
+        code.append("    " + name + "(")
+        // TODO: パラメータ処理
+        code.append(") {\n")
+        
+        // 関数本体
+        if body {
+            local i = 0
+            loop(i < body.length()) {
+                local stmt = body.get(i)
+                code.append(me.generateStatement(stmt))
+                i = i + 1
+            }
+        }
+        
+        code.append("    }\n")
+        
+        return code.toString()
+    }
+    
+    // 文の生成
+    generateStatement(stmt) {
+        local type = stmt.get("type")
+        
+        if type == "return" {
+            return "        return " + stmt.get("value") + "\n"
+        }
+        
+        // TODO: 他の文タイプを追加
+        
+        return "        // TODO: " + type + "\n"
+    }
+    
+    // ヘルパー関数
+    ok(value) {
+        local result = new MapBox()
+        result.set("success", true)
+        result.set("value", value)
+        return result
+    }
+    
+    error(message) {
+        local result = new MapBox()
+        result.set("success", false)
+        result.set("error", message)
+        return result
+    }
+    
+    // 仮のJSONパーサー（スタブ）
+    parseJson(jsonStr) {
+        // TODO: 実際のJSONパース実装
+        // 今は固定のテスト用データを返す
+        local mock = new MapBox()
+        mock.set("success", true)
+        mock.set("dump", "Module(...)")
+        
+        local counts = new MapBox()
+        counts.set("total_nodes", 5)
+        counts.set("functions", 1)
+        counts.set("supported", 5)
+        counts.set("unsupported", 0)
+        mock.set("counts", counts)
+        
+        mock.set("unsupported", new ArrayBox())
+        
+        return mock
+    }
+}

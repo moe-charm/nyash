@@ -1,0 +1,29 @@
+[module]
+name = "selfhost.shared"
+version = "1.0.0"
+
+[exports]
+# JSON adapter facade and common helpers
+json_adapter = "json_adapter.hako"
+common.mini_vm_scan = "common/mini_vm_scan.hako"
+common.mini_vm_binop = "common/mini_vm_binop.hako"
+common.mini_vm_compare = "common/mini_vm_compare.hako"
+common.string_helpers = "common/string_helpers.hako"
+common.string_ops = "common/string_ops.hako"
+
+# JSON tooling
+json.mir_builder_min = "json/mir_builder_min.hako"
+json.mir_v1_adapter = "json/mir_v1_adapter.hako"
+json.core.json_cursor = "json/json_cursor.hako"
+json.utils.json_utils = "json/json_utils.hako"
+
+# MIR helpers (exported as stable module names)
+mir.schema = "mir/mir_schema_box.hako"
+mir.builder = "mir/block_builder_box.hako"
+
+[private]
+# Internal builders kept private for now
+# json/mir_builder2.hako, json/json_inst_encode_box.hako
+
+[dependencies]
+"selfhost.vm" = "^1.0.0"

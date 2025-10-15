@@ -1,0 +1,51 @@
+// sum_loop ベンチマーク（固定時間5秒方式、print()なし版）
+// LLVM backend用（nyash.console.log不要）
+
+box TimerBox {
+    birth() {
+        // ExternCall経由でシステム時計使用
+    }
+
+    now_ms() {
+        // コンパイラが自動的にExternCall(nyrt.time.now_ms)に変換
+        return 0  // このreturnは無視される
+    }
+}
+
+static box Main {
+    main() {
+        local timer, start_time, end_time, current_time
+        local iterations, sum
+        local DURATION_SEC
+
+        DURATION_SEC = 5  // 5秒間測定
+        timer = new TimerBox()
+
+        start_time = timer.now_ms()
+        end_time = start_time + (DURATION_SEC * 1000)
+
+        iterations = 0
+        sum = 0
+        current_time = timer.now_ms()
+
+        // 固定時間方式: end_timeまで繰り返し実行
+        loop(current_time < end_time) {
+            sum = sum + iterations
+            iterations = iterations + 1
+            current_time = timer.now_ms()
+        }
+
+        // 結果計算（表示はしない）
+        local elapsed_ms, ops_per_sec
+        elapsed_ms = current_time - start_time
+        ops_per_sec = (iterations * 1000) / elapsed_ms
+
+        // 結果をexit codeで返す（0 = 成功）
+        // 実際の結果はデバッガーで確認
+        if ops_per_sec > 0 {
+            return 0
+        } else {
+            return 1
+        }
+    }
+}

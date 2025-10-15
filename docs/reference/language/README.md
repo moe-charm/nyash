@@ -1,9 +1,11 @@
 # Nyash Language Reference – Index
 
+Branding note: The project brand is HakoRune (aka Nyash). CLI alias `hrn` is available; docs and tools continue to use “nyash” for compatibility. See reference/project/branding.md.
+
 This is the entry point for Nyash language documentation.
 
 - Full Language Reference (2025): reference/language/LANGUAGE_REFERENCE_2025.md
-- Syntax Cheat Sheet: quick-reference/syntax-cheatsheet.md
+- Syntax Cheat Sheet: ../quick/syntax-cheatsheet.md
 - Phase 12.7 Grammar Specs (ternary, sugar; peek → match に統合):
   - Overview: development/roadmap/phases/phase-12.7/grammar-specs/README.md
   - Token/Grammar: development/roadmap/phases/phase-12.7/ancp-specs/ANCP-Token-Specification-v1.md
@@ -11,10 +13,16 @@ This is the entry point for Nyash language documentation.
 - Match Expression (pattern matching): see the Language Reference and EBNF (peek was replaced by match)
 
 Statement separation and semicolons
-- See: reference/language/statements.md — newline as primary separator; semicolons optional for multiple statements on one line; minimal ASI rules.
+- See: reference/language/statements.md — newline as primary separator; semicolons accepted by default (useful for multiple statements on one line); minimal ASI rules.
 
 Imports and namespaces
 - See: reference/language/using.md — `using` syntax, runner resolution, and style guidance.
+
+Stateless namespaces (flow)
+- See: reference/language/flow.md — `flow` is a fieldless, stateless method container suitable for entry modules and utilities.
+
+Declarative MIR (recommended style)
+- See: guides/declarative-mir.md — Author MIR as Map/Array literals and stringify via `.toJSON()` (Rust JSONBox). Safer and more readable than string concatenation.
 
 Grammar (EBNF)
 - See: reference/language/EBNF.md — Stage‑2 grammar specification used by parser implementations.

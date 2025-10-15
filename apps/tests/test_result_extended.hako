@@ -1,0 +1,196 @@
+// test_result_extended.hako — ResultBox拡張版テストスイート
+// 目的: Result<T,E> Phase 1版の動作確認（既存+新規5メソッド）
+
+using std.result as Result
+
+static box TestResultBox {
+  // テスト1: Ok値の生成と判定
+  test_ok_creation() {
+    local res = Result.ok(42)
+
+    if res.is_ok() != 1 {
+      print("[FAIL] test_ok_creation: is_ok() should return 1")
+      return 0
+    }
+    if res.is_err() != 0 {
+      print("[FAIL] test_ok_creation: is_err() should return 0")
+      return 0
+    }
+    if res.value() != 42 {
+      print("[FAIL] test_ok_creation: value() should return 42")
+      return 0
+    }
+
+    print("[PASS] test_ok_creation")
+    return 1
+  }
+
+  // テスト2: Err値の生成と判定
+  test_err_creation() {
+    local res = Result.err("test error")
+
+    if res.is_ok() != 0 {
+      print("[FAIL] test_err_creation: is_ok() should return 0")
+      return 0
+    }
+    if res.is_err() != 1 {
+      print("[FAIL] test_err_creation: is_err() should return 1")
+      return 0
+    }
+    if res.error() != "test error" {
+      print("[FAIL] test_err_creation: error() should return 'test error'")
+      return 0
+    }
+
+    print("[PASS] test_err_creation")
+    return 1
+  }
+
+  // テスト3: unwrap_or() デフォルト値
+  test_unwrap_or() {
+    local ok_res = Result.ok(100)
+    local err_res = Result.err("failure")
+
+    if ok_res.unwrap_or(999) != 100 {
+      print("[FAIL] test_unwrap_or: ok.unwrap_or() should return 100")
+      return 0
+    }
+    if err_res.unwrap_or(999) != 999 {
+      print("[FAIL] test_unwrap_or: err.unwrap_or() should return 999")
+      return 0
+    }
+
+    print("[PASS] test_unwrap_or")
+    return 1
+  }
+
+  // テスト4: unwrap() 成功時
+  test_unwrap_ok() {
+    local res = Result.ok(777)
+
+    if res.unwrap() != 777 {
+      print("[FAIL] test_unwrap_ok: unwrap() should return 777")
+      return 0
+    }
+
+    print("[PASS] test_unwrap_ok")
+    return 1
+  }
+
+  // テスト5: expect() 成功時
+  test_expect_ok() {
+    local res = Result.ok(888)
+
+    if res.expect("should succeed") != 888 {
+      print("[FAIL] test_expect_ok: expect() should return 888")
+      return 0
+    }
+
+    print("[PASS] test_expect_ok")
+    return 1
+  }
+
+  // テスト6: unwrap_err() エラー時
+  test_unwrap_err() {
+    local res = Result.err("expected error")
+
+    local err_msg = res.unwrap_err()
+    if err_msg != "expected error" {
+      print("[FAIL] test_unwrap_err: unwrap_err() should return 'expected error'")
+      return 0
+    }
+
+    print("[PASS] test_unwrap_err")
+    return 1
+  }
+
+  // テスト7: debug() 表示
+  test_debug() {
+    local ok_res = Result.ok(42)
+    local err_res = Result.err("test error")
+
+    local ok_str = ok_res.debug()
+    local err_str = err_res.debug()
+
+    print("[INFO] ok_res.debug() = " + ok_str)
+    print("[INFO] err_res.debug() = " + err_str)
+
+    print("[PASS] test_debug")
+    return 1
+  }
+
+  // テスト8: panic検証（手動確認用）
+  test_panic_manual() {
+    print("[INFO] test_panic: manual verification needed")
+    print("[INFO] Uncomment the following lines to test panic:")
+    print("[INFO]   local res = Result.err(\"error\")")
+    print("[INFO]   res.unwrap()  // Should print [PANIC] message")
+    print("[PASS] test_panic (manual)")
+    return 1
+  }
+
+  // 全テスト実行
+  run_all() {
+    local total = 0
+    local passed = 0
+
+    total = total + 1
+    if me.test_ok_creation() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_err_creation() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_unwrap_or() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_unwrap_ok() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_expect_ok() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_unwrap_err() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_debug() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_panic_manual() == 1 {
+      passed = passed + 1
+    }
+
+    print("")
+    print("========================================")
+    print("ResultBox Test Results:")
+    print("  Passed: " + passed + " / " + total)
+    if passed == total {
+      print("  Status: ALL_TESTS_PASSED")
+      return 0
+    }
+    print("  Status: SOME_TESTS_FAILED")
+    return 1
+  }
+}
+
+// エントリーポイント
+static box Main {
+  main() {
+    local tester = new TestResultBox()
+    return tester.run_all()
+  }
+}

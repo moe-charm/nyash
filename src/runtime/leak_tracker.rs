@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 static ENABLED: Lazy<bool> =
-    Lazy::new(|| std::env::var("NYASH_LEAK_LOG").unwrap_or_default() == "1");
+    Lazy::new(|| {
+    crate::runtime::env_gate_box::bool_any(&["NYASH_LEAK_LOG", "HAKO_LEAK_LOG"]) 
+});
 static LEAKS: Lazy<Mutex<HashMap<(String, u32), &'static str>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 

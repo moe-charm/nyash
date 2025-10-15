@@ -1,0 +1,150 @@
+// ParserExceptionBox — try/catch/throw parser
+// Responsibility: Parse exception handling constructs
+// API: parse_try(src, i, ctx) -> JSON, parse_throw(src, i, ctx) -> JSON
+
+static box ParserExceptionBox {
+  // Parse: throw expr → {type:"Throw", expr:...} (Stage-3) or {type:"Expr", expr:...} (fallback)
+  parse_throw(src, i, stmt_start, ctx) {
+    local j = i + 5  // skip "throw"
+    j = ctx.skip_ws(src, j)
+    local e_throw = ctx.parse_expr2(src, j)
+    j = ctx.gpos_get()
+
+    if ctx.stage3_enabled() == 1 {
+      if j <= stmt_start {
+        if j < src.size() { j = j + 1 } else { j = src.size() }
+      }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Throw\",\"expr\":" + e_throw + "}"
+    }
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Expr\",\"expr\":" + e_throw + "}"
+  }
+
+  // Parse: try { ... } (catch ...)* (cleanup { ... })? → {type:"Try", ...} (Stage-3) or no-op
+  parse_try(src, i, stmt_start, ctx) {
+    local j = i + 3  // skip "try"
+    j = ctx.skip_ws(src, j)
+
+    // parse try block
+    local try_res = ctx.parse_block2(src, j)
+    local at_t = try_res.lastIndexOf("@")
+    local try_json = try_res.substring(0, at_t)
+    j = ctx.to_int(try_res.substring(at_t+1, try_res.size()))
+
+    local catches_json = "["
+    local catch_first = 1
+
+    // zero or more catch
+    local guard_ct = 0
+    local max_ct = 100
+    local cont_ct = 1
+    loop(cont_ct == 1) {
+      if guard_ct > max_ct { cont_ct = 0 } else { guard_ct = guard_ct + 1 }
+      j = ctx.skip_ws(src, j)
+
+      if ctx.starts_with_kw(src, j, "catch") == 1 {
+        j = j + 5
+        j = ctx.skip_ws(src, j)
+        local catch_type = null
+        local catch_param = null
+
+        if src.substring(j, j+1) == "(" {
+          j = j + 1
+          j = ctx.skip_ws(src, j)
+
+          // optional type + name
+          if ctx.is_alpha(src.substring(j, j+1)) {
+            local id1 = ctx.read_ident2(src, j)
+            local at1 = id1.lastIndexOf("@")
+            catch_type = id1.substring(0, at1)
+            j = ctx.to_int(id1.substring(at1+1, id1.size()))
+            j = ctx.skip_ws(src, j)
+          }
+
+          if ctx.is_alpha(src.substring(j, j+1)) {
+            local id2 = ctx.read_ident2(src, j)
+            local at2 = id2.lastIndexOf("@")
+            catch_param = id2.substring(0, at2)
+            j = ctx.to_int(id2.substring(at2+1, id2.size()))
+            j = ctx.skip_ws(src, j)
+          }
+
+          if src.substring(j, j+1) == ")" { j = j + 1 }
+        }
+
+        j = ctx.skip_ws(src, j)
+
+        // catch body
+        local c_res = ctx.parse_block2(src, j)
+        local atc = c_res.lastIndexOf("@")
+        j = ctx.to_int(c_res.substring(atc+1, c_res.size()))
+
+        if ctx.stage3_enabled() == 1 {
+          local entry = "{"
+          local wrote = 0
+
+          if catch_param != null && catch_param.size() > 0 {
+            entry = entry + "\"param\":\"" + ctx.esc_json(catch_param) + "\""
+            wrote = 1
+          }
+
+          if catch_type != null && catch_type.size() > 0 {
+            if wrote == 1 { entry = entry + "," }
+            entry = entry + "\"typeHint\":\"" + ctx.esc_json(catch_type) + "\""
+            wrote = 1
+          }
+
+          local body_json = c_res.substring(0, atc)
+          if wrote == 1 { entry = entry + "," }
+          entry = entry + "\"body\":" + body_json + "}"
+
+          if catch_first == 0 {
+            catches_json = catches_json + "," + entry
+          } else {
+            catches_json = catches_json + entry
+            catch_first = 0
+          }
+        }
+      } else {
+        cont_ct = 0
+      }
+    }
+
+    catches_json = catches_json + "]"
+
+    // optional cleanup
+    j = ctx.skip_ws(src, j)
+    local finally_json = null
+
+    if ctx.starts_with_kw(src, j, "cleanup") == 1 {
+      j = j + 7
+      j = ctx.skip_ws(src, j)
+      local f_res = ctx.parse_block2(src, j)
+      local atf = f_res.lastIndexOf("@")
+      j = ctx.to_int(f_res.substring(atf+1, f_res.size()))
+      finally_json = f_res.substring(0, atf)
+    }
+
+    if ctx.stage3_enabled() == 1 {
+      if j <= stmt_start {
+        if j < src.size() { j = j + 1 } else { j = src.size() }
+      }
+      ctx.gpos_set(j)
+      local node = "{\"type\":\"Try\",\"try\":" + try_json + ",\"catches\":" + catches_json
+      if finally_json != null { node = node + ",\"finally\":" + finally_json }
+      node = node + "}"
+      return node
+    }
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+  }
+}

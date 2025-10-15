@@ -1,0 +1,19 @@
+// ParserStringUtilsBox — Delegation to StringHelpers (unified string utilities)
+// Responsibility: Backward compatibility wrapper for parser code
+// Notes: All functionality now provided by apps/selfhost/common/string_helpers.hako
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box ParserStringUtilsBox {
+  // Delegate all methods to StringHelpers (centralized implementation)
+  i2s(v) { return StringHelpers.int_to_str(v) }
+  is_digit(ch) { return StringHelpers.is_digit(ch) }
+  is_space(ch) { return StringHelpers.is_space(ch) }
+  is_alpha(ch) { return StringHelpers.is_alpha(ch) }
+  starts_with(src, i, pat) { return StringHelpers.starts_with(src, i, pat) }
+  starts_with_kw(src, i, kw) { return StringHelpers.starts_with_kw(src, i, kw) }
+  index_of(src, i, pat) { return StringHelpers.index_of(src, i, pat) }
+  trim(s) { return StringHelpers.trim(s) }
+  to_int(s) { return StringHelpers.to_i64(s) }
+  skip_ws(src, i) { return StringHelpers.skip_ws(src, i) }
+}

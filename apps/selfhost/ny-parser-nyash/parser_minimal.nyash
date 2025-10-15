@@ -1,7 +1,6 @@
 // Minimal recursive-descent parser for Ny v0 producing JSON IR v0 (MapBox)
 
 using "./apps/selfhost/ny-parser-nyash/tokenizer.nyash" as Tokenizer
-using "./apps/selfhost/ny-parser-nyash/tokenizer.nyash"
 
 static box ParserV0 {
     init { tokens, pos }
@@ -9,14 +8,14 @@ static box ParserV0 {
     parse_program(input) {
         me.tokens = Tokenizer.tokenize(input)
         // Error passthrough
-        if me.tokens.as_any().toString().indexOf("\"kind\":\"Error\"") >= 0 {
+        if call("String.indexOf/2", me.tokens.as_any().toString(), "\"kind\":\"Error\"") >= 0 {
             return me.tokens
         }
         me.pos = 0
         local stmt = me.parse_stmt()
-        if stmt.as_any().toString().indexOf("\"kind\":\"Error\"") >= 0 { return stmt }
+        if call("String.indexOf/2", stmt.as_any().toString(), "\"kind\":\"Error\"") >= 0 { return stmt }
         local body = new ArrayBox(); body.push(stmt)
-        local prog = new MapBox(); prog.set("version", 0); prog.set("kind", "Program"); prog.set("body", body)
+        local prog = map({ version: 0, kind: "Program", body: body })
         return prog
     }
 
@@ -25,8 +24,8 @@ static box ParserV0 {
         if tok.get("type") == "RETURN" {
             me.next()
             local expr = me.parse_expr()
-            if expr.as_any().toString().indexOf("\"kind\":\"Error\"") >= 0 { return expr }
-            local ret = new MapBox(); ret.set("type", "Return"); ret.set("expr", expr)
+            if call("String.indexOf/2", expr.as_any().toString(), "\"kind\":\"Error\"") >= 0 { return expr }
+            local ret = map({ type: "Return", expr: expr })
             return ret
         }
         return me.err("Expected 'return'")
@@ -60,7 +59,7 @@ static box ParserV0 {
         local t = me.peek(); local ty = t.get("type")
         if ty == "INT" {
             me.next();
-            local node = new MapBox(); node.set("type", "Int"); node.set("value", t.get("value"))
+            local node = map({ type: "Int", value: t.get("value") })
             return node
         }
         if ty == "(" {
@@ -76,12 +75,12 @@ static box ParserV0 {
     peek() { return me.tokens.get(me.pos) }
     next() { me.pos = me.pos + 1; return me.tokens.get(me.pos-1) }
     bin(op, lhs, rhs) {
-        local m = new MapBox(); m.set("type", "Binary"); m.set("op", op); m.set("lhs", lhs); m.set("rhs", rhs); return m
+        return map({ type: "Binary", op: op, lhs: lhs, rhs: rhs })
     }
     err(msg) {
-        local err = new MapBox(); err.set("version", 0); err.set("kind", "Error")
-        local e = new MapBox(); e.set("message", msg)
-        local sp = new MapBox(); sp.set("start", me.pos); sp.set("end", me.pos)
+        local err = map({ version: 0, kind: "Error" })
+        local e = map({ message: msg })
+        local sp = map({ start: me.pos, end: me.pos })
         e.set("span", sp); err.set("error", e)
         return err
     }

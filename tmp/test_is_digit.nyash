@@ -1,8 +1,0 @@
-static box Main {
-  main(args) {
-    local vm = new MiniVm()
-    print(vm._is_digit("1"))
-    print(vm._is_digit("a"))
-    return 0
-  }
-}

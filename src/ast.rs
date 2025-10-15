@@ -186,6 +186,14 @@ pub struct CatchClause {
     pub span: Span,                     // ソースコード位置
 }
 
+/// Enum variant for @enum macro - e.g., Ok(value), None
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariant {
+    pub name: String,           // Variant name (e.g., "Ok", "Some", "None")
+    pub fields: Vec<String>,    // Field names (empty for None, single for Ok(value))
+    pub span: Span,
+}
+
 /// リテラル値の型 (Clone可能)
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiteralValue {
@@ -201,14 +209,19 @@ impl LiteralValue {
     /// LiteralValueをNyashBoxに変換
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {
         use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::FloatBox;
 
         match self {
             LiteralValue::String(s) => Box::new(StringBox::new(s)),
             LiteralValue::Integer(i) => Box::new(IntegerBox::new(*i)),
+            #[cfg(feature = "legacy-boxes")]
             LiteralValue::Float(f) => Box::new(FloatBox::new(*f)),
+            #[cfg(not(feature = "legacy-boxes"))]
+            LiteralValue::Float(f) => Box::new(StringBox::new(f.to_string())),
             LiteralValue::Bool(b) => Box::new(BoolBox::new(*b)),
-            LiteralValue::Null => Box::new(crate::boxes::null_box::NullBox::new()),
+            // Represent Null as Void to avoid legacy NullBox dependency in plugin-only builds
+            LiteralValue::Null => Box::new(VoidBox::new()),
             LiteralValue::Void => Box::new(VoidBox::new()),
         }
     }
@@ -216,29 +229,28 @@ impl LiteralValue {
     /// NyashBoxからLiteralValueに変換
     pub fn from_nyash_box(box_val: &dyn NyashBox) -> Option<LiteralValue> {
         use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::FloatBox;
-        #[allow(unused_imports)]
-        use std::any::Any;
+        #[allow(unused_imports)] use std::any::Any;
 
         if let Some(string_box) = box_val.as_any().downcast_ref::<StringBox>() {
-            Some(LiteralValue::String(string_box.value.clone()))
-        } else if let Some(int_box) = box_val.as_any().downcast_ref::<IntegerBox>() {
-            Some(LiteralValue::Integer(int_box.value))
-        } else if let Some(float_box) = box_val.as_any().downcast_ref::<FloatBox>() {
-            Some(LiteralValue::Float(float_box.value))
-        } else if let Some(bool_box) = box_val.as_any().downcast_ref::<BoolBox>() {
-            Some(LiteralValue::Bool(bool_box.value))
-        } else if box_val
-            .as_any()
-            .downcast_ref::<crate::boxes::null_box::NullBox>()
-            .is_some()
-        {
-            Some(LiteralValue::Null)
-        } else if box_val.as_any().downcast_ref::<VoidBox>().is_some() {
-            Some(LiteralValue::Void)
-        } else {
-            None
+            return Some(LiteralValue::String(string_box.value.clone()));
         }
+        if let Some(int_box) = box_val.as_any().downcast_ref::<IntegerBox>() {
+            return Some(LiteralValue::Integer(int_box.value));
+        }
+        #[cfg(feature = "legacy-boxes")]
+        if let Some(float_box) = box_val.as_any().downcast_ref::<FloatBox>() {
+            return Some(LiteralValue::Float(float_box.value));
+        }
+        if let Some(bool_box) = box_val.as_any().downcast_ref::<BoolBox>() {
+            return Some(LiteralValue::Bool(bool_box.value));
+        }
+        if box_val.as_any().downcast_ref::<VoidBox>().is_some() {
+            // Treat Void as Null on the AST roundtrip path (plugin-only compatibility)
+            return Some(LiteralValue::Null);
+        }
+        None
     }
 }
 
@@ -477,6 +489,14 @@ pub enum ASTNode {
         span: Span,
     },
 
+    /// @enum macro declaration: @enum Name { Variant1(field) Variant2 ... }
+    /// Generates EnumNameBox + static box EnumName with constructors
+    EnumDeclaration {
+        name: String,
+        variants: Vec<EnumVariant>,
+        span: Span,
+    },
+
     /// グローバル変数: global name = value
     GlobalVar {
         name: String,
@@ -583,6 +603,14 @@ pub enum ASTNode {
     /// 一般式呼び出し: (callee)(arguments)
     Call {
         callee: Box<ASTNode>,
+        arguments: Vec<ASTNode>,
+        span: Span,
+    },
+
+    /// extern_c 呼び出し: extern_c "symbol" (args)
+    /// Lowers to MIR Call with callee=Extern("ffi.dynamic.<symbol>")
+    ExternCCall {
+        symbol: String,
         arguments: Vec<ASTNode>,
         span: Span,
     },

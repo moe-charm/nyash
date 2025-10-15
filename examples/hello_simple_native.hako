@@ -1,0 +1,2 @@
+// Ultra simple for native build
+print("Hello from Native Nyash!")

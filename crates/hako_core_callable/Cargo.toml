@@ -1,0 +1,9 @@
+[package]
+name = "hako_core_callable"
+version = "0.1.0"
+edition = "2021"
+description = "Core semantics helpers for Callable (arity/call/callAsync surface)"
+
+[lib]
+name = "hako_core_callable"
+path = "src/lib.rs"

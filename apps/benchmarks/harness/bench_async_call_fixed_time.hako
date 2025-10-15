@@ -1,0 +1,45 @@
+// Fixed-Time Async Benchmark (callAsync + await)
+// Measures end-to-end throughput of scheduling + completion
+
+static box Main {
+  main(args) {
+    // Prepare a small Array and a methodRef("push", 1) to obtain a CallableBox
+    local a = new ArrayBox()
+    a.push(1)
+    a.push(2)
+    local cb = a.methodRef("push", 1)
+    local argv = new ArrayBox()
+    argv.push(0)  // value to push
+
+    // Warmup 1s
+    local start_warm = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start_warm < 1000) {
+      local fut = cb.callAsync(argv)
+      // Ensure completion to measure end-to-end behavior
+      local _ = await fut
+    }
+
+    // Measure 5s
+    local iters = 0
+    local acc = 0  // prevent over-optimization by using results
+    local start = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start < 5000) {
+      // schedule + join (await) — end-to-end cost including scheduler
+      local fut = cb.callAsync(argv)
+      local r = await fut
+      acc = acc + 1
+      iters = iters + 1
+    }
+    local elapsed = TimerBox.now_ms() - start
+
+    // Stats
+    local elapsed_s = elapsed / 1000
+    local us_per_op = (elapsed * 1000) / (iters == 0 ? 1 : iters)
+    local ops_per_sec = (iters * 1000) / (elapsed == 0 ? 1 : elapsed)
+    print("Async call(push) for 5s")
+    print("  Iterations: " + iters + " in " + elapsed_s + "s (acc=" + acc + ")")
+    print("  µs/op: " + us_per_op)
+    print("  ops/sec: " + ops_per_sec)
+    return 0
+  }
+}

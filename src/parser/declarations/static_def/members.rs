@@ -59,6 +59,22 @@ pub(crate) fn try_parse_method_or_field(
     let trace = std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1");
     // Allow NEWLINE(s) between identifier and '('
     if !p.match_token(&TokenType::LPAREN) {
+        // Support header-first field annotation in static boxes: `name: Type [= expr]`
+        if p.match_token(&TokenType::COLON) {
+            p.advance(); // consume ':'
+            // Optional type name (identifier); accepted then ignored
+            if let TokenType::IDENTIFIER(_ty) = &p.current_token().token_type {
+                p.advance();
+            }
+            // Optional initializer: `= expr` (parse and discard)
+            if p.match_token(&TokenType::ASSIGN) {
+                p.advance();
+                let _ = p.parse_expression()?;
+            }
+            if trace { eprintln!("[parser][static-box] annotated field detected: {}", name); }
+            fields.push(name);
+            return Ok(true);
+        }
         // Lookahead skipping NEWLINE to see if a '(' follows → treat as method head
         let mut k = 0usize;
         while matches!(p.peek_nth_token(k), TokenType::NEWLINE) { k += 1; }

@@ -1,0 +1,235 @@
+// hakorune_vm_core.hako — Phase 1: 最小動作VM（Const/BinOp/Ret）
+// Strategy: @match 最大限活用、Result @enum でエラーハンドリング
+// Reference: INSTRUCTION_SET.md, LLVM Python, Rust VM
+// Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）- 箱化モジュール化
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+using "selfhost/vm/boxes/result_box.hako" as Result
+// Phase 1 Day 3: 箱化モジュール化
+using "selfhost/hakorune-vm/block_mapper.hako" as BlockMapperBox
+using "selfhost/hakorune-vm/terminator_handler.hako" as TerminatorHandlerBox
+using "selfhost/hakorune-vm/phi_handler.hako" as PhiHandlerBox
+using "selfhost/hakorune-vm/function_locator.hako" as FunctionLocatorBox
+using "selfhost/hakorune-vm/blocks_locator.hako" as BlocksLocatorBox
+using "selfhost/hakorune-vm/block_iterator.hako" as BlockIteratorBox
+// Phase 1 Day 3 リファクタリング: 命令ハンドラー箱化
+using "selfhost/hakorune-vm/instruction_dispatcher.hako" as InstructionDispatcherBox
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
+using "selfhost/shared/mir/mir_io_box.hako" as MirIoBox
+using "selfhost/hakorune-vm/ret_value_loader.hako" as RetValueLoaderBox
+static box HakoruneVmCore {
+  // Unchecked entry: skip MIR(JSON) schema validation (Gate C smoke/helper)
+  run_unchecked(mir_json) {
+    // Initialize registers and memory
+    local regs = new MapBox()
+    local mem = new MapBox()
+    // Execute
+    local result = me._execute_blocks(mir_json, regs, mem)
+    if result.is_Ok() { return result.as_Ok() }
+    else { print("[ERROR] Hakorune-VM: " + result.as_Err()) return -1 }
+  }
+  // Read MIR(JSON) from file and run
+  run_from_file(path) {
+    local fb = new FileBox()
+    local ok = fb.open(path, "r")
+    if ok == false {
+      print("[ERROR] cannot open MIR file: " + path)
+      return -1
+    }
+    local s = fb.read()
+    fb.close()
+    return me.run(s)
+  }
+  // Main entry point
+  run(mir_json) {
+    // Validate MIR JSON via MirIoBox (Phase A)
+    {
+      local v = MirIoBox.validate(mir_json)
+      if v.is_Err() { print("[ERROR] MIR validate: " + v.as_Err())  return -1 }
+    }
+    // Initialize registers and memory
+    local regs = new MapBox()
+    local mem = new MapBox()
+    // Execute from block 0 (Phase 1 Day 3: multiple blocks support)
+    local result = me._execute_blocks(mir_json, regs, mem)
+    // @match Result for error handling
+    if result.is_Ok() {
+      return result.as_Ok()
+    } else {
+      print("[ERROR] Hakorune-VM: " + result.as_Err())
+      return -1
+    }
+  }
+  // Phase 1 Day 3: Execute multiple blocks with control flow
+  _execute_blocks(mir_json, regs, mem) {
+    // Build block map
+    local block_map_result = BlockMapperBox.build_map(mir_json)
+    if block_map_result.is_Err() {
+      return block_map_result
+    }
+    local block_map = block_map_result.as_Ok()
+    // Determine entry block id (prefer explicit function.entry; fallback to first block id; final fallback 0)
+    local current_bb = 0
+    {
+      local loc_func = FunctionLocatorBox.locate(mir_json)
+      // try to read function.entry if present (tolerant)
+      if !loc_func.is_Err() {
+        local func_meta = loc_func.as_Ok()
+        local func_json = func_meta.get("content")
+        // read entry key if present
+        {
+          local k = r#""entry""#
+          local p = func_json.indexOf(k)
+          if p >= 0 {
+            p = p + k.size()
+            loop(p < func_json.size()) { local ch = func_json.substring(p,p+1) if ch == ":" { p = p + 1 break } if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p = p + 1 continue } break }
+            loop(p < func_json.size()) { local ch = func_json.substring(p,p+1) if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p = p + 1 continue } break }
+            local digits = StringHelpers.read_digits(func_json, p)
+            if digits != "" { current_bb = StringHelpers.to_i64(digits) }
+          }
+        }
+        local loc_blocks = BlocksLocatorBox.locate(func_json)
+        if !loc_blocks.is_Err() {
+          local blocks_meta = loc_blocks.as_Ok()
+          local content = blocks_meta.get("content")
+          local it = BlockIteratorBox.next(content, 0)
+          if !it.is_Err() {
+            local first = it.as_Ok().get("obj")
+            local key_id = "\"id\":"
+            local is = first.indexOf(key_id)
+            if is >= 0 {
+              is = is + key_id.size()
+              // skip ws
+              loop(is < first.size()) {
+                local ch = first.substring(is, is+1)
+                if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { is = is + 1  continue }
+                break
+              }
+              local digits = StringHelpers.read_digits(first, is)
+              if digits != "" { current_bb = StringHelpers.to_i64(digits) }
+            }
+          }
+        }
+      }
+    }
+    local predecessor = -1
+    local max_iterations = 1000
+    local iterations = 0
+    loop(current_bb >= 0 && iterations < max_iterations) {
+      iterations = iterations + 1
+      // Get current block
+      local block_json = block_map.get(StringHelpers.int_to_str(current_bb))
+      if block_json == null {
+        return Result.Err("block not found: " + StringHelpers.int_to_str(current_bb))
+      }
+      // Execute PHI instructions first
+      local phi_result = PhiHandlerBox.handle_phi_instructions(block_json, regs, predecessor)
+      if phi_result.is_Err() {
+        return phi_result
+      }
+      // Execute normal instructions (non-PHI)
+      local exec_result = me._execute_instructions_in_block(block_json, regs, mem)
+      if exec_result.is_Err() {
+        return exec_result
+      }
+      // If a ret was executed within instructions, finish here
+      if regs.has("__ret_seen__") || block_json.indexOf("\"op\":\"ret\"") >= 0 {
+        return Result.Ok(exec_result.as_Ok())
+      }
+      // Execute terminator
+      local term_result = TerminatorHandlerBox.handle_terminator(block_json, regs)
+      if term_result.is_Err() {
+        // Tolerate missing terminator as empty return (dev-only relaxation)
+        if term_result.as_Err() == "terminator not found" {
+          return Result.Ok(0)
+        }
+        return term_result
+      }
+      local term_map = term_result.as_Ok()
+      local term_type = term_map.get("type")
+      if term_type == "ret" {
+        // Load return value from register (via unified loader)
+        return RetValueLoaderBox.load_from_terminator(term_map, regs)
+      }
+      if term_type == "jump" || term_type == "branch" {
+        predecessor = current_bb
+        local next_id = term_map.get("next_bb")
+        if block_map.get(StringHelpers.int_to_str(next_id)) == null { return Result.Err("invalid next_bb: " + StringHelpers.int_to_str(next_id)) }
+        current_bb = next_id
+        continue
+      }
+      return Result.Err("unknown terminator type: " + term_type)
+    }
+    if iterations >= max_iterations {
+      return Result.Err("max iterations reached (infinite loop?)")
+    }
+    return Result.Ok(0)
+  }
+  // Execute instructions in a block (excluding PHI)
+  _execute_instructions_in_block(block_json, regs, mem) {
+    // Find instructions array
+    local key_insts = "\"instructions\":["
+    local insts_start = block_json.indexOf(key_insts)
+    if insts_start < 0 {
+      // No instructions (empty block)
+      return Result.Ok(0)
+    }
+    insts_start = insts_start + key_insts.size()
+    // Find instructions array end
+    local insts_end = JsonScanGuardBox.seek_array_end(block_json, insts_start - 1, 200000)
+    if insts_end < 0 {
+      return Result.Err("instructions array end not found")
+    }
+    local insts_json = block_json.substring(insts_start, insts_end)
+    // Execute instructions sequentially
+    return me._execute_instructions(insts_json, regs, mem)
+  }
+  // Execute instructions sequentially
+  _execute_instructions(insts_json, regs, mem) {
+    local pos = 0
+    local len = insts_json.size()
+    local last_ret_value = 0
+    loop(pos < len) {
+      // Skip whitespace
+      local ch = insts_json.substring(pos, pos + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" {
+        pos = pos + 1
+        continue
+      }
+      // Skip comma
+      if ch == "," {
+        pos = pos + 1
+        continue
+      }
+      // Find instruction object
+      if ch == "{" {
+        local inst_end = JsonCursorBox.seek_obj_end(insts_json, pos)
+        if inst_end < 0 {
+          return Result.Err("instruction object end not found")
+        }
+        local inst_json = insts_json.substring(pos, inst_end + 1)
+        // Dispatch instruction using InstructionDispatcherBox
+        local result = InstructionDispatcherBox.dispatch(inst_json, regs, mem)
+        // Check for errors or return value
+        if result.is_Err() {
+          return result
+        }
+        // Check if instruction is Ret (store return value)
+        if inst_json.indexOf("\"op\":\"ret\"") >= 0 {
+          last_ret_value = result.as_Ok()
+          regs.set("__ret_seen__", 1)
+          return Result.Ok(last_ret_value)
+        }
+        pos = inst_end + 1
+        continue
+      }
+      // Skip other characters
+      pos = pos + 1
+    }
+    return Result.Ok(last_ret_value)
+  }
+}

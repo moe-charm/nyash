@@ -35,3 +35,27 @@ Diagnostics
   wiring in the LLVM path.
 - Bridge verifier may allow `verify_allow_no_phi()` in PHI-off mode, but
   the invariants above still apply to resolver synthesis order.
+
+Dev-only verification
+- Enable `NYASH_VERIFY_PHI_STRICT=1` to verify that each PHI's inputs cover all
+  reachable predecessors of its block. Missing inputs are reported as `InvalidPhi`.
+- Quick profile enables this by default to catch builder regressions early.
+
+## JSON Encoding (PHI values)
+
+- Output format is unified to `values[]` only. Do not emit legacy `incoming`.
+- Each entry records `{ "value": <ValueId>, "block": <BlockId> }`.
+- Readers must prefer `values`; accepting `incoming` remains optional for
+  backward compatibility during the transition.
+
+Example
+```json
+{
+  "kind": "phi",
+  "dst": 6,
+  "values": [
+    { "value": 4, "block": 1 },
+    { "value": 5, "block": 2 }
+  ]
+}
+```

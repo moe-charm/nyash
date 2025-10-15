@@ -1,0 +1,19 @@
+// Adapter for JSON cursor operations (extracted)
+// Wraps MiniJsonCur and exposes a stable facade
+using selfhost.vm.json_cur as MiniJsonCur
+
+static box MiniJson {
+  read_quoted_from(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.read_quoted_from(s, pos)
+  }
+  read_digits_from(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.read_digits_from(s, pos)
+  }
+  next_non_ws(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.next_non_ws(s, pos)
+  }
+}
+

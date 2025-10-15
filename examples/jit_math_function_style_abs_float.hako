@@ -1,0 +1,11 @@
+// Function-style math: abs(x)
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_math_function_style_abs_float.nyash
+
+static box Main {
+  main() {
+    return abs(-3.25)
+  }
+}
+

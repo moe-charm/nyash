@@ -95,6 +95,7 @@ pub enum TokenType {
     RBRACE,
     COMMA,
     QUESTION,
+    AT, // @ symbol (for macros: @enum, @match, etc.)
     NEWLINE,
     SEMICOLON, // オプショナル区切り
 

@@ -21,7 +21,7 @@ static box Main {
 }
 EOF
 
-output=$(NYASH_GC_MODE=off NYASH_REWRITE_FUTURE=1 run_nyash_vm gc_off.nyash 2>&1 || true)
+output=$(NYASH_GC_MODE=off NYASH_REWRITE_FUTURE=1 run_nyash_vm gc_off.nyash 2>&1 | grep -v '^Result: ' || true)
 if echo "$output" | grep -q "ExternCall .* not supported\|unimplemented instruction: FutureNew"; then
   test_skip "gc_mode_off" "VM interpreter lacks Future/ExternCall support"
   rc=0

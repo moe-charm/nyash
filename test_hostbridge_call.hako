@@ -1,0 +1,7 @@
+static box Main {
+  main() {
+    local doc
+    doc = hostbridge.box_new("JsonDocBox", new ArrayBox())
+    return 0
+  }
+}

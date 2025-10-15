@@ -79,6 +79,9 @@ pub fn format_instruction(
                     super::Callee::Global(name) => {
                         format!("call_global {}({})", name, args_str)
                     }
+                    super::Callee::ModuleFunction(name) => {
+                        format!("call_module_fn {}({})", name, args_str)
+                    }
                     super::Callee::Method { box_name, method, receiver, certainty } => {
                         if let Some(recv) = receiver {
                             format!(
@@ -182,30 +185,7 @@ pub fn format_instruction(
                 format!("call {}.{}{}({})", box_val, method, id_suffix, args_str)
             }
         }
-        MirInstruction::PluginInvoke {
-            dst,
-            box_val,
-            method,
-            args,
-            effects: _,
-        } => {
-            let args_str = args
-                .iter()
-                .map(|v| format!("{}", v))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(dst) = dst {
-                format!(
-                    "{} plugin_invoke {}.{}({})",
-                    format_dst(dst, types),
-                    box_val,
-                    method,
-                    args_str
-                )
-            } else {
-                format!("plugin_invoke {}.{}({})", box_val, method, args_str)
-            }
-        }
+        
 
         MirInstruction::Branch {
             condition,
@@ -236,18 +216,28 @@ pub fn format_instruction(
             format!("{} phi {}", format_dst(dst, types), inputs_str)
         }
 
-        MirInstruction::NewBox { dst, box_type, args } => {
+        MirInstruction::NewBox { dst, box_type, args, auto_birth } => {
             let args_str = args
                 .iter()
                 .map(|v| format!("{}", v))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!(
-                "{} new {}({})",
-                format_dst(dst, types),
-                box_type,
-                args_str
-            )
+            if let Some(name) = auto_birth {
+                format!(
+                    "{} new {}({}) .auto_birth({})",
+                    format_dst(dst, types),
+                    box_type,
+                    args_str,
+                    name
+                )
+            } else {
+                format!(
+                    "{} new {}({})",
+                    format_dst(dst, types),
+                    box_type,
+                    args_str
+                )
+            }
         }
 
         // Legacy -> Unified print: TypeCheck as TypeOp(check)
@@ -283,13 +273,7 @@ pub fn format_instruction(
             )
         }
 
-        MirInstruction::ArrayGet { dst, array, index } => {
-            format!("{} {}[{}]", format_dst(dst, types), array, index)
-        }
-
-        MirInstruction::ArraySet { array, index, value } => {
-            format!("{}[{}] = {}", array, index, value)
-        }
+        
 
         MirInstruction::Copy { dst, src } => {
             format!("{} copy {}", format_dst(dst, types), src)
@@ -325,18 +309,7 @@ pub fn format_instruction(
             format!("{} ref_new {}", format_dst(dst, types), box_val)
         }
 
-        MirInstruction::RefGet { dst, reference, field } => {
-            format!(
-                "{} ref_get {}.{}",
-                format_dst(dst, types),
-                reference,
-                field
-            )
-        }
-
-        MirInstruction::RefSet { reference, field, value } => {
-            format!("ref_set {}.{} = {}", reference, field, value)
-        }
+        
 
         // Legacy -> Unified print: WeakNew/WeakLoad/BarrierRead/BarrierWrite
         MirInstruction::WeakNew { dst, box_val } => {
@@ -387,28 +360,6 @@ pub fn format_instruction(
             format!("{} await {}", format_dst(dst, types), future)
         }
 
-        // Phase 9.7: External Function Calls
-        MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
-            let args_str = args
-                .iter()
-                .map(|v| format!("{}", v))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(dst) = dst {
-                format!(
-                    "{} extern_call {}.{}({}) [effects: {}]",
-                    format_dst(dst, types),
-                    iface_name,
-                    method_name,
-                    args_str,
-                    effects
-                )
-            } else {
-                format!(
-                    "extern_call {}.{}({}) [effects: {}]",
-                    iface_name, method_name, args_str, effects
-                )
-            }
-        }
+        // (ExternCall retired) — handled by Call with callee=Extern in printer elsewhere
     }
 }

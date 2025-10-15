@@ -1,0 +1,3 @@
+255cb97277ce160140c5fb8a1299cf059e57f1e59ad8236b74abe8e6be1af57a  hako-frozen-v1-msvc-real.exe
+83ee570c9aa375271b801e44ec67a2c6d8febb2b9257cbf4917f1e88959aaa9a  hako-frozen-v1-msvc.exe
+9e60ff4e4c8a6fb58f9ca359f13f7e433569723d55ab1f8b4f5bb9788a0d2e12  hako-frozen-v1-mingw.exe

@@ -6,6 +6,12 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+[features]
+default = ["host-handle"]
+host-handle = []
+
 [dependencies]
 once_cell = "1.20"
 
+hako_core_map = { path = "../../crates/hako_core_map" }
+hako_abi_impl = { path = "../../crates/hako_abi_impl" }

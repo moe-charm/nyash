@@ -1,0 +1,80 @@
+// test_mapbox_get_behavior.hako — Investigate MapBox.get() return value
+// Phase 4: Definitive test of MapBox.get() behavior
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== Phase 4: MapBox.get() Behavior Investigation ===")
+
+    // Test 4.1: What does MapBox.get() actually return?
+    print("\nTest 4.1: MapBox.get() return value for missing key")
+    local map = new MapBox()
+
+    local result = map.get("nonexistent")
+
+    // Try to print it directly
+    print("Direct print: " + result)
+
+    // Try to convert to string
+    local str_result = "" + result
+    print("String concat: " + str_result)
+
+    // Check if it's null
+    if result == null {
+      print("result == null: TRUE")
+    } else {
+      print("result == null: FALSE")
+    }
+
+    // Check if it equals 0
+    if result == 0 {
+      print("result == 0: TRUE")
+    } else {
+      print("result == 0: FALSE")
+    }
+
+    // Check inequality
+    if result != 0 {
+      print("result != 0: TRUE (THIS IS THE BUG!)")
+    } else {
+      print("result != 0: FALSE")
+    }
+
+    // Test 4.2: Compare with actual stored value
+    print("\nTest 4.2: Compare with stored value")
+    map.set("key1", 0)
+
+    local stored_zero = map.get("key1")
+    print("Stored 0, retrieved: " + StringHelpers.int_to_str(stored_zero))
+
+    if stored_zero == 0 {
+      print("stored_zero == 0: TRUE")
+    } else {
+      print("stored_zero == 0: FALSE")
+    }
+
+    if stored_zero != 0 {
+      print("stored_zero != 0: TRUE")
+    } else {
+      print("stored_zero != 0: FALSE")
+    }
+
+    // Test 4.3: has() method check
+    print("\nTest 4.3: Use has() to check existence")
+    if map.has("nonexistent") {
+      print("map.has('nonexistent'): TRUE")
+    } else {
+      print("map.has('nonexistent'): FALSE (correct!)")
+    }
+
+    if map.has("key1") {
+      print("map.has('key1'): TRUE (correct!)")
+    } else {
+      print("map.has('key1'): FALSE")
+    }
+
+    print("\n✅ Investigation complete!")
+    return 0
+  }
+}

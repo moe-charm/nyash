@@ -1,0 +1,168 @@
+// 📊 マンデルブロ集合フラクタル - MathBoxの数学的美しさ
+// WebCanvasBox で複素数計算の視覚化
+
+print("📊 === Mandelbrot Fractal Generator ===")
+
+// デバッグシステム
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🔢 複素数Box - 数学的計算をBox化
+box ComplexBox {
+    init { real, imaginary }
+    
+    ComplexBox(r, i) {
+        me.real = r
+        me.imaginary = i
+    }
+    
+    // 複素数の乗算 z * z
+    multiply(other) {
+        newReal = me.real * other.real - me.imaginary * other.imaginary
+        newImag = me.real * other.imaginary + me.imaginary * other.real
+        return new ComplexBox(newReal, newImag)
+    }
+    
+    // 複素数の加算 z + c
+    add(other) {
+        return new ComplexBox(me.real + other.real, me.imaginary + other.imaginary)
+    }
+    
+    // 絶対値の2乗（発散判定用）
+    magnitudeSquared() {
+        return me.real * me.real + me.imaginary * me.imaginary
+    }
+}
+
+// 🎨 フラクタル描画Box
+box MandelbrotBox {
+    init { canvas, width, height, maxIterations, zoom, centerX, centerY }
+    
+    MandelbrotBox(canvasId, w, h) {
+        me.canvas = new WebCanvasBox(canvasId, w, h)
+        me.width = w
+        me.height = h
+        me.maxIterations = 50
+        me.zoom = 1.0
+        me.centerX = -0.5  // マンデルブロ集合の中心
+        me.centerY = 0.0
+        
+        DEBUG.trackBox(me, "MandelbrotGenerator")
+    }
+    
+    // 点がマンデルブロ集合に属するか判定
+    mandelbrotIterations(c) {
+        z = new ComplexBox(0.0, 0.0)  // z0 = 0
+        
+        iteration = 0
+        loop (iteration < me.maxIterations) {
+            // z = z^2 + c の反復計算
+            z = z.multiply(z).add(c)
+            
+            // 発散判定（|z| > 2）
+            if z.magnitudeSquared() > 4.0 {
+                return iteration
+            }
+            
+            iteration = iteration + 1
+        }
+        
+        return me.maxIterations  // 収束（マンデルブロ集合内）
+    }
+    
+    // 反復回数を色に変換
+    getColor(iterations) {
+        if iterations == me.maxIterations {
+            return "black"  // マンデルブロ集合内
+        }
+        
+        // カラフルなグラデーション
+        ratio = iterations / me.maxIterations
+        
+        if ratio < 0.25 {
+            return "blue"
+        } else {
+            if ratio < 0.5 {
+                return "cyan"
+            } else {
+                if ratio < 0.75 {
+                    return "yellow"
+                } else {
+                    return "red"
+                }
+            }
+        }
+    }
+    
+    // フラクタル描画
+    render() {
+        print("🎨 Rendering Mandelbrot fractal...")
+        print("Zoom: " + me.zoom + ", Center: (" + me.centerX + ", " + me.centerY + ")")
+        
+        // 画面の各ピクセルを計算
+        y = 0
+        loop (y < me.height) {
+            x = 0
+            loop (x < me.width) {
+                // スクリーン座標を複素平面座標に変換
+                real = (x - me.width / 2) / (me.width / 4) / me.zoom + me.centerX
+                imag = (y - me.height / 2) / (me.height / 4) / me.zoom + me.centerY
+                
+                c = new ComplexBox(real, imag)
+                iterations = me.mandelbrotIterations(c)
+                color = me.getColor(iterations)
+                
+                // ピクセル描画
+                me.canvas.setFillStyle(color)
+                me.canvas.fillRect(x, y, 1, 1)
+                
+                x = x + 2  // パフォーマンス向上のため2ピクセル刻み
+            }
+            y = y + 2
+            
+            // 進行状況表示
+            if y % 20 == 0 {
+                progress = (y * 100) / me.height
+                print("Progress: " + progress + "%")
+            }
+        }
+        
+        // 情報表示
+        me.canvas.setFillStyle("white")
+        me.canvas.fillText("Mandelbrot Set - Zoom: " + me.zoom, 10, 20)
+        me.canvas.fillText("Everything is Box Mathematics!", 10, 40)
+    }
+    
+    // ズームイン
+    zoomIn(factor) {
+        me.zoom = me.zoom * factor
+    }
+    
+    // 中心移動
+    setCenter(x, y) {
+        me.centerX = x
+        me.centerY = y
+    }
+}
+
+// 🚀 フラクタル生成開始！
+print("Creating Mandelbrot fractal generator...")
+mandelbrot = new MandelbrotBox("fractal-canvas", 400, 400)
+
+// 基本フラクタル描画
+mandelbrot.render()
+
+print("🌟 Generated beautiful Mandelbrot fractal!")
+print("🔢 Complex number calculations with ComplexBox")
+print("🎨 Mathematical art through WebCanvasBox")
+
+// ズームイン版も生成
+print("📊 Creating zoomed version...")
+mandelbrot.setCenter(-0.8, 0.156)  // 興味深い領域
+mandelbrot.zoomIn(2.0)
+mandelbrot.render()
+
+// 最終レポート
+print(DEBUG.memoryReport())
+print("✨ Mathematics is beautiful with Everything is Box!")
+print("🐱 Complex numbers, iterations, colors - all unified as Boxes!")

@@ -64,11 +64,8 @@ pub mod debug_box;
 pub mod integer_box;
 pub mod math_box;
 pub mod random_box;
-pub mod string_box;
 pub mod time_box;
 // These boxes use web APIs that require special handling in WASM
-pub mod aot_compiler_box;
-pub mod aot_config_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod audio_box;
 #[cfg(not(target_arch = "wasm32"))]
@@ -76,9 +73,7 @@ pub mod canvas_event_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod canvas_loop_box;
 pub mod console_box;
-pub mod debug_config_box;
 pub mod function_box;
-pub mod gc_config_box;
 // ARCHIVED: JIT Box modules moved to archive/jit-cranelift/ during Phase 15
 // pub mod jit_config_box;
 // pub mod jit_events_box;
@@ -87,6 +82,7 @@ pub mod gc_config_box;
 // pub mod jit_stats_box;
 // pub mod jit_strict_box;
 pub mod map_box;
+pub mod set_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod qr_box;
 pub mod ref_cell_box;
@@ -108,8 +104,6 @@ pub mod egui_box;
 // pub use string_box::StringBox; // レガシー実装、box_trait::StringBoxを使用すること
 // pub use integer_box::IntegerBox; // レガシー実装、box_trait::IntegerBoxを使用すること
 // pub use bool_box::BoolBox; // レガシー実装、box_trait::BoolBoxを使用すること
-pub use aot_compiler_box::AotCompilerBox;
-pub use aot_config_box::AotConfigBox;
 #[cfg(not(target_arch = "wasm32"))]
 pub use audio_box::AudioBox;
 #[cfg(not(target_arch = "wasm32"))]
@@ -126,6 +120,7 @@ pub use debug_box::DebugBox;
 // pub use jit_stats_box::JitStatsBox;
 // pub use jit_strict_box::JitStrictBox;
 pub use map_box::MapBox;
+pub use set_box::SetBox;
 pub use math_box::{FloatBox, MathBox};
 #[cfg(not(target_arch = "wasm32"))]
 pub use qr_box::QRBox;
@@ -176,6 +171,7 @@ pub use array::ArrayBox;
 pub use buffer::BufferBox;
 pub use file::FileBox;
 pub use future::{FutureBox, FutureWeak, NyashFutureBox};
+pub mod callable;
 pub use http::HttpClientBox;
 pub use http_message_box::{HTTPRequestBox, HTTPResponseBox};
 pub use http_server_box::HTTPServerBox;

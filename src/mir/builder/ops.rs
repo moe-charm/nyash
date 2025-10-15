@@ -140,38 +140,77 @@ impl super::MirBuilder {
             }
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                // Dev: Lower 比較 を演算子ボックス呼び出しに置換（既定OFF）
-                let in_cmp_op = self
+                // 🎯 Phase 2: Transform Box == Box into ExternCall to op_eq() (NEW PATH)
+                // or BoxCall to .equals() method (OLD PATH, gated by flag)
+
+                // Debug: log the types (Box vs primitive info can be queried on demand)
+                if std::env::var("NYASH_DEBUG_BOX_COMPARE").is_ok() {
+                    eprintln!("[DEBUG] Box comparison check: lhs={:?} lhs_type={:?} rhs={:?} rhs_type={:?}",
+                        lhs, self.value_types.get(&lhs), rhs, self.value_types.get(&rhs));
+                }
+
+                // Guard: Don't transform inside equals() methods to prevent infinite recursion
+                let in_equals_method = self
                     .current_function
                     .as_ref()
-                    .map(|f| f.signature.name.starts_with("CompareOperator.apply/"))
+                    .map(|f| f.signature.name.contains(".equals/"))
                     .unwrap_or(false);
-                if !in_cmp_op
-                    && (all_call || std::env::var("NYASH_BUILDER_OPERATOR_BOX_COMPARE_CALL").ok().as_deref() == Some("1")) {
-                    // op名の文字列化
-                    let opname = match op {
-                        CompareOp::Eq => "Eq",
-                        CompareOp::Ne => "Ne",
-                        CompareOp::Lt => "Lt",
-                        CompareOp::Le => "Le",
-                        CompareOp::Gt => "Gt",
-                        CompareOp::Ge => "Ge",
-                    };
-                    let op_const = crate::mir::builder::emission::constant::emit_string(self, opname);
-                    // そのまま値を渡す（型変換/slot化は演算子内orVMで行う）
-                    let name = "CompareOperator.apply/3".to_string();
-                    self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name), vec![op_const, lhs, rhs])?;
+
+                if std::env::var("NYASH_DEBUG_BOX_COMPARE").is_ok() && in_equals_method {
+                    eprintln!("[DEBUG] SKIPPING transform inside .equals/ method: {:?}",
+                        self.current_function.as_ref().map(|f| &f.signature.name));
+                }
+
+                // Gate: Eq/Ne → Extern("nyrt.ops.op_eq") 降格（ENVで切替）。既定はON（後方互換）。
+                let eq_to_opeq_enabled = {
+                    let v = std::env::var("NYASH_BUILDER_EQ_TO_OPEQ")
+                        .ok()
+                        .or_else(|| std::env::var("HAKO_BUILDER_EQ_TO_OPEQ").ok());
+                    match v {
+                        Some(s) => {
+                            let s = s.to_ascii_lowercase();
+                            matches!(s.as_str(), "1" | "true" | "on")
+                        }
+                        None => false, // default OFF per Phase 15.7 gate
+                    }
+                };
+
+                // Always use op_eq for equality when gate is ON, even if types unknown（runtime dispatch側で対処）
+                if eq_to_opeq_enabled && !in_equals_method && matches!(op, CompareOp::Eq | CompareOp::Ne) {
+                    let mut lhs_copy = lhs;
+                    let mut rhs_copy = rhs;
+                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs_copy, &mut rhs_copy);
+
+                    // Emit unified external call: nyrt.ops.op_eq(lhs, rhs)
+                    let eq_result = self.value_gen.next();
+                    self.emit_unified_call(
+                        Some(eq_result),
+                        super::builder_calls::CallTarget::Extern("nyrt.ops.op_eq".to_string()),
+                        vec![lhs_copy, rhs_copy],
+                    )?;
+                    self.value_types.insert(eq_result, MirType::Bool);
+
+                    if matches!(op, CompareOp::Ne) {
+                        // Ne → negate the result
+                        self.emit_instruction(MirInstruction::UnaryOp {
+                            dst,
+                            op: UnaryOp::Not,
+                            operand: eq_result,
+                        })?;
+                        self.value_types.insert(dst, MirType::Bool);
+                        return Ok(dst);
+                    }
                     self.value_types.insert(dst, MirType::Bool);
+                    return Ok(eq_result);
                 } else {
-                    // 既存の比較経路（安全のための型注釈/slot化含む）
+                    // Primitive comparison or other compare ops (Lt, Gt, etc.)
+                    // Keep existing logic
                     let (lhs2_raw, rhs2_raw) = if self
-                        .value_origin_newbox
-                        .get(&lhs)
+                        .origin_get(lhs)
                         .map(|s| s == "IntegerBox")
                         .unwrap_or(false)
                         && self
-                            .value_origin_newbox
-                            .get(&rhs)
+                            .origin_get(rhs)
                             .map(|s| s == "IntegerBox")
                             .unwrap_or(false)
                     {
@@ -193,7 +232,6 @@ impl super::MirBuilder {
                     } else {
                         (lhs, rhs)
                     };
-                    // Finalize compare operands in current block via LocalSSA
                     let mut lhs2 = lhs2_raw;
                     let mut rhs2 = rhs2_raw;
                     crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
@@ -268,16 +306,21 @@ impl super::MirBuilder {
             let f_id = crate::mir::builder::emission::constant::emit_bool(self, false);
             crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_false_exit = self.current_block()?;
-            // join rhs result into a single bool
+            // join rhs result into a single bool（Helper 統一）
             self.start_new_block(rhs_join)?;
             let rhs_bool = self.value_gen.next();
-            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-            }
-            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
-            self.value_types.insert(rhs_bool, MirType::Bool);
-            rhs_bool
+            let merged = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self,
+                Some(rhs_true_exit),
+                t_id,
+                Some(rhs_false_exit),
+                f_id,
+                rhs_false_exit,
+                Some("@sc_rhs"),
+                Some(rhs_bool),
+            )?.expect("rhs merge must produce a value");
+            self.value_types.insert(merged, MirType::Bool);
+            merged
         } else {
             let t_id = crate::mir::builder::emission::constant::emit_bool(self, true);
             t_id
@@ -347,21 +390,29 @@ impl super::MirBuilder {
         self.start_new_block(merge_block)?;
         self.push_if_merge(merge_block);
 
-        // Result PHI (bool)
-        let result_val = self.value_gen.next();
-        let inputs = vec![(then_exit_block, then_value_raw), (else_exit_block, else_value_raw)];
-        if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-            crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-        }
-        self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+        // Result merge（Helper 統一）
+        let result_val_dst = self.value_gen.next();
+        let (then_pred_opt, else_pred_opt) =
+            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
+        let result_val = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+            self,
+            then_pred_opt,
+            then_value_raw,
+            else_pred_opt,
+            else_value_raw,
+            else_exit_block,
+            Some("@sc_result"),
+            Some(result_val_dst),
+        )?.expect("if result must produce a value");
         self.value_types.insert(result_val, MirType::Bool);
 
         // Merge modified vars from both branches back into current scope
+
         self.merge_modified_vars(
             then_block,
             else_block,
-            then_exit_block,
-            Some(else_exit_block),
+            then_pred_opt,
+            else_pred_opt,
             &pre_if_var_map,
             &then_var_map_end,
             &Some(else_var_map_end),
@@ -397,54 +448,9 @@ impl super::MirBuilder {
                 }
             }
         }
-        // Core-13 純化: UnaryOp を直接 展開（Neg/Not/BitNot）
-        if crate::config::env::mir_core13_pure() {
-            match operator.as_str() {
-                "-" => {
-                    let zero = crate::mir::builder::emission::constant::emit_integer(self, 0);
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp {
-                        dst,
-                        op: crate::mir::BinaryOp::Sub,
-                        lhs: zero,
-                        rhs: operand_val,
-                    })?;
-                    return Ok(dst);
-                }
-                "!" | "not" => {
-                    let f = crate::mir::builder::emission::constant::emit_bool(self, false);
-                    let dst = self.value_gen.next();
-                    crate::mir::builder::emission::compare::emit_to(
-                        self,
-                        dst,
-                        crate::mir::CompareOp::Eq,
-                        operand_val,
-                        f,
-                    )?;
-                    return Ok(dst);
-                }
-                "~" => {
-                    let all1 = crate::mir::builder::emission::constant::emit_integer(self, -1);
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp {
-                        dst,
-                        op: crate::mir::BinaryOp::BitXor,
-                        lhs: operand_val,
-                        rhs: all1,
-                    })?;
-                    return Ok(dst);
-                }
-                _ => {}
-            }
-        }
-        let dst = self.value_gen.next();
+        // Core‑13 pure mode removed; normal UnaryOp path only.
         let mir_op = self.convert_unary_operator(operator)?;
-        self.emit_instruction(MirInstruction::UnaryOp {
-            dst,
-            op: mir_op,
-            operand: operand_val,
-        })?;
-        Ok(dst)
+        self.emit_unop(mir_op, operand_val)
     }
 
     // Convert AST binary operator to MIR enum or compare
@@ -479,5 +485,15 @@ impl super::MirBuilder {
             "~" => Ok(UnaryOp::BitNot),
             _ => Err(format!("Unsupported unary operator: {}", op)),
         }
+    }
+
+    pub(super) fn emit_unop(&mut self, op: UnaryOp, operand: ValueId) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::UnaryOp {
+            dst,
+            op,
+            operand,
+        })?;
+        Ok(dst)
     }
 }

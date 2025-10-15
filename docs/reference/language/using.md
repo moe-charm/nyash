@@ -4,8 +4,15 @@
 
 Status: Accepted (Runner‑side resolution). Selfhost parser accepts using as no‑op and attaches `meta.usings` for future use.
 
+Quick Guide
+- Dev defaults are friendly: `HAKO_USING=full` 相当で動作（using/AST merge/file using 有効）。
+- 詳細は `docs/guides/using-system.md` を参照。
+
+WARNING — --dump-mir is parser-only
+- Files containing `using` fail with `--dump-mir` because resolution happens in the Runner. Use `--emit-mir-json <file>` to inspect MIR, or run without `--dump-mir`.
+
 > Phase 15.5 指針（いいとこ取り）
-> - 依存の唯一の真実（SSOT）: `nyash.toml` の `[using]`（aliases/packages/paths）
+> - 依存の唯一の真実（SSOT）: `hako.toml` の `[using]`（互換: `nyash.toml`。aliases/packages/paths）
 > - 実体の合成: テキスト結合は廃止し、AST マージに一本化（曖昧さ根絶）
 > - プロファイル運用: `NYASH_USING_PROFILE={dev|ci|prod}` で厳格度を段階的に切替
 >   - dev: toml + ファイル内 using を許可（実験/便利）
@@ -63,61 +70,80 @@ pub enum QualifiedCallee {
 
 Alias desugar（MVP, Runner実装）
 - 概要: `using "path" as Alias` で読み込んだプレリュードのトップレベル記号を `Alias_<Name>` にリネームし、コード側の `Alias.Name` を `Alias_Name` にデシュガーする。
+  - ネスト別名（実験的）: `using A as X; using X.B as Y` のように、同一ファイル内で先に導入した別名 `X` をヘッドにもつ名前を次行以降で参照可能。
+    - dev/ci プロファイルで有効。AST マージ（`NYASH_USING_AST=1`）を伴う場合に安定動作。
+    - 解決順序: トップレベルの別名テーブル（toml/env）→ ローカル別名（当該ファイル内で先に出現した `using`）→ modules/env の順。
+    - 例: `using selfhost.vm as VM; using VM.mir_min as MirVmMin` → `selfhost.vm.mir_min` に合成され、`[modules]`/`NYASH_MODULES` で解決。
 - 狙い: 衝突なき名前空間の導入（ASTマージ前提）と、`Main` などの汎用名の競合回避。
 - ルール（MVP）:
   - 対象: 静的Box名、関数名（トップレベル）。
-  - 置換: `FieldAccess(Variable(Alias), field)` → `Variable("Alias_"+field)`（入れ子も再帰処理）。
+  - 置換（変数/フィールド）: `FieldAccess(Variable(Alias), field)` → `Variable("Alias_"+field)`（入れ子も再帰処理）。
+- 置換（関数呼び出し）: `Alias.Box.method(a,b)` → `FunctionCall("Alias_Box.method/2", [a,b])`
+  - 置換（メソッド呼び出し）: `Alias.method(a,b)` → `FunctionCall("Alias_Alias.method/2", [a,b])`
+  - 追加（別形式）: `Alias_Thing.method()`（すでに `Alias_` 接頭辞が付いた静的Box記号）→ `FunctionCall("Alias_Thing.method/0", [])`
+
+#### 衝突ポリシー（Fail‑Fast）
+- `Alias_` 接頭辞で生成される記号が、すでに同一ファイル/プレリュード内に存在する場合はエラーにします（Fail‑Fast）。
+- 例: `using "..." as A` により `A_Main` が生成されるが、コード側に `A_Main` が既に定義されている → エラー
+- 方針: ランナーが脱糖直後に検出・停止。将来は回避候補の提示（リネーム案）を追加予定。
   - 競合: 既存の `Alias_` 接頭辞の記号とぶつかる場合は Fail‑Fast（将来の詳細化で解決）。
   - スコープ: ファイル先頭の using 行に限る。ネストした using の alias は作用しない（将来拡張）。
-  - 既定: dev/ci プロファイルで有効（`NYASH_USING_AST=1`）。prod は toml のみ。
+  - 既定: dev/ci プロファイルで有効（`NYASH_USING_STRATEGY=prelude`）。prod は toml のみ。
 
 例
 ```nyash
-using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+ using "apps/selfhost-compiler/compiler.hako" as CompilerMod
 
 static box Main {
   main() {
     # before: CompilerMod.Main.main(args)
-    # after : CompilerMod_Main.main(args)
+    # after : CompilerMod_Main.main/1(args)
     CompilerMod.Main.main(["--min-json", "--emit-mir"]) 
   }
 }
 ```
 
+ユニットテスト
+- 脱糖ロジックは `src/runner/modes/common_util/resolve/alias_tools.rs` にテストを含みます。
+  - FieldAccess: `Alias.Name` → `Alias_Name`
+  - FunctionCall: `Alias.Box.method(a,b)` → `Alias_Box.method/2(a,b)`
+  - MethodCall: `Alias.method()` → `Alias_Alias.method/0()`
+
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.
-- Resolution is performed by the Rust Runner when `NYASH_ENABLE_USING=1`.
+- Resolution is performed by the Rust Runner when `NYASH_USING=1`（alias: `NYASH_ENABLE_USING=1`）.
+- Strategy: `NYASH_USING_STRATEGY={resolver|prelude}`（alias: `NYASH_USING_IMPL`, fallback: `NYASH_USING_AST=1` → prelude）
 - 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（レガシー経路は呼び出し側から削除済み）。
-- Runner は `nyash.toml` の `[using]` を唯一の真実として参照（prod）。dev/ci は段階的に緩和可能。
+- Runner は `hako.toml` の `[using]` を唯一の真実として参照（prod）。互換として `nyash.toml` も受理。dev/ci は段階的に緩和可能。
 - Selfhost compiler (Ny→JSON v0) collects using lines and emits `meta.usings` when present. The bridge currently ignores this meta field.
  - Prelude の中にさらに `using` が含まれている場合は、Runner が再帰的に `using` をストリップしてから AST として取り込みます（入れ子の前処理をサポート）。
- - パス解決の順序（dev/ci）: 呼び出し元ファイルのディレクトリ → `$NYASH_ROOT` → 実行バイナリからのプロジェクトルート推定（target/release/nyash の 3 階層上）→ `nyash.toml` の `[using.paths]`。
+ - パス解決の順序（dev/ci）: 呼び出し元ファイルのディレクトリ → `$NYASH_ROOT` → 実行バイナリからのプロジェクトルート推定（target/release/nyash の 3 階層上）→ `hako.toml` の `[using.paths]`（互換: `nyash.toml`）。
 
 ## Namespace Resolution (Runner‑side)
 - Goal: keep IR/VM/JIT untouched. All resolution happens in Runner/Registry.
 - Default search order (3 stages, deterministic):
   1) Local/Core Boxes (nyrt)
-  2) Aliases (nyash.toml [imports] / `needs … as …`)
+  2) Aliases (hako.toml [imports] / `needs … as …`)
   3) Plugins (short name if unique, otherwise qualified `pluginName.BoxName`)
 - On ambiguity: error with candidates and remediation (qualify or define alias).
 - Modes:
   - Relaxed (default): short names allowed when unique。
-  - Strict: plugin短名にprefix必須（env `NYASH_PLUGIN_REQUIRE_PREFIX=1` または nyash.toml `[plugins] require_prefix=true`）。
+  - Strict: plugin短名にprefix必須（env `NYASH_PLUGIN_REQUIRE_PREFIX=1` または hako.toml `[plugins] require_prefix=true`。互換: nyash.toml）。
 - Aliases:
-  - nyash.toml `[imports] HttpClient = "network.HttpClient"`
+  - hako.toml `[imports] HttpClient = "network.HttpClient"`（互換: nyash.toml）
   - needs sugar: `needs plugin.network.HttpClient as HttpClient` (file‑scoped alias)
 
 ## Plugins
 - Unified namespace with Boxes. Prefer short names when unique.
 - Qualified form: `network.HttpClient`
-- Per‑plugin control (nyash.toml): `prefix`, `require_prefix`, `expose_short_names`
+- Per‑plugin control (hako.toml): `prefix`, `require_prefix`, `expose_short_names`（互換: nyash.toml）
   - 現状は設定の読み取りのみ（導線）。挙動への反映は段階的に実施予定。
 
 ## `needs` sugar (optional)
 - Treated as a synonym to `using` on the Runner side; registers aliases only.
 - Examples: `needs utils.StringHelper`, `needs plugin.network.HttpClient as HttpClient`, `needs plugin.network.*`
 
-## nyash.toml — Unified Using（唯一の真実 / SSOT）
+## hako.toml — Unified Using（唯一の真実 / SSOT、互換: nyash.toml）
 
 Using resolution is centralized under the `[using]` table. Three forms are supported:
 
@@ -131,17 +157,50 @@ Using resolution is centralized under the `[using]` table. Three forms are suppo
 
 Notes
 - Aliases are fully resolved: `using json` first rewrites to `json_native`, then resolves to a concrete path via `[using.json_native]`.
-- `include` は廃止。代替は `using "./path/to/file.nyash" as Name`。prod では `nyash.toml` への登録が必須。
+- Quoted module using is supported: `using "selfhost.shared.mir.builder" as BlockBuilderBox;` → `[modules]`/workspace exports を優先解決し、見つからない場合のみファイル探索へフォールバック（dev限定）。
+- `include` は廃止。代替は `using "./path/to/file.nyash" as Name`。prod では `hako.toml`（互換: nyash.toml）への登録が必須。
+ - Declarative MIR authoring is recommended when emitting JSON: write Map/Array literals and call `.toJSON()` (see guides/declarative-mir.md).
+
+### hako.toml の探索（CWD → *_ROOT フォールバック）
+- ランナー起動時の環境ブート（[env]）と using リゾルバは、まずカレントディレクトリの `hako.toml` を参照し、見つからなければ `nyash.toml` / `hakorune.toml` も順に探索する。見つからなければ `$NYASH_ROOT/hako.toml` → `$NYASH_ROOT/nyash.toml` → `$NYASH_ROOT/hakorune.toml` を順に参照する。
+- これにより、スモークやツール実行で作業ディレクトリが移動しても、安定して同じ設定を読める。
+
+### DEV フォールバック（安全・prodは不変）
+- 目的: 開発プロファイル（dev/ci）での利便性向上と足止め防止。挙動は prod では無効（SSOT: toml のみ）。
+- 未解決の `using <name> as Alias` に対し、以下の DEV フォールバックを適用する:
+  1) `apps/`・`lib/`・`$NYASH_ROOT` 配下を探索し、`static box <Alias>` を含む `.nyash` ファイルを検出
+  2) 見つかった場合はプレリュードとして AST マージに追加し、エイリアスを `Alias_<Top>` へ改名
+  3) コード側は `Alias.X` → `Alias_X` / `Alias.Box.m(a)` → `Alias_Box.m/N(a)` にデシュガー
+- 相対パス `using "../..." as Name` は、パッケージ内（`$NYASH_ROOT/apps` および `apps/lib` 直下）に限り dev で許可。prod では `hako.toml` の `[using]` へ登録して名前で参照する（互換: nyash.toml）。
+- DEV トレースログは `[using] alias-trace: ...` として出力（既定OFF。`NYASH_RESOLVE_TRACE=1` で有効）。
+
+例（DEVフォールバックの最小例）
+```nyash
+// hako.toml の [using.aliases] で json → json_native が未設定でも、
+// 開発プロファイルでは Alias 名（JsonParserModule）を手掛かりに apps/lib を走査して補完します。
+using json as JsonParserModule
+
+static box Main {
+  main() {
+    // Alias 受け → 関数化（Alias_Alias.method/N）
+    local p = JsonParserModule.create_parser()
+    local ok = p.parse("{\"a\":1}")
+    if (p.has_errors()) { print("ERROR") } else { print("OK") }
+    return 0
+  }
+}
+```
+注: 本フォールバックは dev/ci でのみ働き、prod では `hako.toml`（互換: nyash.toml）の `[using]` に登録して名前で参照します。
 
 ### Dylib autoload (dev guard)
 - Enable autoload during using resolution: set env `NYASH_USING_DYLIB_AUTOLOAD=1`.
 - Resolution returns a token `dylib:<path>`; when autoload is on, Runner calls the plugin host to `load_library_direct(lib_name, path, boxes)`.
 - `boxes` is taken from `[using.<name>].bid` if present; otherwise the loader falls back to plugin‑embedded TypeBox metadata.
-- Safety: keep OFF by default. Prefer configuring libraries under `nyash.toml` for production.
+- Safety: keep OFF by default. Prefer configuring libraries under `hako.toml` (compat: nyash.toml) for production.
 
 ## Index and Cache (Runner)
 - BoxIndex（グローバル）：プラグインBox一覧とaliasesを集約し、Runner起動時（plugins init後）に構築・更新。
-  - `aliases: HashMap<String,String>`（nyash.toml `[aliases]` と env `NYASH_ALIASES`）
+  - `aliases: HashMap<String,String>`（hako.toml `[aliases]` と env `NYASH_ALIASES`。互換: nyash.toml）
   - `plugin_boxes: HashSet<String>`（読み取り専用）
 - 解決キャッシュ：グローバルの小さなキャッシュで同一キーの再解決を回避（キー: `tgt|base|strict|paths`）。
 - トレース：`NYASH_RESOLVE_TRACE=1` で解決手順やキャッシュヒット、未解決候補を出力。
@@ -171,7 +230,7 @@ static box Main {
 }
 ```
 
-nyash.toml examples
+hako.toml examples（互換: nyash.toml も可）
 ```toml
 [using]
 paths = ["apps", "lib", "."]
@@ -192,7 +251,7 @@ bid = "MathBox"
 
 Qualified/Plugins/Aliases examples
 ```nyash
-# nyash.toml
+# hako.toml（互換: nyash.toml も可）
 [plugins.network]
 path = "plugins/network.so"
 prefix = "network"
@@ -213,13 +272,14 @@ static box Main {
 ```
 
 Runner Configuration
-- Enable using pre‑processing: `NYASH_ENABLE_USING=1`
+- Enable using system: `NYASH_USING=1`（compat: `NYASH_ENABLE_USING=1`）
 - CLI from-the-top registration: `--using "ns as Alias"` or `--using '"apps/foo.nyash" as Foo'` (repeatable)
 - Using profiles (phase‑in): `NYASH_USING_PROFILE={dev|ci|prod}`
   - dev: AST マージ 既定ON、legacy前置きは既定で無効（必要時は `NYASH_LEGACY_USING_ALLOW=1` で一時許可）
   - ci: AST マージ 既定ON、legacy前置きは既定で無効（同上の一時許可）
   - prod: AST マージ 既定OFF、toml のみ（file using/path はエラー・追記ガイド）
-- Strict mode (plugin prefix required): `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `nyash.toml` の `[plugins] require_prefix=true`
+  - DEV フォールバック: 未解決の `using name as Alias` に限り、dev/ci で Alias 走査補完を行う（prod は無効）。
+- Strict mode (plugin prefix required): `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `hako.toml` の `[plugins] require_prefix=true`（互換: nyash.toml）
 - Aliases from env: `NYASH_ALIASES="Foo=apps/foo/main.nyash,Bar=lib/bar.nyash"`
 - Additional search paths: `NYASH_USING_PATH="apps:lib:."`
 - Selfhost pipeline keeps child stdout quiet and extracts JSON only: `NYASH_JSON_ONLY=1` (set by Runner automatically for child)
@@ -284,7 +344,7 @@ Notes
 このセクションは移行期の参考情報です。`include` は設計上の一貫性と学習コスト低減のため廃止しました。今後はすべて `using` に一本化してください（ファイル・パッケージ・DLL すべてを `using` で扱えます）。既存コードの移行は以下の対応例を推奨します。
 
 - `local M = include "./path/module.nyash"` → `using "./path/module.nyash" as M`
-- `include` の探索ルートは `[using.paths]` に統合（`nyash.toml`）
+- `include` の探索ルートは `[using.paths]` に統合（`hako.toml`。互換: nyash.toml）
 
 注: `include` は完全に非推奨です。コードは `using` に書き換えてください（互換シムは提供しません）。
 
@@ -303,7 +363,7 @@ Rules
 - Caching: 同一パスは一度だけ評価（2回目以降はキャッシュ返却）
 - Path resolution（MVP）:
   - Relative allowed; absolute discouraged
-  - nyash.toml `[include.roots]` で `std=/stdlib` 等のルート定義を許可
+- hako.toml `[include.roots]` で `std=/stdlib` 等のルート定義を許可（互換: nyash.toml）
   - 省略拡張は `.nyash`、ディレクトリなら `index.nyash`
 
 Backends
@@ -316,3 +376,12 @@ Limitations
 Rationale
 - MIR 仕様に変更を入れず、実用的なモジュール分割を提供
 - Everything‑is‑Box に整合（モジュール=Box、メソッド/フィールド=API）
+
+
+## Directory-as-Namespace (opt-in fallback)
+- Env `NYASH_USING_DIR_NS=1` を有効にすると、`apps/` 配下の `*.hako` を自動スキャンし、
+  ディレクトリ構造をドット区切り名前空間に変換して `[modules]` の最終候補として解決に追加する。
+- 優先順位（高→低）: manifest (`hako_module.toml`/`module.toml`) > module.hako > overrides > auto-dir
+- 除外規則（既定）: `archive/`, 先頭が `_` のディレクトリ, `test_*`, `example_*`
+- STRICT（`NYASH_USING_CHECKS_STRICT=1`）では、同一名前空間を複数パスが主張した場合はエラー。
+- quick プロファイルでは `tools/smokes/v2/configs/quick.env` で既定ON（開発向け）。CI/本番は既定OFF。

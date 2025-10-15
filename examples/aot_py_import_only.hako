@@ -1,0 +1,15 @@
+// Test just import
+static box Main {
+  main() {
+    local py, math_name, math
+    
+    // Create Python runtime  
+    py = new PyRuntimeBox()
+    
+    // Import math module
+    math_name = new StringBox("math")
+    math = py.import(math_name)
+    
+    return 0
+  }
+}

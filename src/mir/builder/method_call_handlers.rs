@@ -16,23 +16,50 @@ impl MirBuilder {
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<ValueId, String> {
+        // Special: unborn constructor — create instance without auto-birth
+        if method == "unborn" {
+            let mut arg_values = Vec::new();
+            for arg in arguments { arg_values.push(self.build_expression(arg.clone())?); }
+            let dst = self.value_gen.next();
+            self.emit_instruction(MirInstruction::NewBox { dst, box_type: box_name.to_string(), args: arg_values , auto_birth: None})?;
+            // Origin register for downstream routing/debug
+            self.origin_register(dst, box_name.to_string());
+            return Ok(dst);
+        }
         // Build argument values
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.build_expression(arg.clone())?);
         }
 
+
         // Compose lowered function name: BoxName.method/N
-        let func_name = format!("{}.{}/{}", box_name, method, arg_values.len());
+        let func_name = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::static_name(box_name, method, arg_values.len()) {
+            Ok(n) => n,
+            Err(e) => return Err(format!("static call name error: {}", e)),
+        };
         let dst = self.value_gen.next();
 
         if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[builder] static-call {}", func_name);
         }
 
-        // Use legacy global-call emission to avoid unified builtin/extern constraints
-        self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
-        Ok(dst)
+        // Strict: if the exact canonical function is absent in this module,
+        // fall back to the dotted base and let VM handle resolution (and optional legacy).
+        // Use canonical function name produced by resolver (e.g., Box.method/Arity)
+        let target_name = func_name.clone();
+
+        // Prefer ModuleFunction emission; VM側の末尾一致フォールバックで alias/宣言名の揺れを吸収
+        let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
+        self.emit_instruction(MirInstruction::Call {
+            dst: Some(dst),
+            func: name_val,
+            callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
+            args: arg_values,
+            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+        })?;
+        self.annotate_call_result_from_func_name(dst, &target_name);
+        return Ok(dst)
     }
 
     /// Handle TypeOp method calls: value.is("Type") and value.as("Type")
@@ -58,15 +85,6 @@ impl MirBuilder {
         })?;
 
         Ok(dst)
-    }
-
-    /// Check if this is a TypeOp method call
-    pub(super) fn is_typeop_method(method: &str, arguments: &[ASTNode]) -> Option<String> {
-        if (method == "is" || method == "as") && arguments.len() == 1 {
-            Self::extract_string_literal(&arguments[0])
-        } else {
-            None
-        }
     }
 
     /// Handle me.method() calls within static box context
@@ -95,6 +113,95 @@ impl MirBuilder {
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.build_expression(arg.clone())?);
+        }
+
+        // Core containers fast-path: when the receiver originated from a
+        // builtin core box (ArrayBox/MapBox/StringBox), prefer emitting a
+        // BoxCall so VM can dispatch to the builtin handlers. This avoids
+        // accidental shadowing by user-defined boxes with the same name in
+        // prelude files (e.g., hakorune std ArrayBox), while keeping behavior
+        // consistent for user boxes (their NewBox origin will not be core).
+        if method != "birth" {
+            // Small helper: table-driven lowering entrypoint
+            #[inline]
+            fn try_lower_via_table(builder: &mut MirBuilder, recv_cls: Option<&str>, method: &str, obj: ValueId, args: &mut Vec<ValueId>) -> Option<ValueId> {
+                if let Some(spec) = crate::mir::builder::lowering::lower_builtin_method(recv_cls, method, args.len()) {
+                    let dst = builder.value_gen.next();
+                    let full = spec.extern_name.to_string();
+                    let name_const = crate::mir::builder::name_const::make_name_const_result(builder, &full).ok()?;
+                    // LocalSSA materialization: ensure receiver/args have in-block defs
+                    let recv_local = if spec.prepend_recv { Some(builder.local_recv(obj)) } else { None };
+                    let mut argv_loc: Vec<ValueId> = Vec::with_capacity(if recv_local.is_some() { 1 + args.len() } else { args.len() });
+                    if let Some(r) = recv_local { argv_loc.push(r); }
+                    while let Some(a) = args.first().cloned() {
+                        let _ = args.remove(0);
+                        argv_loc.push(builder.local_arg(a));
+                    }
+                    let _ = builder.emit_instruction(MirInstruction::Call {
+                        dst: Some(dst),
+                        func: name_const,
+                        callee: Some(crate::mir::Callee::Extern(full)),
+                        args: argv_loc,
+                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                    });
+                    builder.annotate_call_result_from_func_name(dst, method);
+                    return Some(dst);
+                }
+                None
+            }
+            let origin_cls: Option<String> = self.origin_get(object_value).map(|s| s.to_string());
+            // Also infer from value_types when origin is unknown
+            let inferred_string = matches!(self.value_types.get(&object_value), Some(MirType::String))
+                || matches!(self.value_types.get(&object_value), Some(MirType::Box(b)) if b == "StringBox");
+            if let Some(cls) = origin_cls.as_deref() {
+                if let Some(dst) = try_lower_via_table(self, Some(cls), &method, object_value, &mut arg_values) { return Ok(dst); }
+                if cls == "ArrayBox" || cls == "MapBox" || cls == "StringBox" {
+                    // Emit BoxCall only when we have a known builtin method_id
+                    if let Some(mid_u32) = crate::runtime::type_registry::resolve_builtin_method_id(cls, &method) {
+                        let dst = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::BoxCall {
+                            dst: Some(dst),
+                            box_val: object_value,
+                            method: method.clone(),
+                            method_id: Some(mid_u32 as u16),
+                            args: arg_values,
+                            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        })?;
+                        // Conservatively annotate result type based on method name
+                        self.annotate_call_result_from_func_name(dst, &method);
+                        return Ok(dst);
+                    }
+                }
+            }
+            // Lower string methods for inferred String types (literals/expressions)
+            if inferred_string {
+                if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
+            }
+            // Conservative fallback: size/length/len with 0 args → treat receiver as string-like
+            // Guarded: only when receiver is NOT a known Box type (except inferred String)
+            if (method == "size" || method == "length" || method == "len") && arg_values.is_empty() {
+                let is_known_box = match self.origin_get(object_value) {
+                    Some(cls) => cls != "StringBox",
+                    None => matches!(self.value_types.get(&object_value), Some(MirType::Box(b)) if b != "StringBox"),
+                };
+                if !is_known_box {
+                    if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
+                }
+            }
+        }
+
+
+        // Special-case: instance.birth(args) must call user-defined ModuleFunction(Class.birth/N)
+        // to ensure contracts and user Box initializer run even when RouterPolicy prefers BoxCall.
+        if method == "birth" {
+            let dst = self.value_gen.next();
+            // Delegate to legacy path which rewrites Method-birth → ModuleFunction(Class.birth/N)
+            self.emit_legacy_call(
+                Some(dst),
+                CallTarget::Method { box_type: None, method, receiver: object_value },
+                arg_values,
+            )?;
+            return Ok(dst);
         }
 
         // Receiver class hintは emit_unified_call 側で起源/型から判断する（重複回避）

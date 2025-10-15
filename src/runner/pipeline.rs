@@ -33,12 +33,84 @@ impl NyashRunner {
         using_paths.extend(["apps", "lib", "."].into_iter().map(|s| s.to_string()));
 
         // nyash.toml: delegate to using resolver (keeps existing behavior)
-        let _ = crate::using::resolver::populate_from_toml(
+        let res = crate::using::resolver::populate_from_toml(
             &mut using_paths,
             &mut pending_modules,
             &mut aliases,
             &mut packages,
         );
+        if let Err(e) = res {
+            let strict = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+            if strict {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+        // Auto-discovery (Option C): discover apps/**/*.hako and register as pending modules when enabled.
+        // Guarded by env NYASH_DISCOVER_MODULES (default on).
+        let discover_on = std::env::var("NYASH_DISCOVER_MODULES").ok().map(|v| v != "0" && v.to_ascii_lowercase() != "off").unwrap_or(true);
+        if discover_on {
+            // Determine roots (priority: NYASH_DISCOVER_ROOTS > using_paths > NYASH_ROOT/apps)
+            let mut roots: Vec<std::path::PathBuf> = Vec::new();
+            if let Some(raw) = std::env::var("NYASH_DISCOVER_ROOTS").ok() {
+                for s in raw.split(|c| c == ':' || c == ';' || c == ',') {
+                    let s = s.trim();
+                    if s.is_empty() { continue; }
+                    roots.push(std::path::Path::new(s).to_path_buf());
+                }
+            }
+            if roots.is_empty() {
+                for p in using_paths.iter() {
+                    let pb = std::path::Path::new(p);
+                    if pb.exists() && pb.is_dir() { roots.push(pb.to_path_buf()); }
+                }
+            }
+            if roots.is_empty() {
+                let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+                roots.push(std::path::Path::new(&root).join("apps"));
+            }
+            // Existing keys set for override precedence
+            use std::collections::HashSet;
+            let mut existing: HashSet<String> = HashSet::new();
+            for (k, _) in pending_modules.iter() { existing.insert(k.clone()); }
+            // Discover each root
+            let mut opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            // Apply env overrides from [modules.options]
+            let env_on = |k: &str, dflt: bool| -> bool {
+                match std::env::var(k).ok() {
+                    Some(v) => match v.to_ascii_lowercase().as_str() { "0"|"off"|"false"=>false, _=>true },
+                    None => dflt,
+                }
+            };
+            opts.exclude_archive = env_on("NYASH_DISCOVER_EXCLUDE_ARCHIVE", opts.exclude_archive);
+            opts.exclude_underscore_dirs = env_on("NYASH_DISCOVER_EXCLUDE_UNDERSCORE_DIRS", opts.exclude_underscore_dirs);
+            opts.exclude_test_prefix = env_on("NYASH_DISCOVER_EXCLUDE_TEST_PREFIX", opts.exclude_test_prefix);
+            opts.exclude_example_prefix = env_on("NYASH_DISCOVER_EXCLUDE_EXAMPLE_PREFIX", opts.exclude_example_prefix);
+            for r in roots.iter() {
+                if !r.exists() { continue; }
+                let entries = crate::config::module_discovery::discover_entries_under(r, &opts);
+                for (ns, p) in entries {
+                    if !existing.contains(&ns) {
+                        if let Some(sp) = p.to_str() {
+                            pending_modules.push((ns.clone(), sp.to_string()));
+                            existing.insert(ns);
+                        }
+                    }
+                }
+            }
+        }
+        if crate::config::env::resolve_trace() {
+            use crate::runner::trace::log as tlog;
+            if !crate::config::env::cli_quiet() {
+                tlog(format!("[using] ctx: paths:{} modules:{} aliases:{} packages:{}", using_paths.len(), pending_modules.len(), aliases.len(), packages.len()));
+            }
+            if std::env::var("NYASH_RESOLVE_DEBUG").ok().as_deref() == Some("1") {
+                tlog(format!("[using] ctx: paths={:?}", using_paths));
+                tlog(format!("[using] ctx: modules={:?}", pending_modules));
+                tlog(format!("[using] ctx: aliases={:?}", aliases));
+                tlog(format!("[using] ctx: packages={:?}", packages.keys().collect::<Vec<_>>()));
+            }
+        }
 
         // Env overrides: modules and using paths
         if let Ok(ms) = std::env::var("NYASH_MODULES") {
@@ -53,7 +125,7 @@ impl NyashRunner {
             }
         }
         if let Ok(p) = std::env::var("NYASH_USING_PATH") {
-            for s in p.split(':') {
+            for s in p.split(|c| c == ':' || c == ';') {
                 let s = s.trim();
                 if !s.is_empty() {
                     using_paths.push(s.to_string());
@@ -98,7 +170,7 @@ pub(super) fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
                         return;
                     }
                 } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    if ext == "nyash" {
+                    if ext == "nyash" || ext == "hako" {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             if stem == leaf {
                                 out.push(path.to_string_lossy().to_string());
@@ -131,10 +203,115 @@ pub(super) fn resolve_using_target(
 ) -> Result<String, String> {
     // Invalidate and rebuild index/cache if env or nyash.toml changed
     super::box_index::rebuild_if_env_changed();
+    // Heuristic: when target looks like a direct file path, enforce private patterns as well
+    // (even if is_path == false). This protects dev/prelude flows that pass raw strings.
+    {
+        let looks_like_path = tgt.ends_with(".hako") || tgt.ends_with(".nyash") || tgt.contains('/') || tgt.contains('\\');
+        if looks_like_path {
+            if let Some(list) = std::env::var("NYASH_PRIVATE_PATTERNS").ok() {
+                let patterns: Vec<&str> = list.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                fn wild_match(pat: &str, text: &str) -> bool {
+                    if pat == "**" || pat == "*" { return true; }
+                    let mut cur: usize = 0;
+                    let anchored_start = !pat.starts_with('*');
+                    let anchored_end = !pat.ends_with('*');
+                    let parts: Vec<&str> = pat.split('*').collect();
+                    if anchored_start {
+                        if let Some(first) = parts.first() { if !text.starts_with(first) { return false; } cur = first.len(); }
+                    }
+                    for (i, part) in parts.iter().enumerate() {
+                        if part.is_empty() { continue; }
+                        if i == 0 && anchored_start { continue; }
+                        if let Some(pos) = text[cur..].find(part) { cur += pos + part.len(); } else { return false; }
+                    }
+                    if anchored_end { if let Some(last) = parts.last() { return text.ends_with(last); } }
+                    true
+                }
+                for p in patterns.iter() {
+                    if wild_match(p, tgt) {
+                        let diag_on = std::env::var("NYASH_PRIVATE_DIAG").ok().as_deref() != Some("0");
+                        if diag_on { eprintln!("{}", crate::common::diagnostics::modules_error::private_access(tgt, p)); }
+                        let onv = std::env::var("NYASH_PRIVATE_ON_VIOLATION").ok();
+                        let strict_env = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+                        if strict || strict_env || matches!(onv.as_deref(), Some("error")) { return Err(format!("private access: '{}' matches '{}'", tgt, p)); }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    if is_path {
+        // Enforce minimal [private] patterns (warn by default; strict/error via env/flag)
+        if let Some(list) = std::env::var("NYASH_PRIVATE_PATTERNS").ok() {
+            let patterns: Vec<&str> = list.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            fn wild_match(pat: &str, text: &str) -> bool {
+                if pat == "**" || pat == "*" { return true; }
+                let mut cur: usize = 0;
+                let anchored_start = !pat.starts_with('*');
+                let anchored_end = !pat.ends_with('*');
+                let parts: Vec<&str> = pat.split('*').collect();
+                if anchored_start {
+                    if let Some(first) = parts.first() { if !text.starts_with(first) { return false; } cur = first.len(); }
+                }
+                for (i, part) in parts.iter().enumerate() {
+                    if part.is_empty() { continue; }
+                    if i == 0 && anchored_start { continue; }
+                    if let Some(pos) = text[cur..].find(part) { cur += pos + part.len(); } else { return false; }
+                }
+                if anchored_end { if let Some(last) = parts.last() { return text.ends_with(last); } }
+                true
+            }
+            for p in patterns.iter() {
+                if wild_match(p, tgt) {
+                    let diag_on = std::env::var("NYASH_PRIVATE_DIAG").ok().as_deref() != Some("0");
+                    if diag_on { eprintln!("{}", crate::common::diagnostics::modules_error::private_access(tgt, p)); }
+                    let onv = std::env::var("NYASH_PRIVATE_ON_VIOLATION").ok();
+                    let strict_env = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+                    if strict || strict_env || matches!(onv.as_deref(), Some("error")) { return Err(format!("private access: '{}' matches '{}'", tgt, p)); }
+                    break;
+                }
+            }
+        }
+        return Ok(tgt.to_string());
+    }
+    // Heuristic: when target looks like a direct file path, enforce private patterns as well
+    let looks_like_path = tgt.ends_with(".hako") || tgt.ends_with(".nyash") || tgt.contains('/') || tgt.contains('\\');
+    if looks_like_path {
+        if let Some(list) = std::env::var("NYASH_PRIVATE_PATTERNS").ok() {
+            let patterns: Vec<&str> = list.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            fn wild_match(pat: &str, text: &str) -> bool {
+                if pat == "**" || pat == "*" { return true; }
+                let mut cur: usize = 0;
+                let anchored_start = !pat.starts_with('*');
+                let anchored_end = !pat.ends_with('*');
+                let parts: Vec<&str> = pat.split('*').collect();
+                if anchored_start {
+                    if let Some(first) = parts.first() { if !text.starts_with(first) { return false; } cur = first.len(); }
+                }
+                for (i, part) in parts.iter().enumerate() {
+                    if part.is_empty() { continue; }
+                    if i == 0 && anchored_start { continue; }
+                    if let Some(pos) = text[cur..].find(part) { cur += pos + part.len(); } else { return false; }
+                }
+                if anchored_end { if let Some(last) = parts.last() { return text.ends_with(last); } }
+                true
+            }
+            for p in patterns.iter() {
+                if wild_match(p, tgt) {
+                    let diag_on = std::env::var("NYASH_PRIVATE_DIAG").ok().as_deref() != Some("0");
+                    if diag_on { eprintln!("{}", crate::common::diagnostics::modules_error::private_access(tgt, p)); }
+                    let onv = std::env::var("NYASH_PRIVATE_ON_VIOLATION").ok();
+                    let strict_env = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+                    if strict || strict_env || matches!(onv.as_deref(), Some("error")) { return Err(format!("private access: '{}' matches '{}'", tgt, p)); }
+                    break;
+                }
+            }
+        }
+    }
     if is_path {
         return Ok(tgt.to_string());
     }
-    let trace = verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+    let trace = verbose || crate::config::env::resolve_trace();
     let idx = super::box_index::get_box_index();
     let mut strict_effective = strict || idx.plugins_require_prefix_global;
     if std::env::var("NYASH_PLUGIN_REQUIRE_PREFIX").ok().as_deref() == Some("1") {
@@ -183,10 +360,21 @@ pub(super) fn resolve_using_target(
     // Resolve aliases early (provided map) — and then recursively resolve the target
     if let Some(v) = aliases.get(tgt) {
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v)); }
         }
         // Recurse to resolve the alias target into a concrete path/token
         let rec = resolve_using_target(v, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
+        crate::runner::trace::log_json_using(tgt, Some(&rec), &[], "alias");
+        crate::runner::box_index::cache_put(&key, rec.clone());
+        return Ok(rec);
+    }
+    // Nested alias support: when target is like "Alias.rest.of.path", resolve head alias first
+    if let Some(recomposed) = crate::runner::modes::common_util::resolve::alias_expand::expand_head_alias(tgt, aliases) {
+        if trace {
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] nested-alias '{}' -> '{}'", tgt, recomposed)); }
+        }
+        let rec = resolve_using_target(&recomposed, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
+        crate::runner::trace::log_json_using(tgt, Some(&rec), &[], "nested-alias");
         crate::runner::box_index::cache_put(&key, rec.clone());
         return Ok(rec);
     }
@@ -197,32 +385,39 @@ pub(super) fn resolve_using_target(
                 // Return a marker token to avoid inlining attempts; loader will consume later stages
                 let out = format!("dylib:{}", pkg.path);
                 if trace {
-                    crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out));
+                    if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out)); }
                 }
+                crate::runner::trace::log_json_using(tgt, Some(&out), &[], "dylib");
                 crate::runner::box_index::cache_put(&key, out.clone());
                 return Ok(out);
             }
             PackageKind::Package => {
-                // Compute entry: main or <dir_last>.nyash
+                // Compute entry: main or <dir_last>.hako (preferred) / .nyash (legacy)
                 let base = std::path::Path::new(&pkg.path);
                 let out = if let Some(m) = &pkg.main {
-                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                    if matches!(base.extension().and_then(|s| s.to_str()), Some("hako") | Some("nyash")) {
                         // path is a file; ignore main and use as-is
                         pkg.path.clone()
                     } else {
                         base.join(m).to_string_lossy().to_string()
                     }
                 } else {
-                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                    if matches!(base.extension().and_then(|s| s.to_str()), Some("hako") | Some("nyash")) {
                         pkg.path.clone()
                     } else {
                         let leaf = base.file_name().and_then(|s| s.to_str()).unwrap_or(tgt);
-                        base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                        let cand_h = base.join(format!("{}.hako", leaf));
+                        if cand_h.exists() {
+                            cand_h.to_string_lossy().to_string()
+                        } else {
+                            base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                        }
                     }
                 };
                 if trace {
-                    crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out));
+                    if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out)); }
                 }
+                crate::runner::trace::log_json_using(tgt, Some(&out), &[], "package");
                 crate::runner::box_index::cache_put(&key, out.clone());
                 return Ok(out);
             }
@@ -240,6 +435,7 @@ pub(super) fn resolve_using_target(
                             tgt, out
                         ));
                     }
+                    crate::runner::trace::log_json_using(tgt, Some(&out), &[], "env-alias");
                     crate::runner::box_index::cache_put(&key, out.clone());
                     return Ok(out);
                 }
@@ -250,8 +446,9 @@ pub(super) fn resolve_using_target(
     if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) {
         let out = p.clone();
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out)); }
         }
+        crate::runner::trace::log_json_using(tgt, Some(&out), &[], "modules");
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
@@ -259,51 +456,63 @@ pub(super) fn resolve_using_target(
     if tgt == "nyashstd" {
         let out = "builtin:nyashstd".to_string();
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out)); }
         }
+        crate::runner::trace::log_json_using(tgt, Some(&out), &[], "builtin");
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
-    // 3) build candidate list: relative then using-paths
-    let rel = tgt.replace('.', "/") + ".nyash";
+    // 3) build candidate list: relative then using-paths (prefer .hako, fallback .nyash)
+    let rel_h = tgt.replace('.', "/") + ".hako";
+    let rel_ny = tgt.replace('.', "/") + ".nyash";
     let mut cand: Vec<String> = Vec::new();
     if let Some(dir) = context_dir {
-        let c = dir.join(&rel);
-        if c.exists() {
-            cand.push(c.to_string_lossy().to_string());
-        }
+        let c1 = dir.join(&rel_h);
+        let c2 = dir.join(&rel_ny);
+        if c1.exists() { cand.push(c1.to_string_lossy().to_string()); }
+        if c2.exists() { cand.push(c2.to_string_lossy().to_string()); }
     }
     for base in using_paths {
-        let c = std::path::Path::new(base).join(&rel);
-        if c.exists() {
-            cand.push(c.to_string_lossy().to_string());
-        }
+        let c1 = std::path::Path::new(base).join(&rel_h);
+        let c2 = std::path::Path::new(base).join(&rel_ny);
+        if c1.exists() { cand.push(c1.to_string_lossy().to_string()); }
+        if c2.exists() { cand.push(c2.to_string_lossy().to_string()); }
     }
     if cand.is_empty() {
-        // Always emit a concise unresolved note to aid diagnostics in smokes
-        let leaf = tgt.split('.').last().unwrap_or(tgt);
+        // Unresolved: emit diagnostics JSON, then either fail-fast (strict) or log-and-continue
         let mut cands: Vec<String> = Vec::new();
+        let leaf = tgt.split('.').last().unwrap_or(tgt);
         suggest_in_base("apps", leaf, &mut cands);
         if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
         if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
+        eprintln!("{}", crate::common::diagnostics::modules_error::unresolved(tgt, &cands));
+        if strict {
+            return Err(format!("unresolved using '{}': not found in modules/using-paths", tgt));
+        }
+        // Always emit a concise unresolved note to aid diagnostics in smokes
         if trace {
             if cands.is_empty() {
-                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt));
+                if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt)); }
             } else {
-                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", ")));
+                if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", ")))};
             }
         } else {
-            eprintln!("[using] not found: '{}'", tgt);
+            if !crate::config::env::cli_quiet() { eprintln!("[using] not found: '{}'", tgt); }
         }
+        crate::runner::trace::log_json_using(tgt, None, &cands, "unresolved");
         return Ok(tgt.to_string());
     }
-    if cand.len() > 1 && strict {
-        return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
+    if cand.len() > 1 {
+        eprintln!("{}", crate::common::diagnostics::modules_error::ambiguous(tgt, &cand));
+        if strict {
+            return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
+        }
     }
     let out = cand.remove(0);
     if trace {
-        crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out));
+        if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out)); }
     }
+    crate::runner::trace::log_json_using(tgt, Some(&out), &[], "fs");
     crate::runner::box_index::cache_put(&key, out.clone());
     Ok(out)
 }
@@ -446,7 +655,7 @@ pub(super) fn lint_fields_top(code: &str, strict: bool, verbose: bool) -> Result
         }
         return Err(msg);
     }
-    if verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+    if verbose || crate::config::env::resolve_trace() {
         for (lno, fld, bx) in violations {
             eprintln!(
                 "[lint] fields-top: line {} in box {} -> {}",

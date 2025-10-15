@@ -1,0 +1,7 @@
+// Minimal AOT/VM test: return 42
+static box Main {
+  main() {
+    return 42
+  }
+}
+

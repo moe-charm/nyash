@@ -1,0 +1,11 @@
+// Param-string JIT HostCall PoC (length)
+box Utils {
+    strlen(s) {
+        return s.length()
+    }
+}
+
+s = "Hello, Nyash!"
+u = new Utils()
+print(u.strlen(s))
+

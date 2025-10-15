@@ -1,0 +1,22 @@
+// ParseOpsBox — primitive JSON parse helpers for JsonNode
+using "./string.hako" as StringUtils
+using "./escape.hako" as EscUtils
+using "../core/node.hako" as JsonNode
+
+static box ParseOpsBox {
+  // Return JsonNode for primitives (null/true/false/int/float/string), or null if not matched.
+  parse_primitive(text) {
+    if text == null { return JsonNode.create_null() }
+    local t = StringUtils.trim(text)
+    if t == "null" { return JsonNode.create_null() }
+    if t == "true" { return JsonNode.create_bool(true) }
+    if t == "false" { return JsonNode.create_bool(false) }
+    if StringUtils.is_integer(t) { return JsonNode.create_int(StringUtils.parse_integer(t)) }
+    if StringUtils.contains(t, ".") or StringUtils.contains(t, "e") or StringUtils.contains(t, "E") { return JsonNode.create_float(t) }
+    if StringUtils.starts_with(t, """) and StringUtils.ends_with(t, """) {
+      local s = EscUtils.unquote_string(t)
+      return JsonNode.create_string(s)
+    }
+    return null
+  }
+}

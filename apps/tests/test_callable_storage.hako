@@ -1,0 +1,69 @@
+// Test: Can CallableBox be stored in ArrayBox?
+// Purpose: Answer user's question about storing CallableBox
+
+static box Main {
+  main() {
+    print("=== CallableBox Storage Test ===")
+
+    // Test 1: Store CallableBox in ArrayBox
+    print("[Test 1] Store CallableBox in ArrayBox")
+    local arr = new ArrayBox()
+    arr.push(10)
+    arr.push(20)
+
+    // Create CallableBox
+    local cb = arr.methodRef("size", 0)
+
+    // Store in ArrayBox
+    local storage = new ArrayBox()
+    storage.push(cb)
+    print("Stored CallableBox in ArrayBox")
+
+    // Retrieve and call
+    local retrieved = storage.get(0)
+    local args = new ArrayBox()
+    local result = retrieved.call(args)
+    print("Test 1 result: " + result)
+
+    if result != 2 {
+      print("[FAIL] Test 1: expected 2, got " + result)
+      return 1
+    }
+    print("[PASS] Test 1: CallableBox can be stored in ArrayBox!")
+
+    // Test 2: Store in MapBox
+    print("[Test 2] Store CallableBox in MapBox")
+    local map = new MapBox()
+    map.set("sizeMethod", cb)
+    print("Stored CallableBox in MapBox")
+
+    // Retrieve and call
+    local retrieved2 = map.get("sizeMethod")
+    local result2 = retrieved2.call(args)
+    print("Test 2 result: " + result2)
+
+    if result2 != 2 {
+      print("[FAIL] Test 2: expected 2, got " + result2)
+      return 1
+    }
+    print("[PASS] Test 2: CallableBox can be stored in MapBox!")
+
+    // Test 3: Check arity field
+    print("[Test 3] CallableBox.arity() field")
+    local arity = cb.arity()
+    print("Arity: " + arity)
+
+    if arity != 0 {
+      print("[FAIL] Test 3: expected arity=0, got " + arity)
+      return 1
+    }
+    print("[PASS] Test 3: arity() field works!")
+
+    print("=== All tests PASSED! ===")
+    print("")
+    print("Answer: Yes, CallableBox can be stored in ArrayBox/MapBox!")
+    print("methodRef() is just a convenient way to CREATE CallableBox.")
+
+    return 0
+  }
+}

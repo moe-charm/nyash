@@ -1,6 +1,6 @@
 // 完全統合テスト - 美しいモジュラー設計の動作確認
 
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 print("🎨 Nyash JSON Native 統合テスト開始")
 print("美しいモジュラー設計 vs yyjson巨大ファイル")
@@ -52,7 +52,7 @@ test_cases.push("[]")
 test_cases.push("{}")
 
 local i = 0
-loop(i < test_cases.length()) {
+loop(i < test_cases.size()) {
     local input = test_cases.get(i)
     local parsed = JsonNode.parse(input)
     local output = parsed.stringify()
@@ -118,9 +118,9 @@ print("Object JSON: " + obj.stringify())
 
 // オブジェクトキー一覧
 local keys = obj.object_keys()
-print("Object keys count: " + keys.length())
+print("Object keys count: " + keys.size())
 local j = 0
-loop(j < keys.length()) {
+loop(j < keys.size()) {
     print("Key[" + j + "]: " + keys.get(j))
     j = j + 1
 }

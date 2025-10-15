@@ -1,6 +1,6 @@
 #[test]
 fn vm_compare_integerbox_boxref_lt() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::backend::vm::VMValue;
     use crate::box_trait::IntegerBox;
     use std::sync::Arc;

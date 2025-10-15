@@ -1,0 +1,69 @@
+// EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成（Builder版）
+using "selfhost/shared/json/mir_builder2.hako" as MirJsonBuilder2
+using "selfhost/compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
+using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
+
+static box EmitCompareBox {
+  // Return-only variant (prefer_cfg = 0): emit compare → ret directly
+  emit_compare(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_ret(lhs, rhs, cmp, 0) }
+
+  emit_compare_ret(lhs, rhs, cmp, trace) {
+    // dev-trace（最小）
+    if trace == 1 { print("[emit] compare-ret lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp) }
+    // entry: const lhs/rhs; compare→r3; ret r3（Map→to_json に統一）
+    local insts = [
+      MirEmitBox.make_const(1, lhs),
+      MirEmitBox.make_const(2, rhs),
+      MirEmitBox.make_compare(cmp, 1, 2, 3),
+      MirEmitBox.make_ret(3)
+    ]
+
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
+  }
+
+  emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
+
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) { return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, materialize, 0) }
+
+  emit_compare_cfg3(lhs, rhs, cmp, materialize, trace) {
+    if trace == 1 { print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize) }
+    // normalize cmp via match
+    cmp = match cmp { null => "Gt", "" => "Gt", _ => cmp }
+    // Map→to_json で構築
+    // block 0
+    local b0 = [
+      MirEmitBox.make_const(1, lhs),
+      MirEmitBox.make_const(2, rhs),
+      MirEmitBox.make_compare(cmp, 1, 2, 3)
+    ]
+    match materialize { 1 => { b0.push(MirEmitBox.make_copy(4, 3)) }, _ => { } }
+    b0.push({ op:"branch", cond:3, then:1, else_id:2 })
+    // block 1 (then)
+    local b1 = [MirEmitBox.make_const(6, 1), MirEmitBox.make_jump(3)]
+    local blk1 = HeaderEmitBox.make_block(1, b1)
+
+    // block 2 (else)
+    local b2 = [MirEmitBox.make_const(6, 0), MirEmitBox.make_jump(3)]
+    local blk2 = HeaderEmitBox.make_block(2, b2)
+
+    // block 3 (merge)
+    local b3 = [MirEmitBox.make_ret(6)]
+    local blk3 = HeaderEmitBox.make_block(3, b3)
+
+    // assemble function/module
+    local blocks = [
+      HeaderEmitBox.make_block(0, b0),
+      blk1,
+      blk2,
+      blk3
+    ]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
+  }
+}
+
+static box EmitCompareStub { main(args) { return 0 } }

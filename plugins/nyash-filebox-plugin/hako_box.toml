@@ -1,0 +1,45 @@
+[box]
+name = "FileBox"
+version = "1.0.0"
+description = "File I/O operations Box"
+author = "Nyash Team"
+
+[provides]
+boxes = ["FileBox"]
+
+[FileBox]
+type_id = 6
+
+[FileBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[FileBox.methods.open]
+id = 1
+args = [ { name = "path", type = "string" }, { name = "mode", type = "string", default = "r" } ]
+returns = { type = "void", error = "string" }
+
+[FileBox.methods.read]
+id = 2
+args = [ { name = "path", type = "string", optional = true } ]
+returns = { type = "string" }
+
+[FileBox.methods.write]
+id = 3
+args = [ { name = "path", type = "string", optional = true }, { name = "data", type = "bytes" } ]
+returns = { type = "i32" }
+
+[FileBox.methods.exists]
+id = 5
+args = [ { name = "path", type = "string" } ]
+returns = { type = "bool" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_filebox_plugin.dll"
+linux   = "target/release/libnyash_filebox_plugin.so"
+macos   = "target/release/libnyash_filebox_plugin.dylib"
+

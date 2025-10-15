@@ -1,0 +1,11 @@
+// Function-style math: min(a,b)
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_math_function_style_min_float.nyash
+
+static box Main {
+  main() {
+    return min(2.5, 7.0)
+  }
+}
+

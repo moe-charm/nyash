@@ -1,0 +1,74 @@
+// json_frag.hako — JSON v0 断片抽出ユーティリティ（Box）
+// 責務: 文字列JSONから key:int / key:str を簡便に取り出す。
+// 非責務: 実行・評価（構造検査やVM実行は他箱に委譲）。
+
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box JsonFragBox {
+  // 基本ヘルパ
+  index_of_from(hay, needle, pos) { return JsonCursorBox.index_of_from(hay, needle, pos) }
+  read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
+
+  // key に続く数値（最初の一致）を返す。見つからなければ null。
+  get_int(seg, key) {
+    local pat1 = "\"" + key + "\":"
+    local p = me.index_of_from(seg, pat1, 0)
+    if p >= 0 {
+      local v = me.read_digits(seg, p + pat1.size())
+      if v != "" { return me._str_to_int(v) }
+    }
+    return null
+  }
+
+  // key に続く "..." の文字列（最初の一致）を返す。見つからなければ空文字。
+  get_str(seg, key) {
+    local pat = "\"" + key + "\":\""
+    local p = me.index_of_from(seg, pat, 0)
+    if p >= 0 {
+      local vstart = p + pat.size()              // start of value (right after opening quote)
+      local vend = JsonCursorBox.scan_string_end(seg, vstart - 1)
+      if vend > vstart { return seg.substring(vstart, vend) }
+    }
+    return ""
+  }
+
+
+
+  // Strict variants: emit an error when the key is missing
+  get_int_strict(seg, key) {
+    local v = me.get_int(seg, key)
+    if v == null {
+      print("[ERROR] Missing key: " + key)
+    }
+    return v
+  }
+
+  get_str_strict(seg, key) {
+    local v = me.get_str(seg, key)
+    if v == "" {
+      print("[ERROR] Missing key: " + key)
+    }
+    return v
+  }
+  // ブロック0の instructions を丸ごと返す（配列の中身のみ返す）。
+  block0_segment(mjson) {
+    if mjson == null { return "" }
+    // Find the instructions array start reliably
+    local key = "\"instructions\":["
+    local pk = call("String.indexOf/2", mjson, key)
+    if pk < 0 { return "" }
+    // '[' position
+    local arr_bracket = pk + key.size() - 1
+    // Use escape-aware scanner to find matching ']'
+    local endp = JsonCursorBox.seek_array_end(mjson, arr_bracket)
+    if endp < 0 { return "" }
+    return mjson.substring(arr_bracket + 1, endp)
+  }
+
+
+  // Alias for legacy/buggy resolvers that drop underscores in method names.
+  // Keep as a thin forwarder to preserve strict naming in source while
+  // unblocking runtimes that accidentally call `block0segment`.
+}

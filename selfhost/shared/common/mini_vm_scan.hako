@@ -1,0 +1,80 @@
+// Mini-VM scanning and numeric helpers
+using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+
+static box MiniVmScan {
+  // helper: find needle from position pos
+  index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
+
+  // helper: find balanced bracket range [ ... ] starting at idx (points to '[')
+  find_balanced_array_end(json, idx) { return JsonCursorBox.seek_array_end(json, idx) }
+
+  // helper: find balanced object range { ... } starting at idx (points to '{')
+  find_balanced_object_end(json, idx) { return JsonCursorBox.seek_obj_end(json, idx) }
+
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
+  read_digits(json, pos) { return StringHelpers.read_digits(json, pos) }
+
+  // Linear pass: sum all numbers outside of quotes
+  sum_numbers_no_quotes(json) {
+    @i = 0
+    @n = json.size()
+    @total = 0
+    loop (i < n) {
+      @ch = call("String.substring/2", json, i, i+1)
+      if ch == "\"" {
+        @j = me.index_of_from(json, "\"", i+1)
+        if j < 0 { break }
+        i = j + 1
+        continue
+      }
+      @d = me.read_digits(json, i)
+      if d { total = total + me._str_to_int(d)  i = i + d.size()  continue }
+      i = i + 1
+    }
+    return me._int_to_str(total)
+  }
+
+  // Naive: sum all digit runs anywhere
+  sum_all_digits_naive(json) {
+    @i = 0
+    @n = json.size()
+    @total = 0
+    loop (i < n) {
+      @d = me.read_digits(json, i)
+      if d { total = total + me._str_to_int(d)  i = i + d.size()  continue }
+      i = i + 1
+    }
+    return me._int_to_str(total)
+  }
+
+  // Sum first two integers outside quotes; returns string or empty
+  sum_first_two_numbers(json) {
+    @i = 0
+    @n = json.size()
+    @total = 0
+    local found = 0
+    loop (i < n) {
+      @ch = call("String.substring/2", json, i, i+1)
+      if ch == "\"" {
+        @j = me.index_of_from(json, "\"", i+1)
+        if j < 0 { break }
+        i = j + 1
+        continue
+      }
+      @d = me.read_digits(json, i)
+      if d {
+        total = total + me._str_to_int(d)
+        found = found + 1
+        i = i + d.size()
+        if found >= 2 { return me._int_to_str(total) }
+        continue
+      }
+      i = i + 1
+    }
+    return ""
+  }
+}
+

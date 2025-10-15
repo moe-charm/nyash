@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: relies on prod profile instance boxcall materialization; skip by default
+if [ "${SMOKES_ENABLE_USERBOX_ARITY:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_USERBOX_ARITY=1" >&2
+  exit 0
+fi
 # userbox_method_arity_vm.sh — Same-name methods with different arity (prod)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"

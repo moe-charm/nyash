@@ -3,7 +3,7 @@ static box StringExtBox {
   trim(s) {
     // naive: trim spaces and newlines at both ends
     local i = 0
-    local j = s.length()
+    local j = s.size()
     loop (i < j) {
       local ch = s.substring(i, i+1)
       if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1 } else { break }
@@ -15,11 +15,11 @@ static box StringExtBox {
     return s.substring(i, j)
   }
   startsWith(s, pref) {
-    return s.substring(0, pref.length()) == pref
+    return s.substring(0, pref.size()) == pref
   }
   endsWith(s, suf) {
-    local n = s.length()
-    local m = suf.length()
+    local n = s.size()
+    local m = suf.size()
     if m > n { return false }
     return s.substring(n-m, n) == suf
   }
@@ -27,18 +27,18 @@ static box StringExtBox {
     // naive single replacement (first occurrence)
     local i = s.indexOf(old)
     if i < 0 { return s }
-    return s.substring(0, i) + neu + s.substring(i + old.length(), s.length())
+    return s.substring(0, i) + neu + s.substring(i + old.size(), s.size())
   }
   split(s, delim) {
     // minimal split (no regex). returns ArrayBox of parts
     local out = []
     local pos = 0
-    local dlen = delim.length()
+    local dlen = delim.size()
     loop (true) {
       local idx = s.indexOf(delim)
       if idx < 0 { out.push(s)  break }
       out.push(s.substring(0, idx))
-      s = s.substring(idx + dlen, s.length())
+      s = s.substring(idx + dlen, s.size())
     }
     return out
   }

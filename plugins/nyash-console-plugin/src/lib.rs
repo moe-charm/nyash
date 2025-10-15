@@ -1,13 +1,15 @@
 //! Nyash ConsoleBox Plugin — TypeBox v2
 //! Provides simple stdout printing via ConsoleBox
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - Note: Instance storage is declared but currently unused (no METHOD_BIRTH/FINI)
 
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
+
+// Import instance manager macros from hako_abi_impl
+use hako_abi_impl::define_instance_storage;
 
 // ===== Error Codes (BID-1) =====
 const NYB_SUCCESS: i32 = 0;
@@ -29,10 +31,8 @@ const TYPE_ID_CONSOLE_BOX: u32 = 5; // keep in sync with nyash.toml [box_types]
 // ===== Instance management =====
 struct ConsoleInstance {/* no state for now */}
 
-use once_cell::sync::Lazy;
-static INSTANCES: Lazy<Mutex<HashMap<u32, ConsoleInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (currently unused, but declared for potential future use)
+define_instance_storage!(ConsoleInstance);
 
 // ===== TLV helpers (minimal) =====
 // TLV layout: [u16 ver=1][u16 argc][entries...]
@@ -179,56 +179,6 @@ unsafe fn write_tlv_void(out: *mut u8, out_len: *mut usize) -> i32 {
 
 // ===== Entry points =====
 // legacy v1 abi/init removed
-
-/* legacy v1 entry removed
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    if type_id != TYPE_ID_CONSOLE_BOX {
-        return NYB_E_INVALID_TYPE;
-    }
-    unsafe {
-        match method_id {
-            METHOD_BIRTH => {
-                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut m) = INSTANCES.lock() {
-                    m.insert(id, ConsoleInstance {});
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-                return write_tlv_birth(TYPE_ID_CONSOLE_BOX, id, result, result_len);
-            }
-            METHOD_FINI => {
-                if let Ok(mut m) = INSTANCES.lock() {
-                    m.remove(&instance_id);
-                }
-                return NYB_SUCCESS;
-            }
-            METHOD_LOG | METHOD_PRINTLN => {
-                let slice = std::slice::from_raw_parts(args, args_len);
-                let s = match parse_first_string(slice) {
-                    Ok(s) => s,
-                    Err(_) => format_first_any(slice).unwrap_or_else(|| "".to_string()),
-                };
-                if method_id == METHOD_LOG {
-                    print!("{}", s);
-                } else {
-                    println!("{}", s);
-                }
-                return write_tlv_void(result, result_len);
-            }
-            _ => NYB_E_INVALID_METHOD,
-        }
-    }
-}
-*/
 
 // ===== TypeBox FFI (resolve/invoke_id) =====
 #[repr(C)]

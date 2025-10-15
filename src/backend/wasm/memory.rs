@@ -85,6 +85,9 @@ impl MemoryManager {
 
         // DataBox: [type_id][ref_count][field_count][value] - for testing
         self.register_box_type("DataBox".to_string(), vec!["value".to_string()]);
+
+        // ArrayBox: [type_id][ref_count][field_count][len][cap][data_ptr]
+        self.register_box_type("ArrayBox".to_string(), vec!["len".to_string(), "cap".to_string(), "data_ptr".to_string()]);
     }
 
     /// Register a Box type layout
@@ -336,6 +339,171 @@ impl MemoryManager {
         )
     }
 }
+
+
+    /// Generate ArrayBox helpers (alloc/len/get/set/push/clear) — Phase‑A minimal semantics
+    pub fn get_array_helpers(&self) -> Result<Vec<String>, WasmError> {
+        let layout = self
+            .get_box_layout("ArrayBox")
+            .ok_or_else(|| WasmError::MemoryError("Unknown box type: ArrayBox".to_string()))?;
+        let off_len = layout.get_field_offset("len").unwrap_or(12);
+        let off_cap = layout.get_field_offset("cap").unwrap_or(16);
+        let off_ptr = layout.get_field_offset("data_ptr").unwrap_or(20);
+        let alloc_inner = self.get_box_alloc_function("ArrayBox")?;
+        let alloc = format!(
+            r#"(func $alloc_arraybox (result i32)
+  (local $ptr i32)
+  (local $data i32)
+  call $alloc_arraybox_inner
+  local.set $ptr
+  i32.const 4
+  i32.const 8
+  i32.mul
+  call $malloc
+  local.set $data
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.const 0
+  i32.store
+  local.get $ptr
+  i32.const {off_cap}
+  i32.add
+  i32.const 8
+  i32.store
+  local.get $ptr
+  i32.const {off_ptr}
+  i32.add
+  local.get $data
+  i32.store
+  local.get $ptr
+)"#, off_len=off_len, off_cap=off_cap, off_ptr=off_ptr);
+        let array_len = format!(
+            r#"(func $array_len (param $ptr i32) (result i32)
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.load
+)"#, off_len=off_len);
+        let array_get = format!(
+            r#"(func $array_get (param $ptr i32) (param $idx i32) (result i32)
+  (local $len i32)
+  (local $data i32)
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.load
+  local.set $len
+  local.get $ptr
+  i32.const {off_ptr}
+  i32.add
+  i32.load
+  local.set $data
+  local.get $idx
+  local.get $len
+  i32.ge_u
+  if
+    i32.const 0
+    return
+  end
+  local.get $data
+  local.get $idx
+  i32.const 4
+  i32.mul
+  i32.add
+  i32.load
+)"#, off_len=off_len, off_ptr=off_ptr);
+        let array_set = format!(
+            r#"(func $array_set (param $ptr i32) (param $idx i32) (param $val i32)
+  (local $len i32)
+  (local $data i32)
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.load
+  local.set $len
+  local.get $ptr
+  i32.const {off_ptr}
+  i32.add
+  i32.load
+  local.set $data
+  local.get $idx
+  local.get $len
+  i32.gt_u
+  if
+    return
+  end
+  local.get $data
+  local.get $idx
+  i32.const 4
+  i32.mul
+  i32.add
+  local.get $val
+  i32.store
+  local.get $idx
+  local.get $len
+  i32.eq
+  if
+    local.get $ptr
+    i32.const {off_len}
+    i32.add
+    local.get $len
+    i32.const 1
+    i32.add
+    i32.store
+  end
+)"#, off_len=off_len, off_ptr=off_ptr);
+        let array_push = format!(
+            r#"(func $array_push (param $ptr i32) (param $val i32)
+  (local $len i32)
+  (local $cap i32)
+  (local $data i32)
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.load
+  local.set $len
+  local.get $ptr
+  i32.const {off_cap}
+  i32.add
+  i32.load
+  local.set $cap
+  local.get $ptr
+  i32.const {off_ptr}
+  i32.add
+  i32.load
+  local.set $data
+  local.get $len
+  local.get $cap
+  i32.ge_u
+  if
+    return
+  end
+  local.get $data
+  local.get $len
+  i32.const 4
+  i32.mul
+  i32.add
+  local.get $val
+  i32.store
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  local.get $len
+  i32.const 1
+  i32.add
+  i32.store
+)"#, off_len=off_len, off_cap=off_cap, off_ptr=off_ptr);
+        let array_clear = format!(
+            r#"(func $array_clear (param $ptr i32)
+  local.get $ptr
+  i32.const {off_len}
+  i32.add
+  i32.const 0
+  i32.store
+)"#, off_len=off_len);
+        return Ok(vec![alloc_inner, alloc, array_len, array_get, array_set, array_push, array_clear]);
+    }
 
 #[cfg(test)]
 mod tests {

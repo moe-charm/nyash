@@ -6,6 +6,8 @@
  */
 
 use crate::mir::{Effect, EffectMask};
+use crate::mir::externs::registry as extreg;
+use crate::mir::builder::effects::EffectResolverBox;
 
 /// Table-like spec for env.* methods
 /// Returns (iface_name, method_name, effects, returns_value)
@@ -104,6 +106,15 @@ pub fn get_env_method_spec(
             true,
         )),
 
+        // Rune (selfhost placeholder)
+        ("rune", "eval") => Some((
+            // Route env.rune.eval → nyrt.rune.eval (adapter handles provider/env)
+            "nyrt.rune".to_string(),
+            "eval".to_string(),
+            EffectMask::READ,
+            true,
+        )),
+
         // Process/system
         ("process", "exit") => Some((
             "env.process".to_string(),
@@ -123,6 +134,39 @@ pub fn get_env_method_spec(
             EffectMask::READ,
             true,
         )),
+        // Runtime management (release/finalize)
+        ("runtime", "release") => Some((
+            "env.runtime".to_string(),
+            "release".to_string(),
+            EffectMask::IO,
+            false,
+        )),
+        ("runtime", "release_many") => Some((
+            "env.runtime".to_string(),
+            "release_many".to_string(),
+            EffectMask::IO,
+            false,
+        )),
+
+        // nykernel.* (WASM ABI bridge — dev stub + future AOT)
+        ("nykernel", "malloc") => Some((
+            "nykernel".to_string(),
+            "malloc".to_string(),
+            EffectMask::IO,
+            true,
+        )),
+        ("nykernel", "load_i64") => Some((
+            "nykernel".to_string(),
+            "load_i64".to_string(),
+            EffectMask::READ,
+            true,
+        )),
+        ("nykernel", "store_i64") => Some((
+            "nykernel".to_string(),
+            "store_i64".to_string(),
+            EffectMask::IO,
+            false,
+        )),
 
         // Unknown
         _ => None,
@@ -140,30 +184,29 @@ pub fn parse_extern_name(name: &str) -> (String, String) {
     }
 }
 
-/// Check if a name refers to an environment interface
-pub fn is_env_interface(name: &str) -> bool {
-    matches!(name,
-        "env" | "env.console" | "env.fs" | "env.net" |
-        "env.canvas" | "env.task" | "env.future" | "env.process"
-    )
-}
-
 /// Determine effects for an external call
 pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
+    // Prefer unified resolver when enabled, then registry table, then legacy heuristics
+    let use_resolver = matches!(
+        std::env::var("NYASH_USE_EFFECT_RESOLVER").ok().as_deref(),
+        Some("1" | "true" | "on")
+    );
+    if use_resolver {
+        if let Some(eff) = EffectResolverBox::new(false).resolve_extern(iface, method) {
+            return eff;
+        }
+    }
+    if let Some(eff) = extreg::effects_for(iface, method) {
+        return eff;
+    }
     match (iface, method) {
-        // Pure reads
-        (_, m) if m.starts_with("get") || m == "argv" || m == "env" => {
-            EffectMask::READ
-        }
-        // Control flow changes
-        (_, "exit") | (_, "panic") | (_, "throw") => {
-            EffectMask::IO.add(Effect::Control)
-        }
-        // Memory allocation
-        (_, m) if m.starts_with("new") || m.starts_with("create") => {
-            EffectMask::IO.add(Effect::Alloc)
-        }
-        // Default to I/O
+        // Runtime time source: monotonic millisecond timestamp (read-only)
+        ("nyrt.time", "now_ms") => EffectMask::READ,
+        // Collections: size queries are read-only
+        ("nyrt.array", "size") | ("nyrt.map", "size") => EffectMask::READ,
+        // Control flow changes (explicit)
+        (_, "exit") | (_, "panic") | (_, "throw") => EffectMask::IO.add(Effect::Control),
+        // Default: conservative I/O
         _ => EffectMask::IO,
     }
 }

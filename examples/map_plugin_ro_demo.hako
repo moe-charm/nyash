@@ -1,0 +1,20 @@
+// MapBox plugin demo (RO via plugin: size/get/has), set is VM path.
+// Build plugins:
+//   (cd plugins/nyash-map-plugin && cargo build --release)
+// Run:
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/map_plugin_ro_demo.nyash
+
+static box Main {
+  main() {
+    local m
+    m = new MapBox()
+    // mutating ops (VM path)
+    m.set(1, 100)
+    m.set(2, 200)
+    me.console.log("size=", m.size())
+    me.console.log("get(1)=", m.get(1))
+    me.console.log("has(2)=", m.has(2))
+    return m.get(2)
+  }
+}
+

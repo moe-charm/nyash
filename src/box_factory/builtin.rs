@@ -18,6 +18,7 @@ use super::RuntimeError;
 use crate::box_trait::NyashBox;
 
 // Separated implementations (Phase 0: ✅ Complete)
+#[cfg(feature = "legacy-boxes")]
 use super::builtin_impls;
 
 /// Factory for builtin Box types
@@ -29,6 +30,7 @@ impl BuiltinBoxFactory {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 impl BoxFactory for BuiltinBoxFactory {
     fn create_box(
         &self,
@@ -37,16 +39,15 @@ impl BoxFactory for BuiltinBoxFactory {
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // Phase 0: ✅ Route to separated implementations (easy deletion)
         match name {
-            // Phase 2.1-2.2: DELETE when plugins are confirmed working
-            "StringBox" => builtin_impls::string_box::create(args),
+            // StringBox removed — use plugin provider
             "IntegerBox" => builtin_impls::integer_box::create(args),
 
             // Phase 2.3: DELETE when BoolBox plugin is created
             "BoolBox" => builtin_impls::bool_box::create(args),
 
-            // Phase 2.4-2.5: DELETE when collection plugins confirmed
-            "ArrayBox" => builtin_impls::array_box::create(args),
-            "MapBox" => builtin_impls::map_box::create(args),
+            // ArrayBox/MapBox removed — use plugin providers
+            // SetBox is a thin wrapper around MapBox (legacy helper)
+            "SetBox" => builtin_impls::set_box::create(args),
 
             // Phase 2.6: DELETE LAST (critical for logging)
             "ConsoleBox" => builtin_impls::console_box::create(args),
@@ -64,18 +65,30 @@ impl BoxFactory for BuiltinBoxFactory {
     fn box_types(&self) -> Vec<&str> {
         vec![
             // Primitive wrappers
-            "StringBox",
             "IntegerBox",
             "BoolBox",
             // Collections/common
-            "ArrayBox",
-            "MapBox",
             "ConsoleBox",
             "NullBox",
+            "SetBox",
         ]
     }
 
     fn is_builtin_factory(&self) -> bool {
         true
     }
+}
+
+#[cfg(not(feature = "legacy-boxes"))]
+impl BoxFactory for BuiltinBoxFactory {
+    fn create_box(
+        &self,
+        _name: &str,
+        _args: &[Box<dyn NyashBox>],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Err(RuntimeError::InvalidOperation { message: "builtin boxes disabled (legacy-boxes OFF)".to_string() })
+    }
+
+    fn box_types(&self) -> Vec<&str> { vec![] }
+    fn is_builtin_factory(&self) -> bool { false }
 }

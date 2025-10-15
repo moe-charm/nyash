@@ -1,0 +1,23 @@
+// Test returning instance from function
+
+box TestBox {
+    init { x, y }
+    
+    TestBox(x, y) {
+        me.x = x
+        me.y = y
+    }
+}
+
+function createTestBox() {
+    return new TestBox(10, 20)
+}
+
+print("Creating box via function...")
+box1 = createTestBox()
+
+print("Accessing fields...")
+print("x = " + box1.x)
+print("y = " + box1.y)
+
+print("\n✅ Return instance test completed!")

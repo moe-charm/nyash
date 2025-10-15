@@ -1,0 +1,171 @@
+// ParserControlBox — if/loop/break/continue parser
+// Responsibility: Parse control flow statements
+// API: parse_if, parse_loop, parse_break, parse_continue, parse_block
+
+static box ParserControlBox {
+  // Parse: if (cond) { ... } else { ... }
+  parse_if(src, i, stmt_start, ctx) {
+    local j = i + 2  // skip "if"
+    j = ctx.skip_ws(src, j)
+    local paren = 0
+    if src.substring(j, j+1) == "(" { paren = 1 j = j + 1 }
+
+    local cond = ctx.parse_expr2(src, j)
+    j = ctx.gpos_get()
+
+    if paren == 1 {
+      j = ctx.skip_ws(src, j)
+      if src.substring(j, j+1) == ")" { j = j + 1 }
+    }
+
+    j = ctx.skip_ws(src, j)
+    local then_res = me.parse_block(src, j, ctx)
+    local at1 = then_res.lastIndexOf("@")
+    local then_json = then_res.substring(0, at1)
+    j = ctx.to_int(then_res.substring(at1+1, then_res.size()))
+    j = ctx.skip_ws(src, j)
+
+    local else_json = null
+    if ctx.starts_with_kw(src, j, "else") == 1 {
+      j = j + 4
+      j = ctx.skip_ws(src, j)
+      local else_res = me.parse_block(src, j, ctx)
+      local at2 = else_res.lastIndexOf("@")
+      else_json = else_res.substring(0, at2)
+      j = ctx.to_int(else_res.substring(at2+1, else_res.size()))
+    }
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+
+    if else_json == null {
+      return "{\"type\":\"If\",\"cond\":" + cond + ",\"then\":" + then_json + "}"
+    } else {
+      return "{\"type\":\"If\",\"cond\":" + cond + ",\"then\":" + then_json + ",\"else\":" + else_json + "}"
+    }
+  }
+
+  // Parse: loop(cond) { ... }
+  parse_loop(src, i, stmt_start, ctx) {
+    local j = i + 4  // skip "loop"
+    j = ctx.skip_ws(src, j)
+    if src.substring(j, j+1) == "(" { j = j + 1 }
+
+    local cond = ctx.parse_expr2(src, j)
+    j = ctx.gpos_get()
+    j = ctx.skip_ws(src, j)
+    if src.substring(j, j+1) == ")" { j = j + 1 }
+    j = ctx.skip_ws(src, j)
+
+    local body_res = me.parse_block(src, j, ctx)
+    local at3 = body_res.lastIndexOf("@")
+    local body_json = body_res.substring(0, at3)
+    j = ctx.to_int(body_res.substring(at3+1, body_res.size()))
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Loop\",\"cond\":" + cond + ",\"body\":" + body_json + "}"
+  }
+
+  // Parse: break → {type:"Break"} (Stage-3) or no-op
+  parse_break(src, i, stmt_start, ctx) {
+    local j = i + 5  // skip "break"
+
+    if ctx.stage3_enabled() == 1 {
+      j = ctx.skip_ws(src, j)
+      if j <= stmt_start {
+        if j < src.size() { j = j + 1 } else { j = src.size() }
+      }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Break\"}"
+    }
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+  }
+
+  // Parse: continue → {type:"Continue"} (Stage-3) or no-op
+  parse_continue(src, i, stmt_start, ctx) {
+    local j = i + 8  // skip "continue"
+
+    if ctx.stage3_enabled() == 1 {
+      j = ctx.skip_ws(src, j)
+      if j <= stmt_start {
+        if j < src.size() { j = j + 1 } else { j = src.size() }
+      }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Continue\"}"
+    }
+
+    if j <= stmt_start {
+      if j < src.size() { j = j + 1 } else { j = src.size() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+  }
+
+  // Parse: { stmt1; stmt2; ... }
+  parse_block(src, i, ctx) {
+    local j = ctx.skip_ws(src, i)
+    if src.substring(j, j+1) != "{" { return "[]@" + ctx.i2s(j) }
+    j = j + 1
+
+    local body = "["
+    local first = 1
+    local cont_block = 1
+
+    loop(cont_block == 1) {
+      j = ctx.skip_ws(src, j)
+
+      if j >= src.size() {
+        cont_block = 0
+      } else {
+        if src.substring(j, j+1) == "}" {
+          j = j + 1
+          cont_block = 0
+        } else {
+          local start_j = j
+          local s = ctx.parse_stmt2(src, j)
+          j = ctx.gpos_get()
+
+          // Progress guard: ensure forward movement to avoid infinite loop on malformed input
+          if j <= start_j {
+            if j < src.size() { j = j + 1 } else { j = src.size() }
+            ctx.gpos_set(j)
+          }
+
+          // consume optional semicolons (ASI minimal)
+          local done = 0
+          local guard = 0
+          local max = 100000
+          loop(done == 0) {
+            if guard > max { done = 1 } else { guard = guard + 1 }
+            local before = j
+            j = ctx.skip_ws(src, j)
+            if j < src.size() && src.substring(j, j+1) == ";" { j = j + 1 } else { done = 1 }
+            if j == before { done = 1 }
+          }
+
+          if s.size() > 0 {
+            if first == 1 {
+              body = body + s
+              first = 0
+            } else {
+              body = body + "," + s
+            }
+          }
+        }
+      }
+    }
+
+    body = body + "]"
+    return body + "@" + ctx.i2s(j)
+  }
+}

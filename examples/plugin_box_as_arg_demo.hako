@@ -1,0 +1,35 @@
+// プラグインBoxが箱を引数に取る例のデモ
+
+// HttpServer/Request/Responseの例
+local server = new HttpServerBox()
+server.start(8080)
+
+// acceptはHttpRequestBoxを返す
+local request = server.accept()  // returns box
+
+// HttpResponseBoxを作成
+local response = new HttpResponseBox()
+response.setStatus(200)
+response.setHeader("Content-Type", "text/plain")
+response.write("Hello from Nyash!")
+
+// ★ HttpRequestBox.respond()はHttpResponseBox（別の箱）を引数に取る！
+request.respond(response)  // Box引数の実例！
+
+// 他の例：ArrayBoxにプラグインBoxを格納
+local array = new ArrayBox()
+local file1 = new FileBox()
+local file2 = new FileBox()
+
+// ArrayBoxは任意のBoxを引数に取れる
+array.push(file1)  // FileBox（プラグインBox）を引数に
+array.push(file2)  // 別のFileBoxインスタンスも
+
+// MapBoxでも同様
+local map = new MapBox()
+local net = new HttpClientBox()
+
+// MapBoxも任意のBoxを値として設定できる
+map.set("client", net)  // HttpClientBox（プラグインBox）を引数に
+
+print("Plugin boxes can take other boxes as arguments!")

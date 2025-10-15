@@ -1,0 +1,14 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    try {
+      console.println("T")
+      return 10
+    } catch (Error e) {
+      // 例外なし → ここは通らない想定
+      console.println("C")
+    } cleanup {
+      console.println("F")
+    }
+  }
+}

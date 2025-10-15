@@ -100,7 +100,7 @@
  * - キーは自動的に文字列変換される
  * - スレッドセーフ (Arc<RwLock>使用)
  * - 大量データ格納時はメモリ使用量に注意
- * - 存在しないキーの取得は "Key not found" メッセージ返却
+ * - 存在しないキーの取得は null を返す
  */
 
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
@@ -109,6 +109,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::sync::{Arc, RwLock}; // Arc追加
+use std::sync::OnceLock;
 
 /// キーバリューストアを表すBox
 pub struct MapBox {
@@ -124,18 +125,25 @@ impl MapBox {
         }
     }
 
-    /// 値を設定
+    /// 値を設定（戻り値: null）
     pub fn set(&self, key: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
+        if map_trace_enabled() {
+            eprintln!("[MapBox] set: key=\"{}\" value={}", key_str, value.to_string_box().value);
+        }
         self.data.write().unwrap().insert(key_str.clone(), value);
-        Box::new(StringBox::new(&format!("Set key: {}", key_str)))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
-    /// 値を取得
+    /// 値を取得（存在しないキーは null）
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        match self.data.read().unwrap().get(&key_str) {
+        let guard = self.data.read().unwrap();
+        match guard.get(&key_str) {
             Some(value) => {
+                if map_trace_enabled() {
+                    eprintln!("[MapBox] get: key=\"{}\" -> hit", key_str);
+                }
                 // Preserve identity for plugin/user InstanceBox to keep internal fields
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
                 if value
@@ -152,34 +160,59 @@ impl MapBox {
                 {
                     return value.share_box();
                 }
+                // ArrayBox: share underlying Arc to preserve aliasing
+                if value
+                    .as_any()
+                    .downcast_ref::<crate::boxes::array::ArrayBox>()
+                    .is_some()
+                {
+                    return value.share_box();
+                }
                 value.clone_box()
             }
-            None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
+            None => {
+                if map_trace_enabled() {
+                    eprintln!("[MapBox] get: key=\"{}\" -> miss", key_str);
+                }
+                // Phase 15.7: missing → null（legacy suggestion/error strings removed）
+                Box::new(crate::boxes::null_box::NullBox::new())
+            }
         }
+    }
+
+    /// 空かどうか
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.data.read().unwrap().is_empty()))
     }
 
     /// キーが存在するかチェック
     pub fn has(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        Box::new(BoolBox::new(
-            self.data.read().unwrap().contains_key(&key_str),
-        ))
+        let guard = self.data.read().unwrap();
+        let ok = hako_core_map::has_key_str(&guard, &key_str);
+        Box::new(BoolBox::new(ok))
     }
 
-    /// キーを削除
+    /// キーを削除（戻り値: 削除された値 / null)
     pub fn delete(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        match self.data.write().unwrap().remove(&key_str) {
-            Some(_) => Box::new(StringBox::new(&format!("Deleted key: {}", key_str))),
-            None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
+        let removed = self.data.write().unwrap().remove(&key_str);
+        match removed {
+            Some(v) => {
+                if v.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() { return v.share_box(); }
+                if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() { return v.share_box(); }
+                if v.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() { return v.share_box(); }
+                v.clone_box()
+            }
+            None => Box::new(crate::boxes::null_box::NullBox::new()),
         }
     }
 
     /// 全てのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
-        let mut keys: Vec<String> = self.data.read().unwrap().keys().cloned().collect();
-        // Deterministic ordering for stable stringify/tests
-        keys.sort();
+        let guard = self.data.read().unwrap();
+        let keys: Vec<String> = hako_core_map::keys_sorted_from_map_str(&guard);
+        drop(guard);
         let array = ArrayBox::new();
         for key in keys.into_iter() {
             array.push(Box::new(StringBox::new(&key)));
@@ -189,35 +222,30 @@ impl MapBox {
 
     /// 全ての値を取得
     pub fn values(&self) -> Box<dyn NyashBox> {
-        let values: Vec<Box<dyn NyashBox>> = self
-            .data
-            .read()
-            .unwrap()
-            .values()
-            .map(|v| {
-                if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
-                    v.share_box()
-                } else {
-                    v.clone_box()
-                }
-            })
-            .collect();
+        let guard = self.data.read().unwrap();
+        let keys: Vec<String> = hako_core_map::keys_sorted_from_map_str(&guard);
+        let aligned = hako_core_map::values_for_keys_str(&keys, &guard);
         let array = ArrayBox::new();
-        for value in values {
-            array.push(value);
+        for opt in aligned.into_iter() {
+            if let Some(v) = opt {
+                let out = if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() { v.share_box() } else { v.clone_box() };
+                array.push(out);
+            }
         }
         Box::new(array)
     }
 
     /// サイズを取得
     pub fn size(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.data.read().unwrap().len() as i64))
+        let guard = self.data.read().unwrap();
+        let n = hako_core_map::size_of_str_map(&guard);
+        Box::new(IntegerBox::new(n))
     }
 
-    /// 全てクリア
+    /// 全てクリア（戻り値: null）
     pub fn clear(&self) -> Box<dyn NyashBox> {
         self.data.write().unwrap().clear();
-        Box::new(StringBox::new("Map cleared"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 各要素に対して関数を実行
@@ -229,23 +257,47 @@ impl MapBox {
 
     /// JSON文字列に変換
     pub fn toJSON(&self) -> Box<dyn NyashBox> {
-        let data = self.data.read().unwrap();
-        let mut json_parts = Vec::new();
+        // Robust stringify via JSON module conversion (handles nested maps/arrays)
+        let s = crate::boxes::json::stringify_any(self.clone_box());
+        Box::new(StringBox::new(&s))
+    }
 
-        for (key, value) in data.iter() {
-            let value_str = value.to_string_box().value;
-            // 値が数値の場合はそのまま、文字列の場合は引用符で囲む
-            let formatted_value = if value.as_any().downcast_ref::<IntegerBox>().is_some()
-                || value.as_any().downcast_ref::<BoolBox>().is_some()
-            {
-                value_str
-            } else {
-                format!("\"{}\"", value_str.replace("\"", "\\\""))
-            };
-            json_parts.push(format!("\"{}\":{}", key, formatted_value));
+    /// Debug: dump pretty JSON (best-effort)
+    pub fn dump(&self) -> Box<dyn NyashBox> {
+        let s = crate::boxes::json::stringify_any(self.clone_box());
+        match serde_json::from_str::<serde_json::Value>(&s) {
+            Ok(v) => Box::new(StringBox::new(&serde_json::to_string_pretty(&v).unwrap_or(s))),
+            Err(_) => Box::new(StringBox::new(&s)),
         }
+    }
 
-        Box::new(StringBox::new(&format!("{{{}}}", json_parts.join(","))))
+    /// Debug: verify common pitfalls (empty keys, whitespace, control chars)
+    pub fn verify(&self) -> Box<dyn NyashBox> {
+        let mut issues: Vec<String> = Vec::new();
+        let data = self.data.read().unwrap();
+        for k in data.keys() {
+            if k.is_empty() { issues.push("empty key".to_string()); }
+            if k.trim() != *k { issues.push(format!("surrounding whitespace: '{}'", k)); }
+            if k.chars().any(|c| c.is_control()) { issues.push(format!("control chars: '{:?}'", k)); }
+        }
+        if issues.is_empty() { Box::new(StringBox::new("OK")) } else { Box::new(StringBox::new(&issues.join("; "))) }
+    }
+
+    /// Debug: basic stats (size, avg_key_len, type histogram)
+    pub fn stats(&self) -> Box<dyn NyashBox> {
+        let data = self.data.read().unwrap();
+        let size = data.len();
+        let mut sum = 0usize;
+        let mut hist: HashMap<&'static str, usize> = HashMap::new();
+        for (k, v) in data.iter() {
+            sum += k.len();
+            *hist.entry(v.type_name()).or_insert(0) += 1;
+        }
+        let avg = if size == 0 { 0.0 } else { (sum as f64)/(size as f64) };
+        let mut bins: Vec<String> = hist.iter().map(|(t,c)| format!("{}:{}", t, c)).collect();
+        bins.sort();
+        let msg = format!("size={} avg_key_len={:.2} types=[{}]", size, avg, bins.join(","));
+        Box::new(StringBox::new(&msg))
     }
 
     /// 内部データへのアクセス（JSONBox用）
@@ -253,6 +305,14 @@ impl MapBox {
         &self.data
     }
 }
+
+#[inline]
+fn map_trace_enabled() -> bool {
+    static FLAG: OnceLock<bool> = OnceLock::new();
+    *FLAG.get_or_init(|| matches!(std::env::var("HAKO_MAP_TRACE").ok().as_deref(), Some("1"|"true"|"on")))
+}
+
+// legacy suggestion (did-you-mean) removed in Phase 15.7
 
 // Clone implementation for MapBox (needed since RwLock doesn't auto-derive Clone)
 impl Clone for MapBox {

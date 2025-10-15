@@ -1,0 +1,18 @@
+// Array push - mutating operation
+// Expect: decision="fallback", reason="policy_denied_mutating"
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_EVENTS=1 NYASH_JIT_HOSTCALL=1 \
+//     ./target/release/nyash --backend vm examples/jit_hostcall_array_push_mutating.nyash
+
+static box Main {
+  main() {
+    local a, x
+    a = new ArrayBox()
+    x = "item1"
+    
+    // Mutating operation - should fallback with policy_denied_mutating
+    a.push(x)
+    
+    return a.length()  // ReadOnly - should allow
+  }
+}

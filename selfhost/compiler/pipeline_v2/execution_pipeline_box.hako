@@ -1,0 +1,49 @@
+// ExecutionPipelineBox — Orchestrate Parser → Emit (emit-only; no execution)
+using "apps/selfhost-compiler/boxes/parser/parser_box.hako" as ParserBoxMod
+// Parser dependencies (Phase 2 refactoring: hierarchical structure)
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_utils_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_ident_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_number_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/using/using_collector_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_expr_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_peek_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_literal_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_stmt_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_exception_box.hako"
+using "apps/selfhost-compiler/boxes/json_program_box.hako"
+using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
+using "selfhost/compiler/pipeline_v2/backend_box.hako" as BackendBoxMod
+
+box ExecutionPipelineBox {
+  backend_name
+  backend
+
+  birth(name) {
+    // Optional backend tag (no execution here)
+    if name == null { name = "vm" }
+    me.backend_name = name
+    me.backend = new BackendBox(name)
+    return 0
+  }
+
+  // Run with source text; stage3_flag=1 enables Stage‑3 acceptance in parser
+  run_source(src, stage3_flag) {
+    if src == null { src = "return 0" }
+    if stage3_flag == null { stage3_flag = 0 }
+    // Parse
+    local p = new ParserBox()
+    if stage3_flag == 1 { p.stage3_enable(1) }
+    p.extract_usings(src)
+    local usings = p.get_usings_json()
+    local ast = p.parse_program2(src)
+    // Emit Stage‑1 JSON with meta.usings
+    local json = EmitterBox.emit_program(ast, usings)
+    if json == null || json.size() == 0 { return 1 }
+    print(json)
+    return 0
+  }
+}
+
+static box ExecutionPipelineStub { main(args) { return 0 } }

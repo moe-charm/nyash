@@ -1,4 +1,4 @@
-# 🐱 Nyash プログラミング言語
+# 🐱 HakoRune プログラミング言語（旧称 Nyash）
 **超真面目に作っている趣味言語**  
 **20日でゼロからネイティブバイナリへ - AI駆動の言語革命**
 
@@ -20,8 +20,12 @@
 開発者向けクイックスタート: `docs/guides/build/dev-quickstart.md`
 ユーザーマクロ（Phase 2）: `docs/guides/user-macros.md`
 AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
-セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
+セルフホスト1枚ガイド: `docs/guides/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
+VM エンジン切替: `NYASH_VM_ENGINE={fallback|full}`（既定は fallback）。設計は `docs/guides/runtime-architecture.md` を参照してください。
+Using/プラグイン（ENV要約）:
+- Using: `NYASH_USING=0|1`（既定=1）、`NYASH_USING_STRATEGY={resolver|prelude}`（別名: `NYASH_USING_IMPL`）
+- Plugins: `NYASH_PLUGIN_POLICY={auto|off|force}`（既定=auto）
 
 ### MIR 統一Call（既定ON）
 - 呼び出しは中央（`emit_unified_call`）で集約。開発段階では既定ON（`0|false|off` で明示OFF）。
@@ -49,10 +53,10 @@ ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.m
 - 詳細: `docs/guides/operator-boxes.md`
 
 開発モードと既定
-- `nyash --dev script.nyash` で開発向け既定（AST using ON / Operator Boxes 観測ON / 診断の最小ON）を一括で有効化できます。`nyash script.nyash` は本番相当（静かで安定）。
+- `hakorune --dev script.hako` で開発向け既定（AST using ON / Operator Boxes 観測ON / 診断の最小ON）を一括で有効化できます。`hakorune script.hako` は本番相当（静かで安定）。
 - ワンコマンドの dev ショートカットも引き続き利用できます（`tools/opbox-json.sh` / `tools/opbox-quick.sh`）。
 - using ガード: 同じファイルの重複 import（または alias の再バインド）はエラーになり、行番号付きで通知されます。
-  - 例: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
+  - 例: `using: duplicate import of '<canon_path>' at file.hako:12 (previous alias 'X' first seen at line 5)`
   - 重複を削除／統合して解消してください。
 
 Phase‑15（2025‑09）アップデート
@@ -72,9 +76,9 @@ Phase‑15（2025‑09）アップデート
 - 他言語との比較: `docs/guides/comparison/nyash-vs-others.md`
 
 プロファイル（クイック）
-- `--profile dev` → マクロON（strict）、PyVM 開発向けの既定を適用（必要に応じて環境で上書き可）
+- `--profile dev` → マクロON（strict）、開発向け VM 既定（必要に応じて環境で上書き可）
 - `--profile lite` → マクロOFF の軽量実行
-  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/hakorune --profile dev --backend vm apps/tests/ternary_basic.hako`
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
@@ -83,13 +87,13 @@ Phase‑15（2025‑09）アップデート
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
 - ガイド: `docs/how-to/self-hosting.md`
-- 最小E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- 最小E2E: `./target/release/hakorune --backend vm apps/selfhost-minimal/main.hako`
 - スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
 
 MIR注記: Core‑13 最小カーネルは既定で有効（NYASH_MIR_CORE13=1）。旧命令は正規化されます（Array/Ref→BoxCall、TypeCheck/Cast/Barrier/WeakRefの統一）。
 
-純化モード: `NYASH_MIR_CORE13_PURE=1` を有効にすると、Optimizer が Load/Store/NewBox/Unary を Core‑13 形に書き換え、残存する非Core‑13命令があればコンパイルを失敗させます。あえて実行が壊れる可能性がありますが、MIR違反を早期に発見するための設計です。
+Core‑13 は既定で有効です。旧「純化モード（Core‑13 pure）」は撤廃されました。
 
 変更履歴（要点）: `CHANGELOG.md`
 
@@ -100,7 +104,7 @@ MIR注記: Core‑13 最小カーネルは既定で有効（NYASH_MIR_CORE13=1�
 ```bash
 # Nyashソースからネイティブバイナリへ（Craneliftが必要）
 cargo build --release --features cranelift-jit
-./tools/build_aot.sh program.nyash -o app         # ネイティブEXE
+./tools/build_aot.sh program.hako -o app         # ネイティブEXE
 ./app                                             # スタンドアロン実行！
 ```
 
@@ -122,22 +126,24 @@ cargo build --release --features cranelift-jit
 // 従来の言語は複雑な型システムを持つ
 // Nyash: 一つの概念がすべてを支配する - Box
 
-static box Main {
+flow Main {  # 推奨: flow Main（エントリ: Strict=Main.main）
     main() {
         // すべての値はBox - 統一、安全、シンプル
         local name = new StringBox("Nyash")
         local count = new IntegerBox(42)
         local data = new MapBox()
-        
+
         // PythonオブジェクトもBox！
         local py = new PyRuntimeBox()
         local math = py.import("math")
         print("sqrt(9) = " + math.getattr("sqrt").call(9).str())
-        
+
         return 0
     }
 }
 ```
+
+エントリ規約（Strict）: 既定のエントリは `Main.main` のみ。詳細は `docs/reference/language/entrypoints.md` を参照。
 
 ### ⚡ **前例のない開発速度**
 - **1日目**: 基本インタープリター動作
@@ -159,10 +165,10 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
-重要: 現在、JIT ランタイム実行は封印中です。実行は「Rust VM（MIR）/ PyVM（開発補助）」、配布は「LLVM AOT（ハーネス）」が主軸です。ASTインタープリタはレガシー扱いでデフォルト無効（`interpreter-legacy` feature）。
+重要: 現在、JIT ランタイム実行は封印中です。実行は「Rust VM（MIR）」、配布は「LLVM AOT（llvmlite ハーネス）」が主軸です。PyVM は開発補助として段階的撤退中（`pyvm-bridge` feature でのみ有効）。ASTインタープリタはレガシー扱いでデフォルト無効（`interpreter-legacy`）。
 
 Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで明示ON
-- 既定ビルド: `--backend vm` は PyVM 経路（python3 + `tools/pyvm_runner.py` が必要）／Rust VM（MIR）
+- 既定ビルド: `--backend vm` は Rust VM（MIR）。PyVM を使うには `--features pyvm-bridge` でビルドし、`NYASH_VM_USE_PY=1` を明示してください（非推奨）。
 - レガシー AST インタープリタを有効化するには（通常は不要）:
   ```bash
   cargo build --release --features interpreter-legacy
@@ -170,31 +176,29 @@ Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで�
 
 ### 1. **インタープリターモード** （開発用）
 ```bash
-./target/release/nyash program.nyash
+./target/release/hakorune program.hkr
 ```
 - 即座に実行
 - 完全なデバッグ情報
 - 開発に最適
 
-### 2. **VMモード（既定は PyVM／レガシーは任意）**
+### 2. **VMモード（既定は Rust VM）**
 ```bash
-# 既定: PyVM ハーネス（python3 必要）
-./target/release/nyash --backend vm program.nyash
+# Rust VM（既定）
+./target/release/hakorune --backend vm program.hkr
 
-# レガシー Rust VM を使う場合
-cargo build --release --features vm-legacy
-./target/release/nyash --backend vm program.nyash
+# （非推奨）PyVM を使う場合: pyvm-bridge を有効化して実行
+cargo build --release --features pyvm-bridge
+NYASH_VM_USE_PY=1 ./target/release/hakorune --backend vm program.hkr
 ```
-- 既定（vm-legacy OFF）: MIR(JSON) を出力して `tools/pyvm_runner.py` で実行
-- レガシー VM: インタープリター比で 13.5x（歴史的実測）。比較・検証用途で維持
- - 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
+- 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
 
 ### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash
 # 事前ビルド（Cranelift）
 cargo build --release --features cranelift-jit
 
-./tools/build_aot.sh program.nyash -o myapp
+./tools/build_aot.sh program.hako -o myapp
 ./myapp  # スタンドアロン実行！
 ```
 - 依存関係ゼロ
@@ -210,13 +214,13 @@ cargo build --release -p nyash-llvm-compiler && cargo build --release --features
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
 NYASH_EMIT_EXE_NYRT=target/release \
-  ./target/release/nyash --backend llvm --emit-exe myapp program.nyash
+  ./target/release/hakorune --backend llvm --emit-exe myapp program.hkr
 ./myapp
 
 # あるいは .o を出力して手動リンク
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
-  ./target/release/nyash --backend llvm program.nyash \
+  ./target/release/hakorune --backend llvm program.hkr \
   -D NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o
 cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
 ./myapp
@@ -224,13 +228,13 @@ cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -W
 
 簡易スモークテスト（VM と EXE の出力一致確認）:
 ```bash
-tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
+tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.hako
 ```
 
 ### LLVM バックエンドの補足
 - Python llvmlite を使用します。Python3 + llvmlite の用意と `ny-llvmc` のビルド（`cargo build -p nyash-llvm-compiler`）が必要です。`LLVM_SYS_180_PREFIX` は不要です。
 - `NYASH_LLVM_OBJ_OUT`: `--backend llvm` 実行時に `.o` を出力するパス。
-  - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.hako`
 - 削除された `NYASH_LLVM_ALLOW_BY_NAME=1`: すべてのプラグイン呼び出しがmethod_idベースに統一。
   - LLVMバックエンドは性能と型安全性のため、method_idベースのプラグイン呼び出しのみ対応。
 
@@ -244,11 +248,11 @@ WASM/ブラウザ経路は現在メンテ対象外です（CI未対象）。古�
 
 ---
 
-## 🧰 タスク実行 (nyash.toml)
+## 🧰 タスク実行 (hako.toml)
 
-`nyash.toml` の `[tasks]` と `[env]` で、ビルド/スモークなどのタスクを簡単に実行できます（MVP）。
+`hako.toml`（互換: `nyash.toml`）の `[tasks]` と `[env]` で、ビルド/スモークなどのタスクを簡単に実行できます（MVP）。
 
-例（nyash.toml の末尾に追記）:
+例（hako.toml の末尾に追記）:
 
 ```
 [env]
@@ -257,14 +261,14 @@ RUST_BACKTRACE = "1"
 [tasks]
 # llvmlite ハーネス＋CLI をビルド（LLVM_SYS_180_PREFIX不要）
 build_llvm = "cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm"
-smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target/release/ny-llvmc NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash"
+smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target/release/ny-llvmc NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.hako"
 ```
 
 実行:
 
 ```
-./target/release/nyash --run-task build_llvm
-./target/release/nyash --run-task smoke_obj_array
+./target/release/hakorune --run-task build_llvm
+./target/release/hakorune --run-task smoke_obj_array
 ```
 
 補足:
@@ -274,12 +278,12 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 ### ちいさなENVまとめ（VM vs LLVM ハーネス）
 - VM 実行: 追加ENVなしでOK。
-  - 例: `./target/release/nyash --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/hakorune --backend vm apps/tests/ternary_basic.hako`
 - LLVM ハーネス実行: 下記3つだけ設定してね。
   - `NYASH_LLVM_USE_HARNESS=1`
   - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
   - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
-  - 例: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - 例: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.hako`
 
 ### DebugHub かんたんガイド
 - 有効化: `NYASH_DEBUG_ENABLE=1`
@@ -296,18 +300,18 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 ## 🧰 一発ビルド（MVP）: `nyash --build`
 
-`nyash.toml` を読み、プラグイン → コア → AOT → リンクまでを一発実行する最小ビルド機能です。
+`hako.toml`（互換: `nyash.toml`）を読み、プラグイン → コア → AOT → リンクまでを一発実行する最小ビルド機能です。
 
 基本（Cranelift AOT）
 ```bash
-./target/release/nyash --build nyash.toml \
-  --app apps/egui-hello-plugin/main.nyash \
+./target/release/hakorune --build hako.toml \
+  --app apps/egui-hello-plugin/main.hako \
   --out app_egui
 ```
 
 主なオプション（最小）
-- `--build <path>`: nyash.toml の場所
-- `--app <file>`: エントリ `.nyash`
+- `--build <path>`: hako.toml の場所（互換: nyash.toml）
+- `--app <file>`: エントリ `.hako`
 - `--out <name>`: 出力EXE名（既定: `app`/`app.exe`）
 - `--build-aot cranelift|llvm`（既定: cranelift）
 - `--profile release|debug`（既定: release）
@@ -321,7 +325,7 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 ## 📊 **パフォーマンスベンチマーク**
 
-実世界ベンチマーク結果 (ny_bench.nyash)：
+実世界ベンチマーク結果 (ny_bench.hako)：
 
 ```
 モード           | 時間      | 相対速度
@@ -360,6 +364,22 @@ local hero = new GameCharacter("ネコ")
 hero.learnSkill("火魔法").learnSkill("回復")
 ```
 
+### Box ライフサイクル（auto‑birth）
+Hakorune は「new したらすぐ使える」が既定です。`new` は内部で `birth(...)` を自動呼び出しします（明示的に `unborn()` を使った場合を除く）。
+
+```nyash
+// 既定：auto‑birth（推奨）
+local regs = new MapBox()     // 内部的に MapBox.birth()
+regs.set("x", 1)
+
+// 詳細設定が必要な場合
+local cfg = MapBox.unborn()
+    .withPolicy(:deterministic)
+    .birth()?           // Result を返す。冪等。
+```
+
+詳細: docs/guides/box-lifecycle.md を参照してください。
+
 ### モダンなAsync/Await
 ```nyash
 // シンプルな並行処理
@@ -394,7 +414,7 @@ box EnhancedArray from ArrayBox {
 Nyashは「Everything is Plugin」アーキテクチャを開拓：
 
 ```toml
-# nyash.toml - プラグイン設定
+# hako.toml - プラグイン設定（互換: nyash.toml）
 [libraries."libnyash_python_plugin.so"]
 boxes = ["PyRuntimeBox", "PyObjectBox"]
 
@@ -416,8 +436,8 @@ cd nyash
 cargo build --release --features cranelift-jit
 
 # 最初のプログラムを実行
-echo 'print("Hello Nyash!")' > hello.nyash
-./target/release/nyash hello.nyash
+echo 'print("Hello Nyash!")' > hello.hako
+./target/release/hakorune hello.hkr
 ```
 
 ### Windows
@@ -429,7 +449,7 @@ cargo xwin build --target x86_64-pc-windows-msvc --release
 
 # WindowsでのネイティブEXE（AOT）ビルド（Cranelift と MSYS2/WSL が必要）
 cargo build --release --features cranelift-jit
-powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.nyash -Out app.exe
+powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.hako -Out app.exe
 ./app.exe
 ```
 

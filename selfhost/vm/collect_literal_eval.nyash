@@ -1,0 +1,22 @@
+// Minimal self-contained eval (no using): collect the first Print(Literal int) and print it
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":42}}}]}"
+    // naive collect: first Print of Literal int
+    local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+    local p = json.indexOf(ki)
+    if p >= 0 {
+      local i = p + ki.size()
+      local j = i
+      loop (true) {
+        local ch = json.substring(j, j+1)
+        if ch == "" { break }
+        if ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" { j = j + 1  continue }
+        break
+      }
+      local digits = json.substring(i, j)
+      if digits { print(digits) }
+    }
+    return 0
+  }
+}

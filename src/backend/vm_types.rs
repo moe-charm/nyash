@@ -18,6 +18,7 @@ pub enum VMError {
     DivisionByZero,
     StackUnderflow,
     TypeError(String),
+    IoError(String),
 }
 
 impl std::fmt::Display for VMError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for VMError {
             VMError::DivisionByZero => write!(f, "Division by zero"),
             VMError::StackUnderflow => write!(f, "Stack underflow"),
             VMError::TypeError(msg) => write!(f, "Type error: {}", msg),
+            VMError::IoError(msg) => write!(f, "I/O error: {}", msg),
         }
     }
 }
@@ -42,6 +44,7 @@ pub enum VMValue {
     Float(f64),
     Bool(bool),
     String(String),
+    #[cfg(feature = "legacy-boxes")]
     Future(crate::boxes::future::FutureBox),
     Void,
     BoxRef(Arc<dyn NyashBox>),
@@ -56,6 +59,7 @@ impl PartialEq for VMValue {
             (VMValue::Bool(a), VMValue::Bool(b)) => a == b,
             (VMValue::String(a), VMValue::String(b)) => a == b,
             (VMValue::Void, VMValue::Void) => true,
+            #[cfg(feature = "legacy-boxes")]
             (VMValue::Future(_), VMValue::Future(_)) => false,
             (VMValue::BoxRef(_), VMValue::BoxRef(_)) => false,
             _ => false,
@@ -68,9 +72,15 @@ impl VMValue {
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {
         match self {
             VMValue::Integer(i) => Box::new(IntegerBox::new(*i)),
-            VMValue::Float(f) => Box::new(crate::boxes::FloatBox::new(*f)),
+            VMValue::Float(f) => {
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(crate::boxes::FloatBox::new(*f)) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(StringBox::new(format!("{}", f))) }
+            }
             VMValue::Bool(b) => Box::new(BoolBox::new(*b)),
             VMValue::String(s) => Box::new(StringBox::new(s)),
+            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(f) => Box::new(f.clone()),
             VMValue::Void => Box::new(VoidBox::new()),
             VMValue::BoxRef(arc_box) => arc_box.share_box(),
@@ -84,6 +94,7 @@ impl VMValue {
             VMValue::Float(f) => f.to_string(),
             VMValue::Bool(b) => b.to_string(),
             VMValue::String(s) => s.clone(),
+            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(f) => f.to_string_box().value,
             VMValue::Void => "void".to_string(),
             VMValue::BoxRef(arc_box) => arc_box.to_string_box().value,
@@ -114,12 +125,7 @@ impl VMValue {
                 if let Some(ib) = b.as_any().downcast_ref::<IntegerBox>() {
                     return Ok(ib.value != 0);
                 }
-                if let Some(ib) = b
-                    .as_any()
-                    .downcast_ref::<crate::boxes::integer_box::IntegerBox>()
-                {
-                    return Ok(ib.value != 0);
-                }
+                // Avoid direct legacy-box downcast when feature is disabled
                 if b.as_any().downcast_ref::<VoidBox>().is_some() {
                     return Ok(false);
                 }
@@ -131,33 +137,53 @@ impl VMValue {
             VMValue::Void => Ok(false),
             VMValue::Float(f) => Ok(*f != 0.0),
             VMValue::String(s) => Ok(!s.is_empty()),
+            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(_) => Ok(true),
         }
     }
 
     /// Convert from NyashBox to VMValue
     pub fn from_nyash_box(nyash_box: Box<dyn crate::box_trait::NyashBox>) -> VMValue {
+        // VoidBox from plugins → VM Void
+        if nyash_box.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+            return VMValue::Void;
+        }
+        // Legacy NullBox → VM Void (when available)
+        #[cfg(feature = "legacy-boxes")]
         if nyash_box
             .as_any()
             .downcast_ref::<crate::boxes::null_box::NullBox>()
             .is_some()
         {
-            // Treat NullBox as Void in VMValue to align with `null` literal semantics
-            VMValue::Void
-        } else if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
-            VMValue::Integer(int_box.value)
-        } else if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {
-            VMValue::Bool(bool_box.value)
-        } else if let Some(string_box) = nyash_box.as_any().downcast_ref::<StringBox>() {
-            VMValue::String(string_box.value.clone())
-        } else if let Some(future_box) = nyash_box
+            return VMValue::Void;
+        }
+        // HostHandle → resolve to shared Arc
+        if let Some(hhb) = nyash_box.as_any().downcast_ref::<crate::runtime::host_handle_box::HostHandleBox>() {
+            if let Some(arc) = crate::runtime::host_handles::get(hhb.id) {
+                return VMValue::BoxRef(arc);
+            } else {
+                return VMValue::Void;
+            }
+        }
+        // Primitive wrappers
+        if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
+            return VMValue::Integer(int_box.value);
+        }
+        if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {
+            return VMValue::Bool(bool_box.value);
+        }
+        if let Some(string_box) = nyash_box.as_any().downcast_ref::<StringBox>() {
+            return VMValue::String(string_box.value.clone());
+        }
+        #[cfg(feature = "legacy-boxes")]
+        if let Some(future_box) = nyash_box
             .as_any()
             .downcast_ref::<crate::boxes::future::FutureBox>()
         {
-            VMValue::Future(future_box.clone())
-        } else {
-            VMValue::BoxRef(Arc::from(nyash_box))
+            return VMValue::Future(future_box.clone());
         }
+        // Fallback: keep as BoxRef
+        VMValue::BoxRef(Arc::from(nyash_box))
     }
 }
 

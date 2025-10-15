@@ -30,8 +30,8 @@ compile_json() {
   local esc
   esc=$(sed -e 's/\\/\\\\/g' -e 's/\"/\\\"/g' "$TMP/ny_parser_input.ny")
   cat > "$inline" << NY
-include "apps/selfhost/compiler/boxes/parser_box.nyash"
-include "apps/selfhost/compiler/boxes/emitter_box.nyash"
+include "selfhost/compiler/boxes/parser_box.nyash"
+include "selfhost/compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
     local src = "$esc"

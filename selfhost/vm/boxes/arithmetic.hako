@@ -1,0 +1,123 @@
+// arithmetic.hako — ArithmeticBox
+// Responsibility: safe decimal Add/Sub/Mul helpers and simple i64 adapters.
+// Non-responsibility: VM execution, JSON parsing, compare semantics.
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box ArithmeticBox {
+  // Internal helpers operate on decimal strings to avoid overflow.
+  _to_dec_str(x) {
+    local s = "" + x
+    local i = 0
+    loop(i < s.size()) { local ch = s.substring(i,i+1) if ch=="+" || ch==" " { i=i+1 } else { break } }
+    s = s.substring(i, s.size())
+    i = 0
+    loop(i < s.size() && s.substring(i,i+1)=="0") { i = i + 1 }
+    if i >= s.size() { return "0" }
+    return s.substring(i, s.size())
+  }
+
+  _cmp_dec(a, b) {
+    local sa = me._to_dec_str(a)
+    local sb = me._to_dec_str(b)
+    if sa.size() < sb.size() { return -1 }
+    if sa.size() > sb.size() { return 1 }
+    local i = 0
+    loop(i < sa.size()) {
+      local ca = sa.substring(i,i+1)
+      local cb = sb.substring(i,i+1)
+      if ca != cb { if ca < cb { return -1 } else { return 1 } }
+      i = i + 1
+    }
+    return 0
+  }
+
+  _add_dec(a, b) {
+    local sa = me._to_dec_str(a)
+    local sb = me._to_dec_str(b)
+    local i = sa.size() - 1
+    local j = sb.size() - 1
+    local carry = 0
+    local out = new ArrayBox()
+    loop(i >= 0 || j >= 0 || carry > 0) {
+      local da = 0
+      local db = 0
+      if i >= 0 { da = ("0123456789").indexOf(sa.substring(i,i+1)) i = i - 1 }
+      if j >= 0 { db = ("0123456789").indexOf(sb.substring(j,j+1)) j = j - 1 }
+      local s = da + db + carry
+      carry = s / 10
+      local d = s % 10
+      out.push(("0123456789").substring(d, d+1))
+    }
+    local k = out.size()
+    local res = ""
+    loop(k > 0) { k = k - 1  res = res + (""+out.get(k)) }
+    return res
+  }
+
+  _sub_dec(a, b) {
+    // Supports negative result: if a<b, return "-" + (b-a)
+    local sa = me._to_dec_str(a)
+    local sb = me._to_dec_str(b)
+    local c = me._cmp_dec(sa, sb)
+    if c == 0 { return "0" }
+    if c < 0 { return "-" + me._sub_dec(sb, sa) }
+    local i = sa.size() - 1
+    local j = sb.size() - 1
+    local borrow = 0
+    local out = new ArrayBox()
+    loop(i >= 0) {
+      local da = ("0123456789").indexOf(sa.substring(i, i+1)) - borrow
+      local db = 0
+      if j >= 0 { db = ("0123456789").indexOf(sb.substring(j, j+1))  j = j - 1 }
+      if da < db { da = da + 10  borrow = 1 } else { borrow = 0 }
+      local d = da - db
+      out.push(("0123456789").substring(d, d+1))
+      i = i - 1
+    }
+    local k = out.size() - 1
+    loop(true) { if k > 0 && out.get(k) == "0" { k = k - 1 } else { break } }
+    local res = ""
+    loop(k >= 0) { res = res + (""+out.get(k))  k = k - 1 }
+    return res
+  }
+
+  _mul_dec(a, b) {
+    local sa = me._to_dec_str(a)
+    local sb = me._to_dec_str(b)
+    if sa == "0" || sb == "0" { return "0" }
+    local na = sa.size()
+    local nb = sb.size()
+    local res = new ArrayBox()
+    local t = 0
+    loop(t < na+nb) { res.push(0) t = t + 1 }
+    local ia = na - 1
+    loop(ia >= 0) {
+      local da = ("0123456789").indexOf(sa.substring(ia, ia+1))
+      local carry = 0
+      local ib = nb - 1
+      loop(ib >= 0) {
+        local db = ("0123456789").indexOf(sb.substring(ib, ib+1))
+        local idx = ia + ib + 1
+        local sum = res.get(idx) + da * db + carry
+        res.set(idx, sum % 10)
+        carry = sum / 10
+        ib = ib - 1
+      }
+      res.set(ia, res.get(ia) + carry)
+      ia = ia - 1
+    }
+    local k = 0
+    loop(k < res.size() && res.get(k) == 0) { k = k + 1 }
+    local out = ""
+    loop(k < res.size()) { out = out + ("0123456789").substring(res.get(k), res.get(k)+1)  k = k + 1 }
+    if out == "" { return "0" } else { return out }
+  }
+
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
+
+  // Public adapters: operate on i64-likes and return i64-likes.
+  add_i64(a, b) { return me._str_to_int(me._add_dec(a, b)) }
+  sub_i64(a, b) { return me._str_to_int(me._sub_dec(a, b)) }
+  mul_i64(a, b) { return me._str_to_int(me._mul_dec(a, b)) }
+}

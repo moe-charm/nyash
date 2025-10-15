@@ -1,0 +1,228 @@
+// 📦 ConsBox - LISPのcons cell実装
+// ペア（car, cdr）を表現する基本データ構造
+
+box ConsBox {
+    car    // 最初の要素
+    cdr    // 残りの要素（通常は別のConsBoxかNullBox）
+    
+    init {
+        car, cdr
+    }
+    
+    // 基本アクセサ
+    func getCar() {
+        return me.car
+    }
+    
+    func getCdr() {
+        return me.cdr
+    }
+    
+    func setCar(value) {
+        me.car = value
+    }
+    
+    func setCdr(value) {
+        me.cdr = value
+    }
+    
+    // リストかどうかの判定
+    func isList() {
+        // cdrがNullBoxならリストの終端
+        if (NullBox.check_null(me.cdr)) {
+            return true
+        }
+        // cdrがConsBoxなら再帰的にチェック
+        // TODO: 型チェックの別の方法が必要
+        // 暫定的にtrueを返す
+        return true
+        // それ以外はドット対
+        return false
+    }
+    
+    // リストの長さを取得
+    func length() {
+        if (not me.isList()) {
+            return -1  // リストでない場合は-1
+        }
+        
+        count = 0
+        current = me
+        loop(not NullBox.check_null(current)) {
+            count = count + 1
+            current = current.getCdr()
+        }
+        return count
+    }
+    
+    // n番目の要素を取得（0ベース）
+    func nth(n) {
+        if (n < 0) {
+            return new NullBox()
+        }
+        
+        current = me
+        i = 0
+        loop(i < n) {
+            if (NullBox.check_null(current)) {
+                return new NullBox()
+            }
+            current = current.getCdr()
+            i = i + 1
+        }
+        
+        if (NullBox.check_null(current)) {
+            return new NullBox()
+        }
+        return current.getCar()
+    }
+    
+    // リストを配列に変換
+    func toArray() {
+        result = new ArrayBox()
+        current = me
+        
+        loop(not NullBox.check_null(current)) {
+            result.push(current.getCar())
+            cdr = current.getCdr()
+            
+            // ドット対の場合
+            // TODO: 型チェックの別の方法が必要
+            // 暫定的にスキップ
+            
+            current = cdr
+        }
+        
+        return result
+    }
+    
+    // 文字列表現
+    func toString() {
+        // 空リスト
+        if (NullBox.check_null(me.car) and NullBox.check_null(me.cdr)) {
+            return "()"
+        }
+        
+        result = "("
+        current = me
+        first = true
+        
+        loop(not NullBox.check_null(current)) {
+            if (not first) {
+                result = result + " "
+            }
+            first = false
+            
+            // carの表示
+            car = current.getCar()
+            if (NullBox.check_null(car)) {
+                result = result + "nil"
+            } else {
+                result = result + car.toString()
+            }
+            
+            // cdrの確認
+            cdr = current.getCdr()
+            if (NullBox.check_null(cdr)) {
+                break
+            }
+            
+            // ドット対の場合
+            // TODO: 型チェックの別の方法が必要
+            // 暫定的にスキップ
+            
+            current = cdr
+        }
+        
+        result = result + ")"
+        return result
+    }
+    
+    // デバッグ用の詳細表示
+    func debugPrint() {
+        print("ConsBox {")
+        print("  car: " + me.car.toString())
+        print("  cdr: " + me.cdr.toString())
+        print("  isList: " + me.isList())
+        if (me.isList()) {
+            print("  length: " + me.length())
+        }
+        print("}")
+    }
+}
+
+// ヘルパー関数：配列からリストを作成
+function arrayToList(arr) {
+    if (arr.length() == 0) {
+        return new NullBox()
+    }
+    
+    // 逆順に構築
+    result = new NullBox()
+    i = arr.length() - 1
+    loop(i >= 0) {
+        result = new ConsBox(arr.get(i), result)
+        i = i - 1
+    }
+    
+    return result
+}
+
+// ヘルパー関数：可変長引数でリストを作成
+function list() {
+    // TODO: 可変長引数のサポートが必要
+    // 現在は固定数の引数での実装例
+    return new NullBox()
+}
+
+// テストコード
+print("🎯 === ConsBox Test ===")
+
+// 基本的なペア
+print("📦 基本的なペア (1 . 2):")
+pair = new ConsBox(new IntegerBox(1), new IntegerBox(2))
+print(pair.toString())
+pair.debugPrint()
+
+// リスト (1 2 3)
+print("\n📋 リスト (1 2 3):")
+list123 = new ConsBox(
+    new IntegerBox(1),
+    new ConsBox(
+        new IntegerBox(2),
+        new ConsBox(
+            new IntegerBox(3),
+            new NullBox()
+        )
+    )
+)
+print(list123.toString())
+print("Length: " + list123.length())
+print("2nd element: " + list123.nth(1).toString())
+
+// 配列からリストを作成
+print("\n🔄 配列からリスト作成:")
+arr = new ArrayBox()
+arr.push(new StringBox("hello"))
+arr.push(new StringBox("world"))
+arr.push(new IntegerBox(42))
+listFromArray = arrayToList(arr)
+print(listFromArray.toString())
+
+// ネストしたリスト ((1 2) (3 4))
+print("\n🎯 ネストしたリスト:")
+innerList1 = new ConsBox(
+    new IntegerBox(1),
+    new ConsBox(new IntegerBox(2), new NullBox())
+)
+innerList2 = new ConsBox(
+    new IntegerBox(3),
+    new ConsBox(new IntegerBox(4), new NullBox())
+)
+nestedList = new ConsBox(
+    innerList1,
+    new ConsBox(innerList2, new NullBox())
+)
+print(nestedList.toString())
+
+print("\n✅ ConsBox implementation completed!")

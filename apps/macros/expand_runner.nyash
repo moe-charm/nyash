@@ -3,7 +3,7 @@
 // Later: call MacroBoxSpec.expand(ast_json) and print result.
 
 function main(args) {
-    if args.length() == 0 {
+    if args.size() == 0 {
         print("{}")
         return 0
     }

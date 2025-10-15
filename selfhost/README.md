@@ -1,24 +1,20 @@
-Self‑Hosting (Compiler & Smokes)
+Selfhost — Hakorune Self‑Hosting (Compiler/VM/Shared)
 
 Purpose
-- Provide one place to discover all self‑hosting bits without moving files.
-- Avoid large refactors; keep existing paths stable and CI green.
+- Provide a top‑level home for the self‑hosting toolchain.
+- Separate responsibilities from apps/ (samples/demos) for clarity and growth.
 
-Where things live
-- Compiler (Ny): `apps/selfhost-compiler/`
-- Mini‑VM for MIR v0: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
-- Dev samples: `apps/dev/` (e.g., `mir_cfg_branch_smoke.nyash`)
-- Smokes (v2 runner): `tools/smokes/v2/` (filter by prefix `selfhost_*`)
+Layout
+- shared/  — Cross‑cutting boxes used by both compiler and VM (e.g., MIR schema/builders, JSON cursors).
+- compiler/ — Selfhost compiler pipeline (parsing → IR emit → normalization/SSA → MIR emit).
+- vm/       — Mini‑VM boxes for executing MIR used in development/testing.
 
-Quick run
-- Preferred: enable Selfhost profile (tight mode + compiler-track + artifacts):
-  - `source tools/dev_env.sh selfhost`
-- Quick selfhost smokes:
-  - `tools/selfhost_smokes.sh quick`
-- Integration (VM ↔ LLVM harness) selfhost smokes:
-  - `tools/selfhost_smokes.sh integration`
+Boundaries (Box‑First)
+- shared: no I/O side effects; provide pure helpers and schemas.
+- compiler: no runtime execution; emits MIR only (Fail‑Fast at boundaries).
+- vm: execution only; no parsing/emit responsibilities.
 
-Notes
-- No files were physically moved; this directory is an index for humans.
-- Use test filter `--filter "selfhost_*"` with `tools/smokes/v2/run.sh` to target selfhost cases.
- - To revert env toggles: `source tools/dev_env.sh reset`
+Migration
+- Step 1: introduce top‑level structure (this commit) and start routing new work here.
+- Step 2: gradually migrate apps/selfhost-* callers and tests to selfhost/* (module aliases or file‑path using).
+- Step 3: retire legacy paths under apps/ when references are gone (smokes green).

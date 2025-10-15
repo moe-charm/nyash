@@ -18,18 +18,23 @@ use std::{fs, process};
 mod box_index;
 mod build;
 mod cli_directives;
+#[cfg(feature = "legacy-boxes")]
 mod demos;
 mod dispatch;
 mod json_v0_bridge;
+mod mir_json_reader;
 mod mir_json_emit;
+mod mir_json_validate;
 pub mod modes;
 mod pipe_io;
 mod pipeline;
 mod jit_direct;
+pub mod vm_pipeline;
 mod selfhost;
 mod tasks;
 mod trace;
 mod plugins;
+pub mod vm_iface;
 
 // v2 plugin system imports
 use nyash_rust::runner_plugin_init;
@@ -78,9 +83,268 @@ impl NyashRunner {
 impl NyashRunner {
     /// New behavior-preserving refactor of run(): structured into smaller helpers
     fn run_refactored(&self) {
+
+        // Dev utility: resolve a file path to Dir-as-NS namespace and exit
+        if let Ok(file) = std::env::var("NYASH_MODULES_RESOLVE_FILE") {
+            use std::path::Path;
+            let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+            let apps = Path::new(&root).join("apps");
+            let f = Path::new(&file);
+            let target = if f.is_absolute() { f.to_path_buf() } else { Path::new(&root).join(f) };
+            // Announce current namespace policy for clarity
+            let pol = std::env::var("NYASH_NS_POLICY").ok().unwrap_or_else(|| "path-first".to_string());
+            println!("[policy] {}", pol);
+            match crate::config::module_discovery::path_to_namespace(&apps, &target) {
+                Some(ns) => { println!("{}", ns); },
+                None => { eprintln!("modules-resolve: file is not under apps/: {}", file); std::process::exit(1); }
+            }
+            return;
+        }
+        // Dev utility: show mapping for specific namespace and exit
+        if let Ok(ns_query) = std::env::var("NYASH_MODULES_SHOW_NS") {
+            use std::path::{Path, PathBuf};
+            let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+            let apps = Path::new(&root).join("apps");
+            // Gather workspace/overrides/auto entries (same as --list-modules)
+            let mut ws_entries: Vec<(String, PathBuf)> = Vec::new();
+            let mut ws_origin: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut cfg_path: Option<PathBuf> = None;
+            let force_env_root = std::env::var("NYASH_USING_TEST_FORCE_ENV_ROOT").ok().as_deref() == Some("1");
+            if !force_env_root {
+                for name in ["hako.toml", "nyash.toml", "hakorune.toml"] {
+                    let p = Path::new(name);
+                    if p.exists() { cfg_path = Some(p.to_path_buf()); break; }
+                }
+            }
+            if cfg_path.is_none() {
+                let rp = Path::new(&root).join("hako.toml");
+                if rp.exists() { cfg_path = Some(rp); }
+            }
+            if let Some(cfg) = cfg_path.clone() {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ws_tbl) = mods.get("workspace").and_then(|v| v.as_table()) {
+                                if let Some(arr) = ws_tbl.get("members").and_then(|v| v.as_array()) {
+                                    for m in arr.iter() { if let Some(raw) = m.as_str() {
+                                        let mut cand_paths: Vec<PathBuf> = Vec::new();
+                                        if raw.contains('*') { cand_paths.extend(crate::config::module_workspace::expand_members_pattern(raw)); }
+                                        else {
+                                            let p = Path::new(raw);
+                                            if p.is_dir() { cand_paths.push(p.join("hako_module.toml")); cand_paths.push(p.join("module.toml")); } else { cand_paths.push(p.to_path_buf()); }
+                                        }
+                                        for mp in cand_paths.into_iter() {
+                                            if !mp.exists() { continue; }
+                                            if let Some(man) = crate::config::module_workspace::parse_module_toml(&mp) {
+                                                let base_ns = man.name.clone();
+                                                let base_dir = mp.parent().unwrap_or(Path::new("."));
+                                                let origin = mp.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                                let origin_label = if origin == "hako_module.toml" { "hako_module" } else { "module" };
+                                                for (key, rel) in man.exports.into_iter() {
+                                                    let ns = format!("{}.{}", base_ns, key);
+                                                    let sp = base_dir.join(rel);
+                                                    ws_entries.push((ns.clone(), sp));
+                                                    ws_origin.insert(ns, origin_label.to_string());
+                                                }
+                                            }
+                                        }
+                                    } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            let auto_entries = crate::config::module_discovery::discover_entries_under(&apps, &opts);
+            let mut override_entries: Vec<(String, PathBuf)> = Vec::new();
+            if let Some(cfg) = cfg_path {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ovr) = mods.get("overrides").and_then(|v| v.as_table()) {
+                                let v = crate::common::using_core::flatten_modules_table(ovr);
+                                for (k, v) in v.into_iter() { override_entries.push((k, PathBuf::from(v))); }
+                            }
+                        }
+                    }
+                }
+            }
+            // Announce current namespace policy for clarity
+            {
+                let pol = std::env::var("NYASH_NS_POLICY").ok().unwrap_or_else(|| "path-first".to_string());
+                println!("[policy] {}", pol);
+            }
+            // Precedence: workspace > overrides > auto
+            if let Some(p) = ws_entries.iter().find(|(k, _)| k == &ns_query).map(|(_, p)| p) {
+                let tag = ws_origin.get(&ns_query).map(String::as_str).unwrap_or("");
+                if tag.is_empty() { println!("[workspace] {} → {}", ns_query, p.display()); }
+                else { println!("[workspace:{}] {} → {}", tag, ns_query, p.display()); }
+                return;
+            }
+            if let Some(p) = override_entries.iter().find(|(k, _)| k == &ns_query).map(|(_, p)| p) {
+                println!("[override] {} → {}", ns_query, p.display());
+                return;
+            }
+            if let Some(p) = auto_entries.iter().find(|(k, _)| k == &ns_query).map(|(_, p)| p) {
+                println!("[auto] {} → {}", ns_query, p.display());
+                return;
+            }
+            eprintln!("modules-show: namespace not found: {}", ns_query);
+            std::process::exit(1);
+        }
         // Early: macro child
         if let Some(ref macro_file) = self.config.macro_expand_child {
             crate::runner::modes::macro_child::run_macro_child(macro_file);
+            return;
+        }
+        // Dry-run: list discovered modules and exit (spec v2 preview)
+        if std::env::var("NYASH_LIST_MODULES").ok().as_deref() == Some("1") {
+            use std::path::{Path, PathBuf};
+            // Announce current namespace policy for clarity
+            let pol = std::env::var("NYASH_NS_POLICY").ok().unwrap_or_else(|| "path-first".to_string());
+            println!("[policy] {}", pol);
+            let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+            let apps = Path::new(&root).join("apps");
+            // 1) Workspace (module.toml) — [workspace]
+            let mut ws_entries: Vec<(String, PathBuf)> = Vec::new();
+            let mut ws_origin: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut ws_versions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut ws_manifests: Vec<crate::config::module_workspace::ModuleManifest> = Vec::new();
+            // Find toml: prefer ./hako.toml else NYASH_ROOT/hako.toml
+            let mut cfg_path: Option<PathBuf> = None;
+            let force_env_root = std::env::var("NYASH_USING_TEST_FORCE_ENV_ROOT").ok().as_deref() == Some("1");
+            if !force_env_root {
+                for name in ["hako.toml", "nyash.toml", "hakorune.toml"] {
+                    let p = Path::new(name);
+                    if p.exists() { cfg_path = Some(p.to_path_buf()); break; }
+                }
+            }
+            if cfg_path.is_none() {
+                let rp = Path::new(&root).join("hako.toml");
+                if rp.exists() { cfg_path = Some(rp); }
+            }
+            if let Some(cfg) = cfg_path.clone() {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ws_tbl) = mods.get("workspace").and_then(|v| v.as_table()) {
+                                if let Some(arr) = ws_tbl.get("members").and_then(|v| v.as_array()) {
+                                    for m in arr.iter() {
+                                        if let Some(raw) = m.as_str() {
+                                            let mut cand_paths: Vec<PathBuf> = Vec::new();
+                                            if raw.contains('*') {
+                                                cand_paths.extend(crate::config::module_workspace::expand_members_pattern(raw));
+                                            } else {
+                                                let p = Path::new(raw);
+                                                if p.is_dir() { cand_paths.push(p.join("hako_module.toml")); cand_paths.push(p.join("module.toml")); } else { cand_paths.push(p.to_path_buf()); }
+                                            }
+                                            for mp in cand_paths.into_iter() {
+                                                if !mp.exists() { continue; }
+                                                if let Some(man) = crate::config::module_workspace::parse_module_toml(&mp) {
+                                                    let base_ns = man.name.clone();
+                                                    ws_manifests.push(man.clone());
+                                                    if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
+                                                    let base_dir = mp.parent().unwrap_or(Path::new("."));
+                                                    let origin = mp.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                                    let origin_label = if origin == "hako_module.toml" { "hako_module" } else { "module" };
+                                                    for (key, rel) in man.exports.into_iter() {
+                                                        let ns = format!("{}.{}", base_ns, key);
+                                                        let sp = base_dir.join(rel);
+                                                        ws_entries.push((ns.clone(), sp));
+                                                        ws_origin.insert(ns, origin_label.to_string());
+                                                    }
+                                                    // light dependency check
+                                                    for (dep, req) in man.dependencies.iter() {
+                                                        if !ws_versions.contains_key(dep) {
+                                                            eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                                                            eprintln!("[deps] missing: {} -> {} {}", base_ns, dep, req);
+                                                        } else if let Some(cur) = ws_versions.get(dep) {
+                                                            if req.starts_with('^') {
+                                                                let want_major = req.trim_start_matches('^').split('.').next().unwrap_or("");
+                                                                let have_major = cur.split('.').next().unwrap_or("");
+                                                                if want_major != have_major {
+                                                                    eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                                                                    eprintln!("[deps] version-mismatch: {} requires {} {} but found {}", base_ns, dep, req, cur);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Try module.hako (preview-only)
+                                                    // If raw points to a directory, check for module.hako inside
+                                                    let pdir = if mp.is_dir() { mp.clone() } else { mp.parent().unwrap_or(Path::new(".")).to_path_buf() };
+                                                    let mh = pdir.join("module.hako");
+                                                    if mh.exists() {
+                                                        if let Some(man) = crate::config::module_workspace::parse_module_hako(&mh) {
+                                                            let base_ns = man.name.clone();
+                                                            ws_manifests.push(man.clone());
+                                                            if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
+                                                            let base_dir = mh.parent().unwrap_or(Path::new("."));
+                                                            for (key, rel) in man.exports.into_iter() {
+                                                                let ns = format!("{}.{}", base_ns, key);
+                                                                let sp = base_dir.join(rel);
+                                                                ws_entries.push((ns.clone(), sp));
+                                                                ws_origin.insert(ns, "module_hako".to_string());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Cycle detection (warn)
+            {
+                let g = crate::config::module_workspace::build_dep_graph(&ws_manifests);
+                let cycles = crate::config::module_workspace::detect_cycles_from_graph(&g);
+                for cyc in cycles.iter() {
+                    eprintln!("{}", crate::common::diagnostics::modules_error::cycle(cyc));
+                    eprintln!("[deps] cycle: {}", cyc.join(" -> "));
+                }
+            }
+            // 2) Auto discovery — [auto]
+            let opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            let auto_entries = crate::config::module_discovery::discover_entries_under(&apps, &opts);
+            // 3) Overrides — [override]
+            let mut override_entries: Vec<(String, PathBuf)> = Vec::new();
+            if let Some(cfg) = cfg_path {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ovr) = mods.get("overrides").and_then(|v| v.as_table()) {
+                                let v = crate::common::using_core::flatten_modules_table(ovr);
+                                for (k, v) in v.into_iter() { override_entries.push((k, PathBuf::from(v))); }
+                            }
+                        }
+                    }
+                }
+            }
+            // Print with precedence: workspace > overrides > auto (suppress duplicates)
+            use std::collections::HashSet;
+            let mut seen: HashSet<String> = HashSet::new();
+            for (ns, p) in ws_entries.iter() {
+                let k = ws_origin.get(ns).map(String::as_str).unwrap_or("");
+                if k.is_empty() { println!("[workspace] {} → {}", ns, p.display()); }
+                else { println!("[workspace:{}] {} → {}", k, ns, p.display()); }
+                seen.insert(ns.clone());
+            }
+            for (ns, p) in override_entries.iter() {
+                if !seen.contains(ns) {
+                    println!("[override] {} → {}", ns, p.display());
+                    seen.insert(ns.clone());
+                }
+            }
+            for (ns, p) in auto_entries.iter() {
+                if !seen.contains(ns) {
+                    println!("[auto] {} → {}", ns, p.display());
+                }
+            }
             return;
         }
         let groups = self.config.as_groups();
@@ -94,6 +358,8 @@ impl NyashRunner {
         }
         // Preprocess usings and directives (includes dep-tree log)
         self.preprocess_usings_and_directives(&groups);
+        // Gate C: NyVM direct (MIR JSON via file/stdin)
+        if self.try_run_nyvm_mir_pipe() { return; }
         // JSON v0 bridge
         if self.try_run_json_v0_pipe() { return; }
         // Named task
@@ -104,6 +370,20 @@ impl NyashRunner {
             }
             return;
         }
+        // Early: global emit gates (independent of backend)
+        // If --emit-mir-json is specified, compile and emit JSON, then exit.
+        // This keeps behavior consistent regardless of selected backend (vm/mir/llvm).
+        {
+            let groups = self.config.as_groups();
+            if groups.emit.emit_mir_json.is_some() {
+                if let Some(ref file) = groups.input.file {
+                    // Reuse MIR mode to parse/compile and write JSON, then exit
+                    self.execute_mir_mode(file);
+                    return;
+                }
+            }
+        }
+
         // Common env + runtime/plugins
         self.apply_common_env(&groups);
         self.init_runtime_and_plugins(&groups);
@@ -130,7 +410,7 @@ impl NyashRunner {
             let (target, alias) = if let Some(pos) = s.find(" as ") {
                 (s[..pos].trim().to_string(), Some(s[pos + 4..].trim().to_string()))
             } else { (s.to_string(), None) };
-            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".hako") || target.ends_with(".nyash");
             if is_path {
                 let path = target.trim_matches('"').to_string();
                 let name = alias.clone().unwrap_or_else(|| {
@@ -145,6 +425,31 @@ impl NyashRunner {
         for (ns, path) in using_ctx.pending_modules.iter() {
             let sb = crate::box_trait::StringBox::new(path.clone());
             crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+        }
+        // Phase: plugins – proactively load dylib packages from nyash.toml [using.*]
+        // Behavior: best-effort, quiet on failure; keeps default behavior unchanged.
+        // Rationale: v2 plugins profile expects `using <name> { kind="dylib", path=..., bid=... }`
+        // to autoload libraries without additional CLI flags.
+        if !using_ctx.packages.is_empty() {
+            for (pkg_name, pkg) in using_ctx.packages.iter() {
+                if matches!(pkg.kind, crate::using::spec::PackageKind::Dylib) {
+                    let path = pkg.path.as_str();
+                    // Boxes list: prefer declared `bid`, else empty (TypeBox FFI may populate later)
+                    let boxes: Vec<String> = pkg
+                        .bid
+                        .as_ref()
+                        .map(|b| vec![b.clone()])
+                        .unwrap_or_else(|| Vec::new());
+                    // Use package name as library handle (stable within this process)
+                    let host = nyash_rust::runtime::get_global_plugin_host();
+                    if let Ok(ro) = host.read() {
+                        let _ = ro.load_library_direct(pkg_name, path, &boxes);
+                    }
+                    // Also record marker token so suggesters/diagnostics can see it
+                    let sb = nyash_rust::box_trait::StringBox::new(format!("dylib:{}", path));
+                    nyash_rust::runtime::modules_registry::set(pkg_name.clone(), Box::new(sb));
+                }
+            }
         }
         // Optional dependency tree bridge (log-only)
         if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {
@@ -173,7 +478,12 @@ impl NyashRunner {
                 }
                 // Late env overrides (paths/modules)
                 if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
-                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_ctx.using_paths.push(p.to_string()); } }
+                    for p in paths.split(|c| c == ':' || c == ';') {
+                        let p = p.trim();
+                        if !p.is_empty() {
+                            using_ctx.using_paths.push(p.to_string());
+                        }
+                    }
                 }
                 if let Ok(mods) = std::env::var("NYASH_MODULES") {
                     for ent in mods.split(',') {
@@ -189,7 +499,7 @@ impl NyashRunner {
                     nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
                 }
                 // Resolve CLI --using entries against context and register values (with aliasing)
-                let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+                let strict = crate::config::env::using_strict();
                 let verbose = crate::config::env::cli_verbose();
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {
@@ -250,7 +560,15 @@ impl NyashRunner {
         if let Some(ref filename) = groups.input.file {
             if groups.backend.jit.direct { self.run_file_jit_direct(filename); return; }
             self.run_file(filename);
-        } else { demos::run_all_demos(); }
+        } else {
+            #[cfg(feature = "legacy-boxes")]
+            { demos::run_all_demos(); }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                eprintln!("No input file provided. Use --help for usage.");
+                process::exit(1);
+            }
+        }
     }
 }
 
@@ -259,8 +577,8 @@ impl NyashRunner {
     /// ARCHIVED: JIT/Cranelift functionality disabled for Phase 15
     fn run_file_jit_direct(&self, filename: &str) {
         eprintln!("❌ JIT-direct mode is archived for Phase 15. JIT/Cranelift moved to archive/jit-cranelift/");
-        eprintln!("   Use VM backend instead: nyash {}", filename);
-        eprintln!("   Or use LLVM backend: nyash --backend llvm {}", filename);
+        eprintln!("   Use VM backend instead: hakorune {}", filename);
+        eprintln!("   Or use LLVM backend: hakorune --backend llvm {}", filename);
         std::process::exit(1);
     }
 }

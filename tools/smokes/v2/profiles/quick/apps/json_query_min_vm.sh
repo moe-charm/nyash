@@ -8,7 +8,7 @@ preflight_plugins || exit 2
 
 APP_DIR="$NYASH_ROOT/apps/examples/json_query_min"
 export NYASH_ALLOW_USING_FILE=1
-output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
+output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev | grep -v '^Result: ')
 
 expected=$(cat << 'TXT'
 2

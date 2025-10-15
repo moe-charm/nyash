@@ -1,4 +1,4 @@
-#[cfg(feature = "cranelift-jit")]
+#[cfg(all(feature = "cranelift-jit", feature = "legacy-boxes"))]
 #[test]
 #[ignore]
 fn jit_readonly_array_push_denied() {
@@ -21,11 +21,8 @@ fn jit_readonly_array_push_denied() {
     let a = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let three = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -69,7 +66,7 @@ fn jit_readonly_array_push_denied() {
     );
 }
 
-#[cfg(feature = "cranelift-jit")]
+#[cfg(all(feature = "cranelift-jit", feature = "legacy-boxes"))]
 #[test]
 #[ignore]
 fn jit_readonly_map_set_denied() {
@@ -92,11 +89,8 @@ fn jit_readonly_map_set_denied() {
     let mbox = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: mbox,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: mbox, box_type: "MapBox".into(), args: vec![],
+                auto_birth: None });
     let key = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -148,6 +142,7 @@ fn jit_readonly_map_set_denied() {
 }
 
 // Engine-independent smoke: validate policy denial via host externs
+#[cfg(all(feature = "cranelift-jit", feature = "legacy-boxes"))]
 #[test]
 fn extern_readonly_array_push_denied() {
     use crate::backend::vm::VMValue;
@@ -164,6 +159,7 @@ fn extern_readonly_array_push_denied() {
     assert_eq!(len.to_string(), "0");
 }
 
+#[cfg(all(feature = "cranelift-jit", feature = "legacy-boxes"))]
 #[test]
 fn extern_readonly_map_set_denied() {
     use crate::backend::vm::VMValue;
@@ -181,6 +177,7 @@ fn extern_readonly_map_set_denied() {
     assert_eq!(sz.to_string(), "0");
 }
 
+#[cfg(all(feature = "cranelift-jit", feature = "legacy-boxes"))]
 #[test]
 fn extern_readonly_read_ops_allowed() {
     use crate::backend::vm::VMValue;

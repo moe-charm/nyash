@@ -24,7 +24,7 @@ if x > 5 {
 }
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "greater" "$output" "simple_if"
 }
 
@@ -41,7 +41,7 @@ if score >= 80 {
 }
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "B" "$output" "if_else"
 }
 
@@ -61,7 +61,7 @@ if a < b {
 }
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "correct" "$output" "nested_if"
 }
 
@@ -81,7 +81,7 @@ if x > 0 {
 }
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "both positive" "$output" "if_with_and"
 }
 

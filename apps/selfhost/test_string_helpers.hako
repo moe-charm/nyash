@@ -1,0 +1,36 @@
+// Test StringHelpers common library
+using "selfhost/shared/common/string_helpers.hako" as Helpers
+
+static box TestStringHelpers {
+  main() {
+    // Test int_to_str
+    local s1 = Helpers.int_to_str(42)
+    local s2 = Helpers.int_to_str(0)
+    local s3 = Helpers.int_to_str(-99)
+    print("int_to_str(42) = " + s1)
+    print("int_to_str(0) = " + s2)
+    print("int_to_str(-99) = " + s3)
+
+    // Test to_i64
+    local n1 = Helpers.to_i64("123")
+    local n2 = Helpers.to_i64("0")
+    print("to_i64(\"123\") = " + Helpers.int_to_str(n1))
+    print("to_i64(\"0\") = " + Helpers.int_to_str(n2))
+
+    // Test json_quote
+    local q1 = Helpers.json_quote("hello")
+    local q2 = Helpers.json_quote("line1\nline2")
+    print("json_quote(\"hello\") = " + q1)
+    print("json_quote(\"line1\\nline2\") = " + q2)
+
+    // Test is_numeric_str
+    local check1 = Helpers.is_numeric_str("123")
+    local check2 = Helpers.is_numeric_str("-456")
+    local check3 = Helpers.is_numeric_str("abc")
+    print("is_numeric_str(\"123\") = " + Helpers.int_to_str(check1))
+    print("is_numeric_str(\"-456\") = " + Helpers.int_to_str(check2))
+    print("is_numeric_str(\"abc\") = " + Helpers.int_to_str(check3))
+
+    return 0
+  }
+}

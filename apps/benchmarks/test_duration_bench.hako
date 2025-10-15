@@ -1,0 +1,84 @@
+// 固定時間ベンチマーク実例テスト
+// sum_loop_simple.hakoを1秒間実行して何回できるか測定
+
+box TimerBox {
+    birth() {
+        // ExternCall経由でシステム時計使用
+    }
+
+    now_ms() {
+        // コンパイラが自動的にExternCall(nyrt.time.now_ms)に変換
+        return 0  // このreturnは無視される
+    }
+}
+
+box SumLoopBench {
+    birth() {
+        // 初期化処理なし
+    }
+
+    // sum_loop_simple.hakoのロジック
+    sum_range(n) {
+        local sum, i
+        sum = 0
+        i = 0
+        loop(i < n) {
+            sum = sum + i
+            i = i + 1
+        }
+        return sum
+    }
+
+    run_once() {
+        // 100000回のループ（sum_loop_simple.hakoと同じ）
+        return me.sum_range(100000)
+    }
+}
+
+static box Main {
+    main() {
+        local timer, bench
+        local start_time, end_time, current_time
+        local iterations, elapsed_ms
+        local duration_sec
+
+        timer = new TimerBox()
+        bench = new SumLoopBench()
+
+        duration_sec = 1  // 1秒間実行
+
+        start_time = timer.now_ms()
+        end_time = start_time + (duration_sec * 1000)
+
+        iterations = 0
+
+        print("=== 固定時間ベンチマーク: sum_loop (1秒間) ===")
+        print("Running...")
+
+        // 固定時間方式: end_timeまで繰り返し実行
+        current_time = timer.now_ms()
+        loop(current_time < end_time) {
+            bench.run_once()
+            iterations = iterations + 1
+            current_time = timer.now_ms()
+        }
+
+        elapsed_ms = current_time - start_time
+
+        print("=== 結果 ===")
+        print("Iterations: " + iterations)
+        print("Duration: " + elapsed_ms + " ms")
+
+        // ops/sec計算
+        local duration_sec_actual, ops_per_sec
+        duration_sec_actual = elapsed_ms / 1000
+        if duration_sec_actual > 0 {
+            ops_per_sec = iterations / duration_sec_actual
+        } else {
+            ops_per_sec = 0
+        }
+        print("Ops/sec: " + ops_per_sec)
+
+        return 0
+    }
+}

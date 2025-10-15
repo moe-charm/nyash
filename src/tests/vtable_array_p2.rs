@@ -1,10 +1,12 @@
 #[test]
 fn vtable_array_sort_reverse_slice() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
     };
+    use crate::mir::definitions::Callee;
+
     std::env::set_var("NYASH_ABI_VTABLE", "1");
 
     // sort: push 3,1,2 -> sort() -> get(0) == 1
@@ -19,11 +21,8 @@ fn vtable_array_sort_reverse_slice() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let c3 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -47,44 +46,16 @@ fn vtable_array_sort_reverse_slice() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![c3],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, c3], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![c1],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, c1], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![c2],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, c2], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "sort".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.sort/0".into())), args: vec![arr], effects: EffectMask::PURE });
     let idx0 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -95,14 +66,7 @@ fn vtable_array_sort_reverse_slice() {
     let got = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(got),
-            box_val: arr,
-            method: "get".into(),
-            args: vec![idx0],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(got), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.get/1".into())), args: vec![arr, idx0], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(got) });
@@ -124,11 +88,8 @@ fn vtable_array_sort_reverse_slice() {
     let a2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a2,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a2, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let i1 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -145,34 +106,13 @@ fn vtable_array_sort_reverse_slice() {
         });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "push".into(),
-            args: vec![i1],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a2, i1], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "push".into(),
-            args: vec![i2],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a2, i2], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "reverse".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.reverse/0".into())), args: vec![a2], effects: EffectMask::PURE });
     let z0 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -183,14 +123,7 @@ fn vtable_array_sort_reverse_slice() {
     let g2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(g2),
-            box_val: a2,
-            method: "get".into(),
-            args: vec![z0],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(g2), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.get/1".into())), args: vec![a2, z0], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(g2) });
@@ -212,11 +145,8 @@ fn vtable_array_sort_reverse_slice() {
     let a3 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a3,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a3, box_type: "ArrayBox".into(), args: vec![],
+                auto_birth: None });
     let sa = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
@@ -240,34 +170,13 @@ fn vtable_array_sort_reverse_slice() {
         });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![sa],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, sa], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![sb],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, sb], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![sc],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, sc], effects: EffectMask::PURE });
     let s0 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
@@ -285,25 +194,11 @@ fn vtable_array_sort_reverse_slice() {
     let sub = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(sub),
-            box_val: a3,
-            method: "slice".into(),
-            args: vec![s0, s2],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(sub), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.slice/2".into())), args: vec![a3, s0, s2], effects: EffectMask::PURE });
     let ln = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(ln),
-            box_val: sub,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(ln), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![sub], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(ln) });

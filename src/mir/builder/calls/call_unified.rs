@@ -13,19 +13,20 @@ use super::extern_calls;
 
 /// Check if unified call system is enabled
 pub fn is_unified_call_enabled() -> bool {
-    match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-        Some(s) if s == "0" || s == "false" || s == "off" => false,
-        _ => true, // default ON during development; explicit opt-out supported
-    }
+    // Unified call is the only allowed path (ExternCall retired)
+    true
 }
 
 /// Convert CallTarget to Callee
 /// Main translation layer between builder and MIR representations
-pub fn convert_target_to_callee(
+pub fn convert_target_to_callee<OriginLookup>(
     target: CallTarget,
-    value_origin_newbox: &std::collections::HashMap<ValueId, String>,
+    origin_lookup: OriginLookup,
     value_types: &std::collections::HashMap<ValueId, crate::mir::MirType>,
-) -> Result<Callee, String> {
+) -> Result<Callee, String>
+where
+    OriginLookup: Fn(ValueId) -> Option<String>,
+{
     match target {
         CallTarget::Global(name) => {
             // Check if it's a built-in function
@@ -43,7 +44,7 @@ pub fn convert_target_to_callee(
                 box_type.as_deref(),
                 method.as_str(),
                 receiver,
-                value_origin_newbox,
+                |vid| origin_lookup(vid),
                 value_types,
             );
             Ok(Callee::Method { box_name, method, receiver: Some(receiver), certainty })
@@ -69,6 +70,10 @@ pub fn convert_target_to_callee(
 
 /// Compute effects for a call based on its callee
 pub fn compute_call_effects(callee: &Callee) -> EffectMask {
+    // Phase‑in: try resolver when enabled; fallback to legacy logic
+    if let Some(eff) = crate::mir::builder::effects::resolve_effects_for_callee(callee) {
+        return eff;
+    }
     match callee {
         Callee::Global(name) => {
             match name.as_str() {
@@ -77,6 +82,11 @@ pub fn compute_call_effects(callee: &Callee) -> EffectMask {
                 "gc_collect" => EffectMask::IO.add(Effect::Alloc),
                 _ => EffectMask::IO,
             }
+        },
+        Callee::ModuleFunction(_name) => {
+            // Conservative default for user/module functions
+            // Assume they may read heap; refined by future inference
+            EffectMask::READ.add(Effect::ReadHeap)
         },
 
         Callee::Method { method, box_name, .. } => {

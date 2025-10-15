@@ -1,0 +1,270 @@
+// 🧬 Conway's Game of Life - Canvas版視覚化
+// セルラーオートマトンの美しい可視化
+
+print("🧬 === Conway's Game of Life - Canvas Edition ===")
+
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🔬 セルBox - 各セルが独立した生命体
+box CellBox {
+    init { alive, nextState, x, y }
+    
+    CellBox(posX, posY, initialState) {
+        me.alive = initialState
+        me.nextState = false
+        me.x = posX
+        me.y = posY
+    }
+    
+    setNextState(state) {
+        me.nextState = state
+    }
+    
+    update() {
+        me.alive = me.nextState
+    }
+    
+    isAlive() {
+        return me.alive
+    }
+    
+    draw(canvas, cellSize) {
+        color = "black"
+        if me.alive {
+            color = "lime"
+        }
+        
+        canvas.setFillStyle(color)
+        canvas.fillRect(me.x * cellSize, me.y * cellSize, cellSize, cellSize)
+        
+        // グリッド線
+        canvas.setStrokeStyle("gray")
+        canvas.strokeRect(me.x * cellSize, me.y * cellSize, cellSize, cellSize)
+    }
+}
+
+// 🌍 Game of Life世界Box
+box GameOfLifeBox {
+    init { grid, width, height, canvas, cellSize, generation }
+    
+    GameOfLifeBox(canvasId, gridWidth, gridHeight, pixelCellSize) {
+        me.width = gridWidth
+        me.height = gridHeight
+        me.cellSize = pixelCellSize
+        me.generation = 0
+        
+        // Canvas初期化
+        canvasWidth = gridWidth * pixelCellSize
+        canvasHeight = gridHeight * pixelCellSize
+        me.canvas = new WebCanvasBox(canvasId, canvasWidth, canvasHeight)
+        
+        // グリッド初期化
+        me.grid = new ArrayBox()
+        y = 0
+        loop (y < me.height) {
+            row = new ArrayBox()
+            x = 0
+            loop (x < me.width) {
+                cell = new CellBox(x, y, false)
+                row.add(cell)
+                x = x + 1
+            }
+            me.grid.add(row)
+            y = y + 1
+        }
+        
+        DEBUG.trackBox(me, "GameOfLifeWorld")
+    }
+    
+    // 指定位置のセルを取得
+    getCell(x, y) {
+        if x >= 0 and x < me.width and y >= 0 and y < me.height {
+            row = me.grid.get(y)
+            return row.get(x)
+        }
+        return new CellBox(-1, -1, false)  // 境界外は死んだセル
+    }
+    
+    // 近傍の生きているセル数をカウント
+    countLiveNeighbors(x, y) {
+        count = 0
+        
+        // 8近傍をチェック
+        dy = -1
+        loop (dy <= 1) {
+            dx = -1
+            loop (dx <= 1) {
+                if not (dx == 0 and dy == 0) {  // 自分自身は除外
+                    neighbor = me.getCell(x + dx, y + dy)
+                    if neighbor.isAlive() {
+                        count = count + 1
+                    }
+                }
+                dx = dx + 1
+            }
+            dy = dy + 1
+        }
+        
+        return count
+    }
+    
+    // Conway's Game of Lifeルールの適用
+    applyRules() {
+        // 次世代の状態を計算
+        y = 0
+        loop (y < me.height) {
+            x = 0
+            loop (x < me.width) {
+                cell = me.getCell(x, y)
+                liveNeighbors = me.countLiveNeighbors(x, y)
+                
+                newState = false
+                
+                if cell.isAlive() {
+                    // 生きているセルのルール
+                    if liveNeighbors == 2 or liveNeighbors == 3 {
+                        newState = true  // 生存
+                    }
+                    // それ以外は死滅（過疎・過密）
+                } else {
+                    // 死んでいるセルのルール
+                    if liveNeighbors == 3 {
+                        newState = true  // 誕生
+                    }
+                }
+                
+                cell.setNextState(newState)
+                x = x + 1
+            }
+            y = y + 1
+        }
+        
+        // 状態を一斉更新
+        y = 0
+        loop (y < me.height) {
+            x = 0
+            loop (x < me.width) {
+                cell = me.getCell(x, y)
+                cell.update()
+                x = x + 1
+            }
+            y = y + 1
+        }
+        
+        me.generation = me.generation + 1
+    }
+    
+    // パターン設定
+    setPattern(pattern) {
+        if pattern == "glider" {
+            // グライダーパターン
+            me.getCell(1, 0).alive = true
+            me.getCell(2, 1).alive = true
+            me.getCell(0, 2).alive = true
+            me.getCell(1, 2).alive = true
+            me.getCell(2, 2).alive = true
+        }
+        
+        if pattern == "blinker" {
+            // 点滅パターン
+            centerX = me.width / 2
+            centerY = me.height / 2
+            me.getCell(centerX - 1, centerY).alive = true
+            me.getCell(centerX, centerY).alive = true
+            me.getCell(centerX + 1, centerY).alive = true
+        }
+        
+        if pattern == "random" {
+            // ランダムパターン
+            random = new RandomBox()
+            y = 0
+            loop (y < me.height) {
+                x = 0
+                loop (x < me.width) {
+                    if random.float() < 0.3 {  // 30%の確率で生存
+                        me.getCell(x, y).alive = true
+                    }
+                    x = x + 1
+                }
+                y = y + 1
+            }
+        }
+    }
+    
+    // 描画
+    render() {
+        // 背景クリア
+        me.canvas.setFillStyle("white")
+        me.canvas.fillRect(0, 0, me.canvas.width, me.canvas.height)
+        
+        // 全セル描画
+        y = 0
+        loop (y < me.height) {
+            x = 0
+            loop (x < me.width) {
+                cell = me.getCell(x, y)
+                cell.draw(me.canvas, me.cellSize)
+                x = x + 1
+            }
+            y = y + 1
+        }
+        
+        // 情報表示
+        me.canvas.setFillStyle("blue")
+        me.canvas.fillText("Generation: " + me.generation, 10, 20)
+        me.canvas.fillText("Conway's Game of Life", 10, 40)
+    }
+    
+    // 生きているセルの総数
+    countAliveCells() {
+        count = 0
+        y = 0
+        loop (y < me.height) {
+            x = 0
+            loop (x < me.width) {
+                if me.getCell(x, y).isAlive() {
+                    count = count + 1
+                }
+                x = x + 1
+            }
+            y = y + 1
+        }
+        return count
+    }
+}
+
+// 🚀 Game of Life開始！
+print("Creating Conway's Game of Life world...")
+game = new GameOfLifeBox("life-canvas", 40, 30, 10)
+
+// パターン設定
+print("🧬 Setting up initial patterns...")
+game.setPattern("random")
+
+// シミュレーション実行
+print("🌱 Running life simulation...")
+generation = 0
+loop (generation < 50) {
+    game.render()
+    aliveCount = game.countAliveCells()
+    
+    if generation % 10 == 0 {
+        print("Generation " + generation + ": " + aliveCount + " cells alive")
+    }
+    
+    game.applyRules()
+    generation = generation + 1
+}
+
+// 最終統計
+finalAlive = game.countAliveCells()
+print("🏁 Simulation complete!")
+print("Final generation: " + game.generation)
+print("Final alive cells: " + finalAlive)
+print(DEBUG.memoryReport())
+
+print("✨ Conway's Game of Life - Everything is Box!")
+print("🔬 Each cell is an independent CellBox")
+print("🌍 The world itself is a GameOfLifeBox")
+print("🎨 Beautiful visualization through WebCanvasBox")

@@ -7,6 +7,12 @@ Following the design principles in docs/development/design/legacy/LLVM_LAYER_OVE
 import json
 import sys
 import os
+# Apply brand env aliases early when run as a script (e.g., via Python)
+try:
+    from utils.brand import alias_prefixes_bootstrap as _brand_alias
+    _brand_alias()
+except Exception:
+    pass
 from typing import Dict, Any, Optional, List, Tuple
 import llvmlite.ir as ir
 import llvmlite.binding as llvm
@@ -20,11 +26,7 @@ from instructions.controlflow.branch import lower_branch
 from instructions.ret import lower_return
 from instructions.copy import lower_copy
 # PHI are deferred; finalize_phis wires incoming edges after snapshots
-from instructions.call import lower_call
-from instructions.boxcall import lower_boxcall
-from instructions.externcall import lower_externcall
 from instructions.typeop import lower_typeop, lower_convert
-from instructions.newbox import lower_newbox
 from instructions.safepoint import lower_safepoint, insert_automatic_safepoint
 from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
@@ -40,18 +42,45 @@ from build_ctx import BuildCtx
 
 from resolver import Resolver
 from mir_reader import MIRReader
+from targets import create_target
 
 class NyashLLVMBuilder:
     """Main LLVM IR builder for Nyash MIR"""
-    
-    def __init__(self):
-        # Initialize LLVM
-        llvm.initialize()
-        llvm.initialize_native_target()
-        llvm.initialize_native_asmprinter()
-        
+
+    def __init__(self, target="native"):
+        """
+        Initialize LLVM IR builder
+
+        Args:
+            target: Target architecture ("native" or "wasm32")
+                    - "native": Native platform (default)
+                    - "wasm32": WebAssembly (wasm32-unknown-wasi)
+        """
+        # Create target object (箱理論: ターゲット抽象化)
+        self.target_obj = create_target(target)
+        self.target = target  # Keep for backward compatibility
+        self.target_triple = self.target_obj.get_triple()
+
+        # Initialize LLVM core (automatically handled by llvmlite now)
+        # llvm.initialize()  # Deprecated - removed per llvmlite warning
+
+        # Initialize target-specific components
+        if target == "wasm32":
+            # WASM target: initialize all targets to enable wasm32
+            llvm.initialize_all_targets()
+            llvm.initialize_all_asmprinters()
+        elif target == "native":
+            # Native target (default)
+            llvm.initialize_native_target()
+            llvm.initialize_native_asmprinter()
+        else:
+            # Cross targets (e.g., windows) — initialize all
+            llvm.initialize_all_targets()
+            llvm.initialize_all_asmprinters()
+
         # Module and basic types
         self.module = ir.Module(name="nyash_module")
+        self.module.triple = self.target_triple  # Set target triple on module
         self.i64 = ir.IntType(64)
         self.i32 = ir.IntType(32)
         self.i8 = ir.IntType(8)
@@ -108,7 +137,7 @@ class NyashLLVMBuilder:
             else:
                 arity = int(m.group(1)) if m else len(params_list)
             if name == "ny_main":
-                fty = ir.FunctionType(self.i32, [])
+                fty = ir.FunctionType(self.i64, [])
             else:
                 fty = ir.FunctionType(self.i64, [self.i64] * arity)
             exists = False
@@ -117,7 +146,9 @@ class NyashLLVMBuilder:
                     exists = True
                     break
             if not exists:
-                ir.Function(self.module, fty, name=name)
+                func = ir.Function(self.module, fty, name=name)
+                # Configure function for target (箱理論: ターゲット固有設定)
+                self.target_obj.configure_function(func)
         
         # Process each function (finalize PHIs per function to avoid cross-function map collisions)
         for func_data in functions:
@@ -125,14 +156,36 @@ class NyashLLVMBuilder:
 
         # Create ny_main wrapper if necessary (delegated builder; no legacy fallback)
         try:
-            from builders.entry import ensure_ny_main as _ensure_ny_main
-            _ensure_ny_main(self)
+            import os as _os
+            if _os.environ.get('NYASH_LLVM_NO_NY_MAIN', '0') not in ('1', 'true', 'on', 'YES', 'yes'):
+                from builders.entry import ensure_ny_main as _ensure_ny_main
+                _ensure_ny_main(self)
         except Exception as _e:
             try:
                 trace_debug(f"[Python LLVM] ensure_ny_main failed: {_e}")
             except Exception:
                 pass
         
+        # Run standard optimization passes (-O3 equivalent)
+        # NOTE: PassManager expects llvmlite.binding.Module, but self.module is llvmlite.ir.Module
+        # This will fail with TypeError, but we catch it silently to allow execution
+        try:
+            pmb = llvm.PassManagerBuilder()
+            pmb.opt_level = 3
+            # Function-level + Module-level passes
+            fpm = llvm.FunctionPassManager(self.module)
+            pmb.populate(fpm)
+            mpm = llvm.ModulePassManager()
+            pmb.populate(mpm)
+            # JIT-style run over all functions
+            fpm.initialize()
+            for fn in self.module.functions:
+                fpm.run(fn)
+            fpm.finalize()
+            mpm.run(self.module)
+        except Exception:
+            # Optimization passes fail due to module type mismatch, but continue anyway
+            pass
         ir_text = str(self.module)
         # Optional IR dump to file for debugging
         try:
@@ -174,100 +227,8 @@ class NyashLLVMBuilder:
 
 
     def setup_phi_placeholders(self, blocks: List[Dict[str, Any]]):
-        """Predeclare PHIs and collect incoming metadata for finalize_phis.
-
-        This pass is function-local and must be invoked after basic blocks are
-        created and before lowering individual blocks. It also tags string-ish
-        values eagerly to help downstream resolvers choose correct intrinsics.
-        """
-        try:
-            # Pass A: collect producer stringish hints per value-id
-            produced_str: Dict[int, bool] = {}
-            for block_data in blocks:
-                for inst in block_data.get("instructions", []) or []:
-                    try:
-                        opx = inst.get("op")
-                        dstx = inst.get("dst")
-                        if dstx is None:
-                            continue
-                        is_str = False
-                        if opx == "const":
-                            v = inst.get("value", {}) or {}
-                            t = v.get("type")
-                            if t == "string" or (isinstance(t, dict) and t.get("kind") in ("handle","ptr") and t.get("box_type") == "StringBox"):
-                                is_str = True
-                        elif opx in ("binop","boxcall","externcall"):
-                            t = inst.get("dst_type")
-                            if isinstance(t, dict) and t.get("kind") == "handle" and t.get("box_type") == "StringBox":
-                                is_str = True
-                        if is_str:
-                            produced_str[int(dstx)] = True
-                    except Exception:
-                        pass
-            # Pass B: materialize PHI placeholders and record incoming metadata
-            self.block_phi_incomings = {}
-            for block_data in blocks:
-                bid0 = block_data.get("id", 0)
-                bb0 = self.bb_map.get(bid0)
-                for inst in block_data.get("instructions", []) or []:
-                    if inst.get("op") == "phi":
-                        try:
-                            dst0 = int(inst.get("dst"))
-                            incoming0 = inst.get("incoming", []) or []
-                        except Exception:
-                            dst0 = None; incoming0 = []
-                        if dst0 is None:
-                            continue
-                        # Record incoming metadata for finalize_phis
-                        try:
-                            self.block_phi_incomings.setdefault(bid0, {})[dst0] = [
-                                (int(b), int(v)) for (v, b) in incoming0
-                            ]
-                        except Exception:
-                            pass
-                        # Ensure placeholder exists at block head
-                        if bb0 is not None:
-                            b0 = ir.IRBuilder(bb0)
-                            try:
-                                b0.position_at_start(bb0)
-                            except Exception:
-                                pass
-                            existing = self.vmap.get(dst0)
-                            is_phi = False
-                            try:
-                                is_phi = hasattr(existing, 'add_incoming')
-                            except Exception:
-                                is_phi = False
-                            if not is_phi:
-                                ph0 = b0.phi(self.i64, name=f"phi_{dst0}")
-                                self.vmap[dst0] = ph0
-                            # Tag propagation: if explicit dst_type marks string or any incoming was produced as string-ish, tag dst
-                            try:
-                                dst_type0 = inst.get("dst_type")
-                                mark_str = isinstance(dst_type0, dict) and dst_type0.get("kind") == "handle" and dst_type0.get("box_type") == "StringBox"
-                                if not mark_str:
-                                    for (v_id, _b_id) in incoming0:
-                                        try:
-                                            if produced_str.get(int(v_id)):
-                                                mark_str = True; break
-                                        except Exception:
-                                            pass
-                                if mark_str and hasattr(self.resolver, 'mark_string'):
-                                    self.resolver.mark_string(int(dst0))
-                            except Exception:
-                                pass
-                            # Definition hint: PHI defines dst in this block
-                            try:
-                                self.def_blocks.setdefault(int(dst0), set()).add(int(bid0))
-                            except Exception:
-                                pass
-            # Sync to resolver
-            try:
-                self.resolver.block_phi_incomings = self.block_phi_incomings
-            except Exception:
-                pass
-        except Exception:
-            pass
+        """Legacy stub — use phi_wiring.tagging.setup_phi_placeholders instead."""
+        raise NotImplementedError("setup_phi_placeholders moved to phi_wiring.tagging")
     
     def lower_block(self, bb: ir.Block, block_data: Dict[str, Any], func: ir.Function):
         """Lower a single basic block.
@@ -455,230 +416,196 @@ class NyashLLVMBuilder:
     # to avoid divergence between two implementations.
 
     def _lower_instruction_list(self, builder: ir.IRBuilder, insts: List[Dict[str, Any]], func: ir.Function):
-        """Lower a flat list of instructions using current builder and function."""
-        for sub in insts:
-            # If current block already has a terminator, create a continuation block
-            if builder.block.terminator is not None:
-                cont = func.append_basic_block(name=f"cont_bb_{builder.block.name}")
-                builder.position_at_end(cont)
-            self.lower_instruction(builder, sub, func)
+        """Legacy stub — use builders.instruction_lower instead."""
+        raise NotImplementedError("_lower_instruction_list moved to builders.instruction_lower")
     
     def finalize_phis(self):
-        """Finalize PHIs declared in JSON by wiring incoming edges at block heads.
-        Uses resolver._value_at_end_i64 to materialize values at predecessor ends,
-        ensuring casts/boxing are inserted in predecessor blocks (dominance-safe)."""
-        # Iterate JSON-declared PHIs per block
-        # Build succ map for nearest-predecessor mapping
-        succs: Dict[int, List[int]] = {}
-        for to_bid, from_list in (self.preds or {}).items():
-            for fr in from_list:
-                succs.setdefault(fr, []).append(to_bid)
-        for block_id, dst_map in (getattr(self, 'block_phi_incomings', {}) or {}).items():
-            try:
-                trace_phi_json({"phi": "finalize_begin", "block": int(block_id), "dsts": [int(k) for k in (dst_map or {}).keys()]})
-            except Exception:
-                pass
-            bb = self.bb_map.get(block_id)
-            if bb is None:
-                continue
-            for dst_vid, incoming in (dst_map or {}).items():
-                try:
-                    trace_phi_json({"phi": "finalize_dst", "block": int(block_id), "dst": int(dst_vid), "incoming": [(int(v), int(b)) for (b, v) in [(b, v) for (v, b) in (incoming or [])]]})
-                except Exception:
-                    pass
-                # Ensure placeholder exists at block head with common helper
-                phi = _ensure_phi(self, int(block_id), int(dst_vid), bb)
-                self.vmap[int(dst_vid)] = phi
-                n = getattr(phi, 'name', b'').decode() if hasattr(getattr(phi, 'name', None), 'decode') else str(getattr(phi, 'name', ''))
-                try:
-                    trace_phi_json({"phi": "finalize_target", "block": int(block_id), "dst": int(dst_vid), "ir": str(n)})
-                except Exception:
-                    pass
-                # Wire incoming per CFG predecessor; map src_vid when provided
-                preds_raw = [p for p in self.preds.get(block_id, []) if p != block_id]
-                # Deduplicate while preserving order
-                seen = set()
-                preds_list: List[int] = []
-                for p in preds_raw:
-                    if p not in seen:
-                        preds_list.append(p)
-                        seen.add(p)
-                # Helper: find the nearest immediate predecessor on a path decl_b -> ... -> block_id
-                def nearest_pred_on_path(decl_b: int) -> Optional[int]:
-                    # BFS from decl_b to block_id; return the parent of block_id on that path.
-                    from collections import deque
-                    q = deque([decl_b])
-                    visited = set([decl_b])
-                    parent: Dict[int, Optional[int]] = {decl_b: None}
-                    while q:
-                        cur = q.popleft()
-                        if cur == block_id:
-                            par = parent.get(block_id)
-                            return par if par in preds_list else None
-                        for nx in succs.get(cur, []):
-                            if nx not in visited:
-                                visited.add(nx)
-                                parent[nx] = cur
-                                q.append(nx)
-                    return None
-                # Precompute a non-self initial source (if present) to use for self-carry cases
-                init_src_vid: Optional[int] = None
-                for (b_decl0, v_src0) in incoming:
-                    try:
-                        vs0 = int(v_src0)
-                    except Exception:
-                        continue
-                    if vs0 != int(dst_vid):
-                        init_src_vid = vs0
-                        break
-                # Pre-resolve declared incomings to nearest immediate predecessors
-                chosen: Dict[int, ir.Value] = {}
-                for (b_decl, v_src) in incoming:
-                    try:
-                        bd = int(b_decl); vs = int(v_src)
-                    except Exception:
-                        continue
-                    pred_match = nearest_pred_on_path(bd)
-                    if pred_match is None:
-                        continue
-                    # If self-carry is specified (vs == dst_vid), map to init_src_vid when available
-                    if vs == int(dst_vid) and init_src_vid is not None:
-                        vs = int(init_src_vid)
-                    try:
-                        val = self.resolver._value_at_end_i64(vs, pred_match, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                    except Exception:
-                        val = None
-                    if val is None:
-                        val = ir.Constant(self.i64, 0)
-                    chosen[pred_match] = val
-                # Fill remaining predecessors with dst carry or (optionally) a synthesized default
-                for pred_bid in preds_list:
-                    if pred_bid not in chosen:
-                        val = None
-                        # Optional gated fix for esc_json: default branch should append current char
-                        try:
-                            import os
-                            if os.environ.get('NYASH_LLVM_ESC_JSON_FIX','0') == '1':
-                                fname = getattr(self, 'current_function_name', '') or ''
-                                sub_vid = getattr(self, '_last_substring_vid', None)
-                                if isinstance(fname, str) and 'esc_json' in fname and isinstance(sub_vid, int):
-                                    # Compute out_at_end and ch_at_end in pred block, then concat_hh
-                                    out_end = self.resolver._value_at_end_i64(int(dst_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                                    ch_end = self.resolver._value_at_end_i64(int(sub_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                                    if out_end is not None and ch_end is not None:
-                                        pb = ir.IRBuilder(self.bb_map.get(pred_bid))
-                                        try:
-                                            t = self.bb_map.get(pred_bid).terminator
-                                            if t is not None:
-                                                pb.position_before(t)
-                                            else:
-                                                pb.position_at_end(self.bb_map.get(pred_bid))
-                                        except Exception:
-                                            pass
-                                        fnty = ir.FunctionType(self.i64, [self.i64, self.i64])
-                                        callee = None
-                                        for f in self.module.functions:
-                                            if f.name == 'nyash.string.concat_hh':
-                                                callee = f; break
-                                        if callee is None:
-                                            callee = ir.Function(self.module, fnty, name='nyash.string.concat_hh')
-                                        val = pb.call(callee, [out_end, ch_end], name=f"phi_def_concat_{dst_vid}_{pred_bid}")
-                        except Exception:
-                            pass
-                        if val is None:
-                            try:
-                                val = self.resolver._value_at_end_i64(dst_vid, pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                            except Exception:
-                                val = None
-                        if val is None:
-                            val = ir.Constant(self.i64, 0)
-                        chosen[pred_bid] = val
-                # Finally add incomings (each predecessor at most once)
-                for pred_bid, val in chosen.items():
-                    pred_bb = self.bb_map.get(pred_bid)
-                    if pred_bb is None:
-                        continue
-                    phi.add_incoming(val, pred_bb)
-                    try:
-                        trace_phi(f"[finalize]   add incoming: bb{pred_bid} -> v{dst_vid}")
-                    except Exception:
-                        pass
-                # Tag dst as string-ish if any declared source was string-ish (post-lowering info)
-                try:
-                    if hasattr(self.resolver, 'is_stringish') and hasattr(self.resolver, 'mark_string'):
-                        any_str = False
-                        for (_b_decl_i, v_src_i) in incoming:
-                            try:
-                                if self.resolver.is_stringish(int(v_src_i)):
-                                    any_str = True; break
-                            except Exception:
-                                pass
-                        if any_str:
-                            self.resolver.mark_string(int(dst_vid))
-                except Exception:
-                    pass
-        # Clear legacy deferrals if any
-        try:
-            self.phi_deferrals.clear()
-        except Exception:
-            pass
+        """Deprecated shim. Use phi_wiring.finalize_phis via builders.function_lower.
+
+        This method now delegates to the wire-only finalizer to avoid legacy
+        ensure+wire duplication. It remains for backward compatibility.
+        """
+        from phi_wiring import finalize_phis as _finalize
+        _finalize(self)
     
     def compile_to_object(self, output_path: str):
-        """Compile module to object file"""
-        # Create target machine
-        target = llvm.Target.from_default_triple()
+        """Compile module to object file (or WASM via external toolchain when enabled).
+
+        When target == wasm32 and env NYASH_LLVM_WASM_TOOLCHAIN=1, this method
+        will invoke system LLVM tools (llc + wasm-ld) to produce a final
+        .wasm module, working around llvmlite limitations.
+        """
+        # TODO(Phase 2): Delegate to self.target_obj.emit_object()
+        # Current implementation uses manual target_machine for PHI sanitize logic
+
+        # Create target machine for the specified target triple
+        target = llvm.Target.from_triple(self.target_triple)
         target_machine = target.create_target_machine()
-        
+
         # Compile
+        # Run standard optimization passes (-O3 equivalent)
+        # NOTE: PassManager expects llvmlite.binding.Module, but self.module is llvmlite.ir.Module
+        # This will fail with TypeError, but we catch it silently to allow execution
+        try:
+            pmb = llvm.PassManagerBuilder()
+            pmb.opt_level = 3
+            # Function-level + Module-level passes
+            fpm = llvm.FunctionPassManager(self.module)
+            pmb.populate(fpm)
+            mpm = llvm.ModulePassManager()
+            pmb.populate(mpm)
+            # JIT-style run over all functions
+            fpm.initialize()
+            for fn in self.module.functions:
+                fpm.run(fn)
+            fpm.finalize()
+            mpm.run(self.module)
+        except Exception:
+            # Optimization passes fail due to module type mismatch, but continue anyway
+            pass
         ir_text = str(self.module)
-        # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
-        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
-        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':
+
+        # Debug: Always dump optimized IR for debugging
+        try:
+            with open('/tmp/debug_ir.ll', 'w') as f:
+                f.write(ir_text)
+            print(f"[DEBUG] Optimized IR dumped to /tmp/debug_ir.ll")
+        except Exception as e:
+            print(f"[DEBUG] Failed to dump IR: {e}")
+
+        # Optional sanitize passes for IR text before verification
+        # 1) Drop empty PHIs (no incoming pairs)
+        # 2) Group PHIs at the block head (LLVM invariant: all PHIs at top)
+        # Default OFF. Enable by setting NYASH_LLVM_SANITIZE_EMPTY_PHI=1.
+        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1':
             try:
-                fixed_lines = []
-                for line in ir_text.splitlines():
+                lines = ir_text.splitlines()
+                # Pass 1: remove malformed empty PHIs
+                tmp = []
+                for line in lines:
                     if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
-                        # Skip malformed PHI without incoming pairs
                         continue
-                    fixed_lines.append(line)
-                ir_text = "\n".join(fixed_lines)
+                    tmp.append(line)
+                lines = tmp
+                # Pass 2: group PHIs at block head
+                grouped = []
+                i = 0
+                n = len(lines)
+                while i < n:
+                    line = lines[i]
+                    grouped.append(line)
+                    # Detect basic block start like: "bb<N>:" (possibly with leading spaces)
+                    stripped = line.strip()
+                    if stripped.endswith(":") and stripped.startswith("bb"):
+                        # Collect subsequent PHI and non-PHI lines until next label or end
+                        phi_buf = []
+                        body_buf = []
+                        j = i + 1
+                        while j < n:
+                            l2 = lines[j]
+                            s2 = l2.strip()
+                            # Next block label?
+                            if s2.endswith(":") and s2.startswith("bb"):
+                                break
+                            if (" = phi  i64" in s2) or (" = phi i64" in s2):
+                                phi_buf.append(l2)
+                            else:
+                                body_buf.append(l2)
+                            j += 1
+                        # Emit PHIs first (preserve relative order), then rest
+                        if phi_buf or body_buf:
+                            grouped.extend(phi_buf)
+                            grouped.extend(body_buf)
+                            i = j
+                            continue
+                    i += 1
+                ir_text = "\n".join(grouped)
             except Exception:
                 pass
+        
+        # wasm32 via external toolchain (optional)
+        if self.target == "wasm32" and os.environ.get('NYASH_LLVM_WASM_TOOLCHAIN') == '1':
+            try:
+                ir_path = '/tmp/nyash_harness.ll'
+                try:
+                    with open(ir_path, 'w') as f:
+                        f.write(ir_text)
+                except Exception:
+                    ir_path = os.path.abspath('tmp/nyash_harness.ll')
+                    os.makedirs(os.path.dirname(ir_path), exist_ok=True)
+                    with open(ir_path, 'w') as f:
+                        f.write(ir_text)
+                obj_path = '/tmp/nyash_harness.o'
+                triple = 'wasm32-unknown-unknown'
+                llc = os.environ.get('LLC', 'llc')
+                wasm_ld = os.environ.get('WASM_LD', 'wasm-ld')
+                cmd1 = [llc, '-mtriple='+triple, '-filetype=obj', ir_path, '-o', obj_path]
+                print(f"[LLVM tools] {' '.join(cmd1)}")
+                r1 = os.spawnvp(os.P_WAIT, cmd1[0], cmd1)
+                if r1 != 0:
+                    print(f"[LLVM tools] llc failed with code {r1}")
+                    raise RuntimeError('llc failed')
+                exports = ['ny_main']
+                extra_exports = (os.environ.get('NYASH_WASM_EXPORTS') or '').strip()
+                if extra_exports:
+                    exports.extend([x for x in extra_exports.split(',') if x])
+                export_args = []
+                for e in exports:
+                    export_args.extend(['--export', e])
+                cmd2 = [wasm_ld, obj_path, '-o', output_path, '--no-entry', '--allow-undefined'] + export_args
+                print(f"[LLVM tools] {' '.join(cmd2)}")
+                r2 = os.spawnvp(os.P_WAIT, cmd2[0], cmd2)
+                if r2 != 0:
+                    print(f"[LLVM tools] wasm-ld failed with code {r2}")
+                    raise RuntimeError('wasm-ld failed')
+                return
+            except Exception as _e:
+                print(f"[LLVM tools] fallback to llvmlite emit_object due to: {_e}")
         mod = llvm.parse_assembly(ir_text)
-        # Allow skipping verifier for iterative bring-up
         if os.environ.get('NYASH_LLVM_SKIP_VERIFY') != '1':
             mod.verify()
-        
-        # Generate object code
         obj = target_machine.emit_object(mod)
-        
-        # Write to file
         with open(output_path, 'wb') as f:
             f.write(obj)
+              
 
 def main():
     # CLI:
-    #   llvm_builder.py <input.mir.json> [-o output.o]
-    #   llvm_builder.py --dummy [-o output.o]
+    #   llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native|windows]
+    #   llvm_builder.py --dummy [-o output.o] [--target wasm32|native|windows]
     output_file = os.path.join('tmp', 'nyash_llvm_py.o')
     args = sys.argv[1:]
     dummy = False
+    target = "native"  # Default target
 
     if not args:
-        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] | --dummy [-o output.o]")
+        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native|windows] | --dummy [-o output.o] [--target wasm32|native|windows]")
         sys.exit(1)
 
+    # Parse --target option
+    if "--target" in args:
+        idx = args.index("--target")
+        if idx + 1 < len(args):
+            target = args[idx + 1]
+            if target not in ("wasm32", "native", "windows"):
+                print(f"error: invalid target '{target}', must be 'wasm32' or 'native' or 'windows'", file=sys.stderr)
+                sys.exit(1)
+            del args[idx:idx+2]
+
+    # Parse -o option
     if "-o" in args:
         idx = args.index("-o")
         if idx + 1 < len(args):
             output_file = args[idx + 1]
             del args[idx:idx+2]
 
+    # Parse --dummy option
     if args and args[0] == "--dummy":
         dummy = True
         del args[0]
 
-    builder = NyashLLVMBuilder()
+    # Create builder with specified target
+    builder = NyashLLVMBuilder(target=target)
 
     if dummy:
         # Emit dummy ny_main

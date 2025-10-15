@@ -42,7 +42,7 @@ static box ControlFlowBuilder {
     local normals = []
     local default_arm = null
     local i = 0
-    loop(i < arms.length()) {
+    loop(i < arms.size()) {
       local a = arms.get(i)
       if a.cond_json == PT.default() {
         default_arm = a
@@ -60,7 +60,7 @@ static box ControlFlowBuilder {
 
     // 末尾から畳み込んで If 連鎖を組み立てる
     local chain = null
-    i = normals.length() - 1
+    i = normals.size() - 1
     loop(i >= 0) {
       local a = normals.get(i)
       local cond_all = cond_fuse(a.cond_json, a.guard_json)

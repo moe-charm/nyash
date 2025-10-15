@@ -1,0 +1,67 @@
+// test_compare_bug.hako — Minimal test case for comparison bug investigation
+// Phase 1: Simple comparison tests
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== Phase 1: Basic Comparison Tests ===")
+
+    // Test 1.1: Direct literal comparison
+    print("\nTest 1.1: Direct literal comparison (0 != 0)")
+    local x = 0
+    if x != 0 {
+      print("[FAIL] x=0 but (x != 0) is true!")
+      return 1
+    }
+    print("[PASS] x=0 and (x != 0) is false")
+
+    // Test 1.2: Variable assignment comparison
+    print("\nTest 1.2: Variable assignment comparison")
+    local y = 0
+    local z = 0
+    if y != z {
+      print("[FAIL] y=0, z=0 but (y != z) is true!")
+      return 1
+    }
+    print("[PASS] y=0, z=0 and (y != z) is false")
+
+    // Test 1.3: Comparison with string conversion
+    print("\nTest 1.3: Comparison with string conversion")
+    local a = 0
+    local str_a = StringHelpers.int_to_str(a)
+    print("Value: " + str_a)
+    if a != 0 {
+      print("[FAIL] a=0 (str=" + str_a + ") but (a != 0) is true!")
+      return 1
+    }
+    print("[PASS] a=0 and comparison works")
+
+    // Test 1.4: Equality comparison (opposite direction)
+    print("\nTest 1.4: Equality comparison (== instead of !=)")
+    local b = 0
+    if b == 0 {
+      print("[PASS] b=0 and (b == 0) is true")
+    }
+    if b == 0 == false {
+      print("[FAIL] b=0 but (b == 0) is false!")
+      return 1
+    }
+
+    // Test 1.5: Nested condition
+    print("\nTest 1.5: Nested condition with comparison")
+    local c = 0
+    local fail = 0
+    if c != 0 {
+      fail = 1
+    }
+    if fail != 0 {
+      print("[FAIL] c=0 but comparison triggered")
+      return 1
+    }
+    print("[PASS] Nested condition works")
+
+    print("\n✅ All Phase 1 tests PASSED!")
+    return 0
+  }
+}

@@ -1,6 +1,6 @@
 // yyjson置き換えテスト - 既存APIとの互換性確認
 
-using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+using "apps/lib/json_native/parser/parser.hako" as JsonParserUtils
 
 // 🔄 既存JsonDocBox API互換テスト
 static box JsonDocBoxCompatTest {
@@ -97,7 +97,7 @@ static box JsonDocBoxCompatTest {
         examples.push("{\"operation\":\"add\",\"left\":1,\"right\":2}")
         
         local i = 0
-        loop(i < examples.length()) {
+        loop(i < examples.size()) {
             local json = examples.get(i)
             
             print("Testing: " + json)
@@ -126,7 +126,7 @@ static box JsonDocBoxCompatTest {
         error_cases.push("{\"key\": \"value\",}") // 末尾カンマ
         
         local i = 0
-        loop(i < error_cases.length()) {
+        loop(i < error_cases.size()) {
             local invalid_json = error_cases.get(i)
             
             print("Testing error case: " + invalid_json)
@@ -165,12 +165,12 @@ static box JsonDocBoxCompatTest {
         // 大きなJSON
         local large_json = this.generate_large_json()
         print("\nLarge JSON test:")
-        print("  Size: " + large_json.length() + " characters")
+        print("  Size: " + large_json.size() + " characters")
         
         local large_result = JsonParserUtils.parse_json(large_json)
         if large_result != null {
             print("  ✅ Large JSON parsed successfully")
-            print("  Result size: " + large_result.stringify().length() + " characters")
+            print("  Result size: " + large_result.stringify().size() + " characters")
         } else {
             print("  ❌ Large JSON parsing failed")
         }
@@ -244,7 +244,7 @@ static box ReplacementVerification {
         
         local passed = 0
         local i = 0
-        loop(i < tests.length()) {
+        loop(i < tests.size()) {
             local result = JsonParserUtils.parse_json(tests.get(i))
             if result != null {
                 passed = passed + 1
@@ -252,7 +252,7 @@ static box ReplacementVerification {
             i = i + 1
         }
         
-        return (passed * 100) / tests.length()
+        return (passed * 100) / tests.size()
     }
     
     check_accuracy() {
@@ -264,7 +264,7 @@ static box ReplacementVerification {
         
         local passed = 0
         local i = 0
-        loop(i < tests.length()) {
+        loop(i < tests.size()) {
             local result = JsonParserUtils.roundtrip_test(tests.get(i))
             if result != null {
                 passed = passed + 1
@@ -272,7 +272,7 @@ static box ReplacementVerification {
             i = i + 1
         }
         
-        return (passed * 100) / tests.length()
+        return (passed * 100) / tests.size()
     }
     
     check_compatibility() {

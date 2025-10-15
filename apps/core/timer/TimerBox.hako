@@ -1,0 +1,7 @@
+// apps/core/timer/TimerBox.hako — minimal static timer facade
+static box TimerBox {
+  now_ms() {
+    local env = 0
+    return env.nyrt.time.now_ms()
+  }
+}

@@ -1,0 +1,18 @@
+// AOT Python eval with code string - simplest possible
+static box Main {
+  init { py, code, result }
+  
+  main() {
+    // Create Python runtime
+    me.py = new PyRuntimeBox()
+    
+    // Create code string
+    me.code = new StringBox("1 + 2 + 3")
+    
+    // Eval the code
+    me.result = me.py.eval(me.code)
+    
+    // Return the result (should be 6)
+    return me.result
+  }
+}

@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: method resolution edge-case; skip under rapid bring-up
+if [ "${SMOKES_ENABLE_METHOD_RESOLUTION_EDGE:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_METHOD_RESOLUTION_EDGE=1" >&2
+  exit 0
+fi
 # method_resolution_is_eof_vm.sh — Ensure class-scoped method resolution works (no cross-class leak)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"

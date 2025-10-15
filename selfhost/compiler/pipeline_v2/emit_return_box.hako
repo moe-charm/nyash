@@ -1,0 +1,21 @@
+// EmitReturnBox — return(Int) の最小 MIR(JSON v0) 生成
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+
+static box EmitReturnBox {
+  emit_return_int(v) { return EmitReturnBox.emit_return_int2(v, 0) }
+
+  emit_return_int2(v, trace) {
+    // dev-trace (minimal, env-gate想定): trace==1 の時のみ出力
+    if trace == 1 { print("[emit] return v=" + v) }
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, v)
+      |> MirJsonBuilderMin.add_ret(1)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitReturnStub { main(args) { return 0 } }

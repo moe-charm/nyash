@@ -1,9 +1,0 @@
-static box Main {
-  main(args) {
-    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
-    local key = "\"expression\":{"
-    local pos = json.indexOf(key)
-    print(pos)
-    return 0
-  }
-}

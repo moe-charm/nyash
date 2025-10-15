@@ -1,0 +1,24 @@
+// guard_box.hako — GuardBox
+// 責務: 反復処理に上限を設け、無限ループをFail‑Fastに近い形で防止
+// 非責務: エラー出力のポリシー決定（呼び出し側で扱う）
+
+box GuardBox {
+  _name: StringBox
+  _max: IntegerBox
+  _cur: IntegerBox
+
+  birth(name, max_iter) {
+    me._name = name
+    me._max = max_iter
+    me._cur = 0
+  }
+
+  reset() { me._cur = 0 }
+
+  // 正常:1, 上限超:0 を返す（呼び出し側で中断）
+  tick() {
+    me._cur = me._cur + 1
+    if me._cur > me._max { return 0 }
+    return 1
+  }
+}

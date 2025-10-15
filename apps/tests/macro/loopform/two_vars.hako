@@ -1,0 +1,8 @@
+local i = 0
+local sum = 0
+loop(i < 3) {
+  print(i)
+  sum = sum + i
+  i = i + 1
+}
+

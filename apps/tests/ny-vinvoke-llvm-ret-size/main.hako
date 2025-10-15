@@ -1,0 +1,13 @@
+// ny-vinvoke-llvm-ret-size - LLVM向け: by-id(size)の戻り値を検証
+// 期待: ランタイム標準出力に "Result: 1" が出る（ny_mainの戻り値）
+
+static box Main {
+    main() {
+        local m = new MapBox()
+        m.set(1, 42)
+        // size() は固定長、by-id経路の戻り値確認
+        local s = m.size()
+        return s
+    }
+}
+

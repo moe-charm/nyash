@@ -1,0 +1,28 @@
+// compare_ops.hako — CompareOpsBox
+// Responsibility: mapping of symbols to kinds and evaluating compares.
+// Non-responsibility: scanning/VM execution/arithmetic.
+
+static box CompareOpsBox {
+  map_symbol(sym) {
+    return match sym {
+      "==" => "Eq"
+      "!=" => "Ne"
+      "<"  => "Lt"
+      "<=" => "Le"
+      ">"  => "Gt"
+      ">=" => "Ge"
+      _ => ""
+    }
+  }
+  eval(kind, a, b) {
+    return match kind {
+      "Eq" => { if a == b { 1 } else { 0 } }
+      "Ne" => { if a != b { 1 } else { 0 } }
+      "Lt" => { if a <  b { 1 } else { 0 } }
+      "Gt" => { if a >  b { 1 } else { 0 } }
+      "Le" => { if a <= b { 1 } else { 0 } }
+      "Ge" => { if a >= b { 1 } else { 0 } }
+      _ => 0
+    }
+  }
+}

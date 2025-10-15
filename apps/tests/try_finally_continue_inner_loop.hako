@@ -1,0 +1,23 @@
+static box Main {
+  main(args) {
+    local fin = 0
+    local i = 0
+    loop(i < 2) {
+      local j = 0
+      loop(j < 3) {
+        // 各反復で continue が起きたかを印付け
+        local mark = 0
+        try {
+          j = j + 1
+          if (j == 1) { mark = 1; continue }
+        } cleanup {
+          // continue でも finally は実行される
+          if (mark == 1) { fin = fin + 1 }
+        }
+      }
+      i = i + 1
+    }
+    // outer=2 回、各回で j==1 の continue が 1 度発生 → fin=2
+    return fin
+  }
+}

@@ -1,0 +1,15 @@
+// Selfhost compiler wrapper (dev): Compare → MIR(JSON v0) via Pipeline V2
+using "apps/selfhost-compiler/compiler.hako" as CompilerMod
+
+static box Main {
+  main(){
+    local argv = new ArrayBox()
+    argv.push("--min-json")
+    argv.push("--min-json-cmp")
+    argv.push("--emit-mir")
+    argv.push("--pipeline-v2")
+    // Prefer alias-safe static call
+    CompilerMod_Main.main(argv)
+    return 0
+  }
+}

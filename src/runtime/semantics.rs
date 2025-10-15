@@ -18,6 +18,7 @@ fn maybe_unwrap_instance(b: &dyn NyashBox) -> &dyn NyashBox {
 }
 
 /// Result.Ok(inner) → recurse helper
+#[cfg(feature = "legacy-boxes")]
 fn maybe_unwrap_result_ok(b: &dyn NyashBox) -> &dyn NyashBox {
     if let Some(res) = b
         .as_any()
@@ -29,6 +30,8 @@ fn maybe_unwrap_result_ok(b: &dyn NyashBox) -> &dyn NyashBox {
     }
     b
 }
+#[cfg(not(feature = "legacy-boxes"))]
+fn maybe_unwrap_result_ok(b: &dyn NyashBox) -> &dyn NyashBox { b }
 
 /// Best-effort string coercion used by all backends.
 pub fn coerce_to_string(b: &dyn NyashBox) -> Option<String> {
@@ -112,17 +115,20 @@ pub fn coerce_to_i64(b: &dyn NyashBox) -> Option<i64> {
                 }
             }
         }
-        // FloatBox.toDouble -> FloatBox
-        if pb.box_type == "FloatBox" {
-            let host = crate::runtime::get_global_plugin_host();
-            let read_res = host.read();
-            if let Ok(ro) = read_res {
-                if let Ok(ret) =
-                    ro.invoke_instance_method("FloatBox", "toDouble", pb.instance_id(), &[])
-                {
-                    if let Some(vb) = ret {
-                        if let Some(fb) = vb.as_any().downcast_ref::<crate::boxes::FloatBox>() {
-                            return Some(fb.value as i64);
+        // FloatBox.toDouble -> FloatBox (legacy only)
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if pb.box_type == "FloatBox" {
+                let host = crate::runtime::get_global_plugin_host();
+                let read_res = host.read();
+                if let Ok(ro) = read_res {
+                    if let Ok(ret) =
+                        ro.invoke_instance_method("FloatBox", "toDouble", pb.instance_id(), &[])
+                    {
+                        if let Some(vb) = ret {
+                            if let Some(fb) = vb.as_any().downcast_ref::<crate::boxes::FloatBox>() {
+                                return Some(fb.value as i64);
+                            }
                         }
                     }
                 }

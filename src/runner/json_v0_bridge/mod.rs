@@ -1,11 +1,18 @@
 mod ast;
 mod lexer;
 mod lowering;
+mod convert_to_ast;
 
 use ast::{ProgramV0, StmtV0};
 use lowering::lower_program;
 
 pub fn parse_json_v0_to_module(json: &str) -> Result<crate::mir::MirModule, String> {
+    // Optional: enable Builder-side NewBox{auto_birth} emission when requested for JSON v0 route
+    // Gate: NYASH_JSON_NEWBOX_AUTOBIRTH=1 (default OFF)
+    if std::env::var("NYASH_JSON_NEWBOX_AUTOBIRTH").ok().as_deref() == Some("1") {
+        // Builder reads NYASH_BUILDER_NEWBOX_AUTOBIRTH; set it here for this process
+        std::env::set_var("NYASH_BUILDER_NEWBOX_AUTOBIRTH", "1");
+    }
     let prog: ProgramV0 =
         serde_json::from_str(json).map_err(|e| format!("invalid JSON v0: {}", e))?;
     if crate::config::env::cli_verbose() {

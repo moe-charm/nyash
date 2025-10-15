@@ -23,6 +23,14 @@
 | **integration** | 5-10分 | 基本パリティ確認 | VM↔LLVM整合性 |
 | **full** | 15-30分 | 完全マトリックス | 全組み合わせテスト |
 | **plugins** | 数十秒〜 | 任意の補助スイート | using.dylib 自動読み込みなど |
+| **legacy** | 任意 | 移行・互換スモーク保管庫 | デフォルト非対象（手動実行） |
+
+### プロファイル環境オーバーレイ
+
+- 追加の overlay を使う場合は `SMOKES_PROFILE_ENV=<name>` で `configs/env/<name>.env` を読み込む
+- plugin-on（動的プラグイン優先）: `SMOKES_PROFILE_ENV=plugin-on`
+  - 既定で `HAKO_PLUGIN_POLICY=auto` と `NYASH_PLUGIN_CONFIG=hako.toml` を設定
+  - ビルトイン core（String/Array/Map）は disable にしてプラグインパリティを検証
 
 ## 🎯 使用方法
 
@@ -32,7 +40,40 @@
 ./run.sh --profile plugins
 ./run.sh --profile integration --filter "plugins:*"
 ./run.sh --profile full --format json --jobs 4 --timeout 300
+# HostHandleRouter 代表のみ（フィルタ別名: hosthandle）
+./run.sh --profile plugins --filter hosthandle
+
+# HostHandleRouter 統合スイート（境界系 -1/-11/-13/-14）
+# すべての境界チェックを一括実行（plugins プロファイル）
+./run.sh --profile plugins --filter 'hosthandle_boundary_*'
+# 返却型不一致（-14）を観測する場合はテストフックを有効化
+HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1 \
+  ./run.sh --profile plugins --filter hosthandle_return_type_mismatch_vm.sh
 ```
+
+### LLVM ハーネス系スモーク（更新）
+```bash
+# PHI ライン（VM vs LLVM 比較; Result 行一致）
+NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./run_phi.sh release
+
+# Extern Quick（文字列APIのDP/タグ確認; ハーネス直実行）
+NYASH_LLVM_USE_HARNESS=1 ./run.sh --profile quick --filter "aot_extern_"
+
+# Extended（heavy LLVM; opt-in）
+NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./run_llvm_extended.sh release
+```
+
+### フロントエンド（Parser）ミニチェック（quick-selfhost, gated）
+```bash
+# selfhost 子プロセスの最小 JSON ヘッダ検証（--min-json）
+SMOKES_SELFHOST_ENABLE=1 \
+  ./run.sh --profile quick-selfhost --filter selfhost_min_json_header_vm.sh
+```
+
+ビルドポリシー
+- `NYASH_LLVM_USE_HARNESS=1` のとき、内部で `cargo build --features llvm` を使用。
+- `ny-llvmc` を事前にビルドすると AOT 実行系が安定:
+  - `cargo build --release -p nyash-llvm-compiler`
 
 ### オプション
 ```bash
@@ -53,8 +94,10 @@ tools/smokes/v2/
 ├── README.md                 # このファイル
 ├── profiles/                 # テストプロファイル
 │   ├── quick/                # 開発時高速テスト（1-2分）
-│   │   ├── core/             # 言語・制御構文・演算
-│   │   └── boxes/            # 各Boxの最小API
+│   │   ├── core/             # 言語・制御構文・演算（プラグイン非依存）
+│   │   ├── boxes/            # 各Boxの最小API
+│   │   ├── selfhost/         # selfhost/pipeline_v2/Stage‑1/Emit 最小テスト
+│   │   └── llvm/             # LLVM/ハーネスを使う軽量テスト（IR/trace など）
 │   ├── integration/          # 統合テスト（5-10分）
 │   │   ├── parity/           # VM↔LLVM・動的↔静的観点合わせ
 │   │   └── plugins/          # プラグイン整合性
@@ -63,6 +106,11 @@ tools/smokes/v2/
 │       └── stress/           # 負荷・ストレステスト
 │   └── plugins/              # プラグイン専用スイート（任意）
 │       └── dylib_autoload.sh # using kind="dylib" 自動読み込みの動作確認（Fixture/Counter 等）
+│   └── legacy/               # 旧/移行スモーク（デフォルト非対象）
+│       ├── README.md         # 方針・運用
+│       ├── run_all_legacy.sh # 一括実行
+│       ├── legacy_map_keys_values_fallback_vm.sh
+│       └── legacy_array_size_force_host_vm.sh
 ├── lib/                      # 共通ライブラリ（強制使用）
 │   ├── test_runner.sh        # 中核実行器
 │   ├── plugin_manager.sh     # プラグイン設定管理
@@ -111,6 +159,26 @@ run_test "test_name" {
 - 1Box1ファイル原則
 - エラーハンドリング確認
 
+#### **quick/selfhost** - selfhost / emit-only / pipeline_v2
+- JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
+- 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
+- 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
+- 代表ケース（制御フロー）
+  - Jump 単発: `profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
+  - Jump チェーン: `profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
+ - plugin-on 代表（コレクション最小）
+   - String 基本: `profiles/quick/selfhost/plugin_on_string_vm.sh`
+   - Map+Array 合成: `profiles/quick/selfhost/plugin_on_map_array_vm.sh`
+   - Array slice/境界: `profiles/quick/selfhost/plugin_on_array_slice_vm.sh`
+   - Identity（Map.values with Handle）: `profiles/quick/selfhost/plugin_on_map_values_identity_vm.sh`
+
+#### **quick/llvm** - 軽量LLVM/ハーネス・トレース
+- llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
+- ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
+ - PHI 形状（incoming/values）コンパイル検査:
+   - `profiles/quick/llvm/harness_phi_incoming_compile_ok.sh`
+   - `profiles/quick/llvm/harness_phi_values_compile_ok.sh`
+
 #### **integration/parity** - VM↔LLVM観点合わせ
 - 同一スクリプトでRust VM vs LLVM実行
 - 出力・性能・エラーメッセージの一致確認
@@ -121,7 +189,22 @@ run_test "test_name" {
 - Cartesian積実行
 - 回帰テスト・互換性確認
 
-## 📊 出力形式
+## 📊 出力形式（メタ行・正規化）
+
+### メタ行（既定ON）
+
+- 各テスト終了時（stderr）：
+  - `SMOKES_STATUS: <PASS|SKIP|FAIL> test=<name> code=<exit> duration=<0.000s>`
+- サマリ（stderr）：
+  - `SMOKES_SUMMARY: total=<N> pass=<N> skip=<N> fail=<N> duration=<0.000s>`
+- 設定：`SMOKES_EMIT_META=0` で無効化、`SMOKES_STRICT_NOISE=0` で詳細1行（SMOKES_ERR）を通過
+
+### エラー正規化（filter_noise）
+
+- 代表的な長文エラーを 1 行に正規化：
+  - `SMOKES_ERR: json_bridge …` `json_parse …` `mir_json_reader …`
+  - `SMOKES_ERR: io_stdin …` `io_file …` `invalid_inst …`
+  - `SMOKES_ERR: using …` `tokenize …` `using_prelude`
 
 ### text（デフォルト）
 ```
@@ -131,7 +214,7 @@ run_test "test_name" {
    Actual: "Hell"
 ```
 
-### json
+### json（--format json）
 ```json
 {
   "profile": "quick",
@@ -143,7 +226,7 @@ run_test "test_name" {
 }
 ```
 
-### junit（CI用）
+### junit（--format junit / CI向け）
 ```xml
 <testsuite name="smokes_quick" tests="15" failures="1" time="78.5">
   <testcase name="basic_print" classname="quick.core" time="0.2"/>
@@ -179,6 +262,8 @@ run_test "test_name" {
 - Quick/Core: 目安 12〜16 本。意味論の軽量ガードのみ（< 0.5s/本）
   - 増やす基準: バグ/回帰が出たとき“最小再現”を1本追加
   - 既存と同型のバリエーションは増やさない（効果逓減を避ける）
+- Quick/Selfhost: 目安 6〜10 本。emit-only/CFG/LocalSSA 代表ケース（ヘッダ/branch/copy）
+- Quick/LLVM: 目安 2〜4 本。IR/trace の最小検査
 - Integration/Parity: 目安 8〜10 本。代表構文の VM ↔ LLVM ハーネス一致
   - 増やす基準: LLVM 側の修正で差分が出る領域のみ 1 本追加
 - Plugins: 1〜3 本/プラグイン。環境依存は必ず SKIP ガード
@@ -189,7 +274,8 @@ run_test "test_name" {
 新しいノイズが出たらフィルタへ追加し、各テスト個別の `grep -v` は増やさない。
 
 ### LLVM パリティ（Python ハーネス）
-- Integration の `check_parity` は LLVM 実行時に `NYASH_LLVM_USE_HARNESS=1` を自動付与して llvmlite ハーネスで検証する。
+- Harness-first: Integration の LLVM 経路は llvmlite ハーネスを既定とし、`NYASH_LLVM_USE_HARNESS=1` を付与してオブジェクト生成・IR/トレースを検証する。
+- 実行までのパリティ（VM==LLVM 実行結果）は NyKernel（静的）連携が整っている環境でのみ有効。通常はハーネスでのコンパイル成功をゴールとする。
 - 使い方（例）:
   - `check_parity -c 'print("Hello")' "hello_parity"`
   - 同一コードを VM と LLVM で実行し、終了コードと整形後の標準出力を比較する。
@@ -243,3 +329,12 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm test.nyash
 #### **plugins** - プラグイン専用（任意）
 - 安定検証用に最小フィクスチャプラグイン（`nyash-fixture-plugin`）を優先利用
 - 実在プラグイン（Counter/Math/String）は存在すれば追加で実行（無ければSKIP）
+
+## Env overlay (quick.env)
+
+- Use `SMOKES_PROFILE_ENV=quick` to load `tools/smokes/v2/configs/quick.env` automatically.
+- Example: `SMOKES_PROFILE_ENV=quick ./run.sh --profile quick` or `SMOKES_PROFILE_ENV=quick tools/smokes/v2/profiles/quick/llvm/unified_print_harness_llvm.sh`.
+
+Note
+- Nested alias smokes rely on AST merge for stability. When running nested alias tests locally, ensure `NYASH_USING_AST=1` is set (the quick env overlay does this by default for relevant tests).
+ - Optimization traces: enable `NYASH_MIR_OPTIMIZE_TRACE=1` to see one-line JSON events when self-rec direct is applied by LLVM (`kind=selfrec_direct`).

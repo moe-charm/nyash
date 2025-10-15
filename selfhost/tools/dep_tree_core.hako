@@ -1,0 +1,55 @@
+// dep_tree_core.hako — Shared utilities for dependency tree builders
+
+static box DepTreeCore {
+  // Read entire file as string via FileBox
+  read_all(path) {
+    local fb = new FileBox()
+    local ok = fb.open(path, "r")
+    if ok == false { return null }
+    local s = fb.read()
+    fb.close()
+    return s
+  }
+
+  // Check if file exists
+  file_exists(path) {
+    local fb = new FileBox()
+    local ok = fb.open(path, "r")
+    if ok == false { return false }
+    fb.close()
+    return true
+  }
+
+  // Get directory name from path
+  dirname(path) {
+    local pb = new PathBox()
+    local d = pb.dirname(path)
+    if d != null { return d }
+    local i = path.lastIndexOf("/")
+    if i < 0 { return "." }
+    return path.substring(0, i)
+  }
+
+  // Join base path with relative path
+  join(base, rel) {
+    local pb = new PathBox()
+    local j = pb.join(base, rel)
+    if j != null { return j }
+    return base + "/" + rel
+  }
+
+  // Escape string for JSON (minimal: \ and ")
+  esc_json(s) {
+    local out = ""
+    local i = 0
+    local n = s.size()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" } else {
+        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
+      }
+      i = i + 1
+    }
+    return out
+  }
+}

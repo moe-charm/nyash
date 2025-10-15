@@ -11,6 +11,7 @@ use crate::box_trait::NyashBox;
 /// This function recognizes builtin containers (ArrayBox/MapBox) and is a no-op otherwise.
 pub fn trace_children(obj: &dyn NyashBox, visit: &mut dyn FnMut(Arc<dyn NyashBox>)) {
     // ArrayBox
+    #[cfg(feature = "legacy-boxes")]
     if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
         if let Ok(items) = arr.items.read() {
             for it in items.iter() {
@@ -21,7 +22,13 @@ pub fn trace_children(obj: &dyn NyashBox, visit: &mut dyn FnMut(Arc<dyn NyashBox
         }
         return;
     }
+    #[cfg(not(feature = "legacy-boxes"))]
+    if obj.type_name() == "ArrayBox" {
+        // Plugin-only: internal iteration is opaque; skip.
+        return;
+    }
     // MapBox
+    #[cfg(feature = "legacy-boxes")]
     if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
         if let Ok(data) = map.get_data().read() {
             for (_k, v) in data.iter() {
@@ -31,5 +38,9 @@ pub fn trace_children(obj: &dyn NyashBox, visit: &mut dyn FnMut(Arc<dyn NyashBox
         }
         return;
     }
+    #[cfg(not(feature = "legacy-boxes"))]
+    if obj.type_name() == "MapBox" {
+        // Plugin-only: internal iteration is opaque; skip.
+        return;
+    }
 }
-

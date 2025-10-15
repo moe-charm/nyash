@@ -1,0 +1,10 @@
+// Verify lastIndexOf on string via extern (string API) and Result line
+static box Main {
+  main() {
+    local s = "ababa"
+    local idx = s.lastIndexOf("ba") // JS-like semantics → 3
+    print("Result: " + idx)
+    return 0
+  }
+}
+

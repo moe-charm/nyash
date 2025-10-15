@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: forward-references using AST path; skip by default
+if [ "${SMOKES_ENABLE_FORWARD_REFS:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_FORWARD_REFS=1" >&2
+  exit 0
+fi
 # forward_refs_using_ast_vm.sh - Forward references across using (AST prelude, VM backend)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"

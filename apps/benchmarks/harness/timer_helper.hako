@@ -1,0 +1,24 @@
+// Timer Helper Box — Monotonic clock wrapper for benchmark measurements
+// Wraps TimerBox.now_ms() to provide nanosecond-precision timing (simulated via ms * 1000000)
+//
+// Note: Currently using millisecond precision from TimerBox.now_ms()
+// Future: Add nanosecond support when available (TimerBox.now_ns())
+
+box TimerHelper {
+  birth() {
+    return 0
+  }
+
+  // Returns current time in nanoseconds (simulated from ms)
+  // Note: Actual precision is milliseconds, converted to ns for interface consistency
+  now_ns() {
+    local ms = TimerBox.now_ms()
+    // Convert ms to ns (1 ms = 1,000,000 ns)
+    return ms * 1000000
+  }
+
+  // Returns current time in milliseconds (direct call)
+  now_ms() {
+    return TimerBox.now_ms()
+  }
+}

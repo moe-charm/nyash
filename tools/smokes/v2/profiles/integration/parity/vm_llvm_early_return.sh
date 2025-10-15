@@ -2,8 +2,7 @@
 # vm_llvm_early_return.sh - VM vs LLVM parity for early return
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
-
+require_llvm_or_skip || exit 0
 require_env || exit 2
 preflight_plugins || exit 2
 

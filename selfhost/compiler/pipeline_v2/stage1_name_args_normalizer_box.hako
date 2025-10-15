@@ -1,0 +1,60 @@
+// stage1_name_args_normalizer_box.hako — Stage1NameArgsNormalizerBox
+// Responsibility: Normalize (label, args_text) from Stage‑1 scanner into names ready for emit.
+//  - Call: name normalization via UsingResolverBox/NamespaceBox, arity sanity via SignatureVerifierBox
+//  - Method: same as Call but for method label
+//  - New: class normalization via UsingResolverBox/NamespaceBox
+// Non‑Responsibility: MIR emit or IO
+
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/signature_verifier_box.hako" as SignatureVerifierBox
+using "selfhost/compiler/pipeline_v2/alias_preflight_box.hako" as AliasPreflightBox
+
+static box Stage1NameArgsNormalizerBox {
+  _label_or_name(scan) {
+    if scan == null { return null }
+    local n = scan.get("name")
+    if n != null { return n }
+    return scan.get("label")
+  }
+
+  // Returns { name, args_text } or null
+  normalize_call(scan, r) {
+    if scan == null { return null }
+    local raw = me._label_or_name(scan)
+    if raw == null || raw == "" { return null }
+    if AliasPreflightBox.check_head(raw, r) != 1 { return null }
+    local fq = NamespaceBox.normalize_global_name(raw, r)
+    if fq == null { return null }
+    local args = scan.get("args_text")
+    // Best-effort arity check for globals
+    if SignatureVerifierBox.verify_call_name_arity(fq, args) != 1 { return null }
+    return { name: fq, args_text: args }
+  }
+
+  // Returns { method, args_text } or null
+  normalize_method(scan, r) {
+    if scan == null { return null }
+    local raw = me._label_or_name(scan)
+    if raw == null || raw == "" { return null }
+    if AliasPreflightBox.check_head(raw, r) != 1 { return null }
+    local fq = NamespaceBox.normalize_global_name(raw, r)
+    if fq == null { return null }
+    local args = scan.get("args_text")
+    if SignatureVerifierBox.verify_from_args(fq, args) != 1 { return null }
+    return { method: fq, args_text: args }
+  }
+
+  // Returns { class, args_text } or null
+  normalize_class(scan, r) {
+    if scan == null { return null }
+    local raw = me._label_or_name(scan)
+    if raw == null || raw == "" { return null }
+    // class names are resolved through class resolver (no alias head check needed but harmless)
+    local fq = NamespaceBox.normalize_class_name(raw, r)
+    if fq == null { return null }
+    return { class: fq, args_text: scan.get("args_text") }
+  }
+}
+
+static box Stage1NameArgsNormalizerMain { main(args) { return 0 } }
+

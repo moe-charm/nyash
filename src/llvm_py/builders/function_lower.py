@@ -9,6 +9,10 @@ from phi_wiring import (
     finalize_phis as _finalize_phis,
     build_succs as _build_succs,
 )
+from phi_wiring.verify import verify_phi_cfg as _verify_phi_cfg
+from phi_wiring.verify import verify_phi_order as _verify_phi_order
+from phi_wiring.verify import verify_phi_uniqueness as _verify_phi_uniqueness
+from phi_wiring.lifecycle import PhiLifecycle
 
 
 def lower_function(builder, func_data: Dict[str, Any]):
@@ -24,8 +28,8 @@ def lower_function(builder, func_data: Dict[str, Any]):
 
     # Determine function signature
     if name == "ny_main":
-        # Special case: ny_main returns i32
-        func_ty = ir.FunctionType(builder.i32, [])
+        # Special case: ny_main returns i64 (changed from i32 for WASM compatibility)
+        func_ty = ir.FunctionType(builder.i64, [])
     else:
         # Default: i64(i64, ...) signature; derive arity from '/N' suffix when params missing
         m = re.search(r"/(\d+)$", name)
@@ -42,11 +46,28 @@ def lower_function(builder, func_data: Dict[str, Any]):
         builder.bb_map.clear()
     except Exception:
         builder.bb_map = {}
+    # Clear PHI wiring book-keeping and per-function declared incomings
+    try:
+        builder.phi_wired.clear()
+    except Exception:
+        try:
+            builder.phi_wired = {}
+        except Exception:
+            pass
+    try:
+        builder.block_phi_incomings = {}
+    except Exception:
+        pass
     try:
         # Reset resolver caches keyed by block names
         builder.resolver.i64_cache.clear()
         builder.resolver.ptr_cache.clear()
         builder.resolver.f64_cache.clear()
+        # Expose owner (NyashLLVMBuilder) to resolver for registry access
+        try:
+            builder.resolver._owner_builder = builder
+        except Exception:
+            pass
         if hasattr(builder.resolver, '_end_i64_cache'):
             builder.resolver._end_i64_cache.clear()
         if hasattr(builder.resolver, 'string_ids'):
@@ -74,6 +95,48 @@ def lower_function(builder, func_data: Dict[str, Any]):
             builder.vmap[i] = func.args[i]
     except Exception:
         pass
+
+    # Process constants (string literals, etc.)
+    constants = func_data.get("constants", {})
+    for vid_str, const_data in constants.items():
+        try:
+            vid = int(vid_str)
+            const_type = const_data.get("type")
+            const_value = const_data.get("value")
+
+            if const_type == "string":
+                # Create global string literal
+                str_bytes = (const_value + '\0').encode('utf-8')
+                str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
+                global_str = ir.GlobalVariable(builder.module, str_type,
+                                               name=f".str.{vid}")
+                global_str.initializer = ir.Constant(str_type, bytearray(str_bytes))
+                global_str.global_constant = True
+                global_str.linkage = 'internal'
+
+                # Get pointer to first element (i8*)
+                i8p = ir.IntType(8).as_pointer()
+                zero = ir.Constant(ir.IntType(32), 0)
+                str_ptr = global_str.gep([zero, zero])
+                builder.vmap[vid] = str_ptr
+
+                # Also register in resolver if available
+                if hasattr(builder, 'resolver') and hasattr(builder.resolver, 'string_ptrs'):
+                    builder.resolver.string_ptrs[vid] = str_ptr
+
+            elif const_type == "i64":
+                # Integer constant
+                i64_val = ir.Constant(builder.i64, const_value)
+                builder.vmap[vid] = i64_val
+
+            elif const_type == "f64":
+                # Float constant
+                f64_val = ir.Constant(builder.f64, const_value)
+                builder.vmap[vid] = f64_val
+
+        except Exception as e:
+            trace_debug(f"[constants] Failed to process constant {vid_str}: {e}")
+            pass
 
     # Build predecessor map from control-flow edges
     builder.preds = {}
@@ -137,6 +200,12 @@ def lower_function(builder, func_data: Dict[str, Any]):
 
     # Prepass: collect PHI metadata and placeholders
     _setup_phi_placeholders(builder, blocks)
+    # Lifecycle.create: pre-create PHIs declared by metadata so that body lowering
+    # can always see the placeholder via vmap/registry (単一起点化を前倒し)
+    try:
+        PhiLifecycle(builder).create_phase()
+    except Exception:
+        pass
 
     # Optional: if-merge prepass (gate NYASH_LLVM_PREPASS_IFMERGE)
     try:
@@ -181,6 +250,17 @@ def lower_function(builder, func_data: Dict[str, Any]):
                 except Exception:
                     pass
             return defs
+        def _collect_declared_phis(block):
+            phis = set()
+            for ins in block.get('instructions') or []:
+                try:
+                    if ins.get('op') == 'phi':
+                        d = ins.get('dst')
+                        if isinstance(d, int):
+                            phis.add(int(d))
+                except Exception:
+                    pass
+            return phis
         def _collect_uses(block):
             uses = set()
             for ins in block.get('instructions') or []:
@@ -206,8 +286,9 @@ def lower_function(builder, func_data: Dict[str, Any]):
             if len(preds_list) <= 1:
                 continue
             defs = _collect_defs(blk)
+            declared_phis = _collect_declared_phis(blk)
             uses = _collect_uses(blk)
-            need = [u for u in uses if u not in defs]
+            need = [u for u in uses if (u not in defs) and (u not in declared_phis)]
             if not need:
                 continue
             for vid in need:
@@ -257,8 +338,33 @@ def lower_function(builder, func_data: Dict[str, Any]):
     except Exception:
         pass
 
-    # Finalize PHIs for this function
+    # Finalize PHIs for this function (wire-only)
     _finalize_phis(builder)
+
+    # Optional verification pass (fail-fast in dev), gated by NYASH_LLVM_PHI_VERIFY
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_PHI_VERIFY', '1') != '0':
+            strict = (os.environ.get('NYASH_LLVM_PHI_VERIFY_STRICT') == '1')
+            problems = _verify_phi_cfg(builder, strict=strict)
+            if problems:
+                # Summarize first few problems for quick diagnosis
+                summary = ", ".join([f"bb{p.get('block')} v{p.get('dst')}: {p.get('issue')}" for p in problems[:3]])
+                raise RuntimeError(f"PHI verification failed: {summary} (total {len(problems)})")
+            # Uniqueness: single PHI per (block,dst)
+            dup = _verify_phi_uniqueness(builder)
+            if dup:
+                first = dup[0]
+                raise RuntimeError(f"PHI duplicate at bb{first.get('block')} v{first.get('dst')}: {first.get('detail')} (total {len(dup)})")
+            # Also enforce order: all PHIs must be grouped at block head
+            order_issues = _verify_phi_order(func)
+            if order_issues:
+                first = order_issues[0]
+                raise RuntimeError(f"PHI order invalid in block {first.get('block')}: {first.get('detail')} (total {len(order_issues)})")
+    except Exception as _ve:
+        # In bring-up, allow soft-fail when explicitly opted out
+        if os.environ.get('NYASH_LLVM_PHI_VERIFY_STRICT') == '1':
+            raise
 
     # Safety pass: ensure every basic block ends with a terminator.
     # This avoids llvmlite IR parse errors like "expected instruction opcode" on empty blocks.

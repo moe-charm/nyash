@@ -1,0 +1,14 @@
+static box Main {
+  main() {
+    local s = "Nyash"
+    if s.size() != 5 { print("FAIL: size!=5") return 1 }
+    if s.isEmpty() { print("FAIL: isEmpty on non-empty") return 1 }
+    if s.substring(0, 2) != "Ny" { print("FAIL: substring") return 1 }
+    if s.charAt(2) != "a" { print("FAIL: charAt") return 1 }
+    local e = ""
+    if not e.isEmpty() { print("FAIL: empty.isEmpty==false") return 1 }
+    print("OK: String size/substring/charAt/isEmpty")
+    return 0
+  }
+}
+

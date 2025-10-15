@@ -37,6 +37,7 @@ fn test_call_instruction() {
     let inst = MirInstruction::Call {
         dst: Some(dst),
         func,
+        callee: None,
         args: vec![arg1, arg2],
         effects: EffectMask::IO,
     };
