@@ -189,8 +189,10 @@ extern "C" fn array_invoke_id(
                 if debug {
                     unsafe {
                         if !result_len.is_null() {
-                            eprintln!("[array-plugin] LENGTH ENTER: result_len ptr={:?} value_before={}",
-                                      result_len, *result_len);
+                            eprintln!(
+                                "[array-plugin] LENGTH ENTER: result_len ptr={:?} value_before={}",
+                                result_len, *result_len
+                            );
                         } else {
                             eprintln!("[array-plugin] LENGTH ENTER: result_len ptr=NULL");
                         }
@@ -205,10 +207,15 @@ extern "C" fn array_invoke_id(
                 if debug {
                     unsafe {
                         if !result_len.is_null() {
-                            eprintln!("[array-plugin] LENGTH EXIT: code={} result_len value_after={}",
-                                      ret, *result_len);
+                            eprintln!(
+                                "[array-plugin] LENGTH EXIT: code={} result_len value_after={}",
+                                ret, *result_len
+                            );
                         } else {
-                            eprintln!("[array-plugin] LENGTH EXIT: code={} result_len ptr=NULL", ret);
+                            eprintln!(
+                                "[array-plugin] LENGTH EXIT: code={} result_len ptr=NULL",
+                                ret
+                            );
                         }
                     }
                 }

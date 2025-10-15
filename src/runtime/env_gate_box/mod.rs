@@ -43,6 +43,17 @@ pub fn plugin_policy_on() -> bool {
     }
 }
 
+/// Determine if plugin policy is strictly `force` (no builtin fallback allowed).
+#[inline]
+pub fn plugin_policy_force() -> bool {
+    crate::common::env_helpers::get_string_with_alias(
+        "NYASH_PLUGIN_POLICY",
+        "HAKO_PLUGIN_POLICY",
+    )
+    .map(|v| v.eq_ignore_ascii_case("force"))
+    .unwrap_or(false)
+}
+
 /// Return true if plugins are explicitly disabled.
 #[inline]
 pub fn plugins_disabled() -> bool {

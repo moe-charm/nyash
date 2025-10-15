@@ -10,6 +10,8 @@ mod map_callable;
 mod method_ref;
 mod plugin;
 mod builtin;
+mod tables;
+mod host_slot;
 
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
@@ -65,13 +67,9 @@ pub fn route(
         // If a plugin provider exists for this box type (per registry), but the receiver is not a PluginBoxV2
         // or plugin routing did not handle it, fail fast instead of delegating to builtin.
         {
-            let policy = crate::runtime::env_gate_box::string_alias_or(
-                "NYASH_PLUGIN_POLICY", "HAKO_PLUGIN_POLICY", "auto",
-            );
-            let strict = policy.to_ascii_lowercase() == "force";
             let plugin_on = crate::runtime::env_gate_box::plugin_policy_on()
                 && !crate::runtime::env_gate_box::plugins_disabled();
-            if strict && plugin_on {
+            if crate::runtime::env_gate_box::plugin_policy_force() && plugin_on {
                 let reg = crate::runtime::get_global_registry();
                 if let Some(p) = reg.get_provider(bx.type_name()) {
                     if matches!(p, crate::runtime::box_registry::BoxProvider::Plugin(_)) {

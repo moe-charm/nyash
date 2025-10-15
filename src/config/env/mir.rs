@@ -22,7 +22,7 @@ pub fn mir_core13_pure() -> bool {
 
 pub fn mir_pre_pin_compare_operands() -> bool {
     match std::env::var("NYASH_MIR_PRE_PIN_COMPARE_OPERANDS").ok().as_deref() {
-        Some("0") | Some("false") | Some("off") => false,
-        _ => true,
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
     }
 }

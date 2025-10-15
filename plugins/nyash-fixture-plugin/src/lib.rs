@@ -5,8 +5,8 @@
 //! - ✅ 2 lock() blocks in birth()/fini() → macro helpers
 
 // Import shared TLV codec + instance manager macros from hako_abi_impl
-use hako_abi_impl::tlv::{read_arg_string, write_tlv_string};
 use hako_abi_impl::define_instance_storage;
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_string};
 
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;

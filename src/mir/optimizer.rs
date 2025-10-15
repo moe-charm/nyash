@@ -38,8 +38,16 @@ impl MirOptimizer {
         }
 
         // Pre-pass repairs: ensure local materialization for fragile call sites
-        // 1) String/Array length-like Method calls
-        stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
+        // NOTE: Disable aggressive repair passes by default now that EmitGuard (builder)
+        // materializes operands at the call site. These legacy safety nets have caused
+        // unintended Copy direction inversions in some pipelines.
+        // Enable only BoxCall receiver repair which is still needed for legacy paths.
+        if std::env::var("NYASH_REPAIR_METHOD_RECV").ok().as_deref() == Some("1") {
+            stats.merge(crate::mir::optimizer_passes::repair::repair_method_receivers(module));
+        }
+        if std::env::var("NYASH_REPAIR_STRING_LEN").ok().as_deref() == Some("1") {
+            stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
+        }
         // 2) BoxCall receivers (always insert in-block Copy before call)
         stats.merge(crate::mir::optimizer_passes::repair::repair_boxcall_receivers(module));
 
@@ -109,9 +117,13 @@ impl MirOptimizer {
             crate::mir::optimizer_passes::diagnostics::diagnose_legacy_instructions(self, module);
         stats.merge(diag2);
 
-        // Post-normalize repair: re-apply Method(ArrayBox/StringBox length-like) → Extern and
-        // ensure in-block receiver materialization in case later passes introduced new Method calls.
-        stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
+        // Post-normalize repair (optional): keep OFF by default; guarded by env
+        if std::env::var("NYASH_REPAIR_METHOD_RECV").ok().as_deref() == Some("1") {
+            stats.merge(crate::mir::optimizer_passes::repair::repair_method_receivers(module));
+        }
+        if std::env::var("NYASH_REPAIR_STRING_LEN").ok().as_deref() == Some("1") {
+            stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
+        }
 
         stats
     }

@@ -25,21 +25,16 @@ impl NyashRunner {
         // Default policy: OFF (plugins disabled) unless explicitly set to auto/force.
         // Aliases handled by env core bootstrap (HAKO_* → NYASH_*), but we defensively read both.
         // Policy: default ON (auto). Unknown/empty -> treat as auto.
-        let policy = std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok());
-        let disable_by_policy = match policy.as_deref() {
-            Some(s) if s.eq_ignore_ascii_case("off") => true,
-            Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => false,
-            None => false, // default to auto
-            _ => false,    // unknown → consider auto (fail-open; providers may still be empty)
+        let disable_by_policy = match crate::runtime::env_gate_box::string_alias_or("NYASH_PLUGIN_POLICY","HAKO_PLUGIN_POLICY","auto").to_ascii_lowercase().as_str() {
+            "off" => true,
+            _ => false,
         };
-        if !disable_by_policy && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+        if !disable_by_policy && !crate::runtime::env_gate_box::bool_alias_or("NYASH_DISABLE_PLUGINS","HAKO_DISABLE_PLUGINS", false) {
             runner_plugin_init::init_bid_plugins();
             crate::runner::box_index::refresh_box_index();
         }
         // Allow interpreter to create plugin-backed boxes via unified registry
-        if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
-            std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
-        }
+        if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() { std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1"); }
         // Merge override types env (ensure FileBox/TOMLBox present)
         let mut override_types: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
             list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()

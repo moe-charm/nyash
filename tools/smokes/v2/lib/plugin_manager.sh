@@ -35,8 +35,21 @@ check_dynamic_plugins() {
     candidates[arraybox]="nyash-array-plugin/libnyash_array_plugin.so nyash-array-plugin/libnyash_array_plugin.a"
     candidates[mapbox]="nyash-map-plugin/libnyash_map_plugin.so nyash-map-plugin/libnyash_map_plugin.a"
     candidates[filebox]="nyash-filebox-plugin/libnyash_filebox_plugin.so nyash-filebox-plugin/libnyash_filebox_plugin.a"
+    candidates[setbox]="nyash-set-plugin/libnyash_set_plugin.so nyash-set-plugin/libnyash_set_plugin.a"
 
-    local required_plugins=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox" "filebox")
+    # Compute required plugin keys (dynamic via env; fallback to default core set)
+    local _required_default=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox" "filebox" "setbox")
+    local required_plugins=()
+    if [ -n "${SMOKES_REQUIRED_PLUGINS:-}" ]; then
+        # Accept comma or space separated lists
+        if [[ "$SMOKES_REQUIRED_PLUGINS" == *","* ]]; then
+            IFS=',' read -r -a required_plugins <<< "$SMOKES_REQUIRED_PLUGINS"
+        else
+            read -r -a required_plugins <<< "$SMOKES_REQUIRED_PLUGINS"
+        fi
+    else
+        required_plugins=("${_required_default[@]}")
+    fi
     local missing_plugins=()
 
     # Always rebuild when auto-build is enabled to refresh .so artifacts
@@ -201,16 +214,67 @@ rebuild_plugins() {
         echo "[INFO] Building via cargo fallback" >&2
     fi
 
-    # Minimal required set for plugin-on smokes
-    if cargo build --release -p nyash-array-plugin -p nyash-map-plugin -p nyash-string-plugin -p nyash-filebox-plugin >/dev/null 2>&1; then
-        if [ -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" ]; then
-            cp -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" \
-                  "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" 2>/dev/null || true
+    # Minimal required set for plugin-on smokes (dynamic)
+    # Map logical keys → crate names and post-build copy rules
+    declare -A crate_names
+    crate_names[stringbox]=nyash-string-plugin
+    crate_names[integerbox]=nyash-integer-plugin
+    crate_names[mathbox]=nyash-math-plugin
+    crate_names[arraybox]=nyash-array-plugin
+    crate_names[mapbox]=nyash-map-plugin
+    crate_names[filebox]=nyash-filebox-plugin
+    crate_names[setbox]=nyash-set-plugin
+
+    # Determine required set (same logic as check_dynamic_plugins)
+    local _required_default=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox" "filebox" "setbox")
+    local required_plugins=()
+    if [ -n "${SMOKES_REQUIRED_PLUGINS:-}" ]; then
+        if [[ "$SMOKES_REQUIRED_PLUGINS" == *","* ]]; then
+            IFS=',' read -r -a required_plugins <<< "$SMOKES_REQUIRED_PLUGINS"
+        else
+            read -r -a required_plugins <<< "$SMOKES_REQUIRED_PLUGINS"
         fi
+    else
+        required_plugins=("${_required_default[@]}")
+    fi
+
+    # Compose cargo -p list dynamically
+    local crates_to_build=()
+    for req in "${required_plugins[@]}"; do
+        if [ -n "${crate_names[$req]:-}" ]; then
+            crates_to_build+=( -p "${crate_names[$req]}" )
+        fi
+    done
+    # Fall back to a safe default if something went wrong
+    if [ ${#crates_to_build[@]} -eq 0 ]; then
+        crates_to_build=( -p nyash-string-plugin -p nyash-integer-plugin -p nyash-math-plugin -p nyash-array-plugin -p nyash-map-plugin -p nyash-filebox-plugin -p nyash-set-plugin )
+    fi
+
+    if cargo build --release "${crates_to_build[@]}" >/dev/null 2>&1; then
+        # Post-build copy for known dynamic artifacts (only those required)
+        for req in "${required_plugins[@]}"; do
+            case "$req" in
+                filebox)
+                    if [ -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" ]; then
+                        cp -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" \
+                              "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" 2>/dev/null || true
+                    fi ;;
+                setbox)
+                    if [ -f "plugins/nyash-set-plugin/target/release/libnyash_set_plugin.so" ]; then
+                        cp -f "plugins/nyash-set-plugin/target/release/libnyash_set_plugin.so" \
+                              "plugins/nyash-set-plugin/libnyash_set_plugin.so" 2>/dev/null || true
+                    fi ;;
+                *) : ;;
+            esac
+        done
         echo "[INFO] Plugin rebuild completed (cargo)" >&2
         return 0
     fi
-    echo "[ERROR] Plugin rebuild failed (cargo)" >&2
+    if [ "${SMOKES_STRICT_NOISE:-0}" = "1" ]; then
+        echo "[WARN] Plugin rebuild failed (cargo; continuing)" >&2
+    else
+        echo "[ERROR] Plugin rebuild failed (cargo)" >&2
+    fi
     return 1
 }
 

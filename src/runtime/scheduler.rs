@@ -56,7 +56,10 @@ impl Scheduler for SingleThreadScheduler {
     }
     fn poll(&self) {
         // Move due delayed tasks to queue
-        let trace = std::env::var("NYASH_SCHED_TRACE").ok().as_deref() == Some("1");
+        let trace = crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_SCHED_TRACE",
+            "NYASH_SCHED_TRACE",
+        ]);
         let now = Instant::now();
         let mut moved = 0usize;
         if let Ok(mut d) = self.delayed.lock() {
@@ -74,11 +77,15 @@ impl Scheduler for SingleThreadScheduler {
             }
         }
         // Run up to budget queued tasks
-        let budget: usize = std::env::var("NYASH_SCHED_POLL_BUDGET")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .filter(|&n: &usize| n > 0)
-            .unwrap_or(1);
+        let budget: usize = crate::runtime::env_gate_box::string_alias_or(
+            "NYASH_SCHED_POLL_BUDGET",
+            "HAKO_SCHED_POLL_BUDGET",
+            "1",
+        )
+        .parse::<usize>()
+        .ok()
+        .filter(|&n| n > 0)
+        .unwrap_or(1);
         let mut ran = 0usize;
         while ran < budget {
             let task_opt = {

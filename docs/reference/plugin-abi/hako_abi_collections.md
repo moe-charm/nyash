@@ -4,7 +4,7 @@ Status: Active (formerly “Nyash ABI”)
 
 Scope
 - Single ABI face for core collections implemented as plugins or embedded providers.
-- Box types: `StringBox` (type_id=13), `ArrayBox` (type_id=12), `MapBox` (type_id=11).
+- Box types (core): `MapBox` (type_id=11), `ArrayBox` (type_id=12), `StringBox` (type_id=10), `SetBox` (type_id=15).
 
 Principles
 - Everything is Box: same lifecycle (`birth`/`fini`) across host/plugin/user.
@@ -21,8 +21,11 @@ Required methods (subset)
 - String: `length/size`, `substring(start,end)`, `indexOf(s)`, `lastIndexOf(s)`, `charAt(i)`.
 - Array: `get(i) -> Box|null`, `set(i,v) -> null`, `push(v) -> null`.
 - Map: `get(k) -> Box|null`, `set(k,v) -> null`, `delete(k) -> null`, `keys() -> ArrayBox`, `values() -> ArrayBox`.
+ - Set: `add(v) -> null`, `remove(v) -> null`, `has(v) -> BoolBox`, `toArray() -> ArrayBox`.
 
 Interop notes
 - Host bridges and VM dispatch must not special‑case collections; prefer PluginHost facade.
 - When plugins are OFF, embedded providers keep behavior equivalent.
 
+Notes
+- SetBox is Map‑backed (Map<Key, Unit>) and shares Map’s Eq/Hash/決定モードの意味論。Extern 経路は `nyrt.set.*` に統一される。

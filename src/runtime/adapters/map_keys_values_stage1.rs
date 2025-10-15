@@ -22,7 +22,10 @@ pub fn route_map_keys_values_stage1(
     if box_type != "MapBox" { return None; }
     if method != "keys" && method != "values" { return None; }
     // Only when Stage-2 is disabled
-    let stage2 = std::env::var("NYASH_PLUGIN_MAP_ARRAY_HANDLE").ok().as_deref() == Some("1");
+    let stage2 = crate::runtime::env_gate_box::bool_any(&[
+        "HAKO_PLUGIN_MAP_ARRAY_HANDLE",
+        "NYASH_PLUGIN_MAP_ARRAY_HANDLE",
+    ]);
     if stage2 { return None; }
 
     let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();

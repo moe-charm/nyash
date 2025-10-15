@@ -24,6 +24,29 @@ Everything is Box の方針に合わせ、ArrayBox / MapBox の最小仕様を�
 | MapBox   | `keys()`          | ArrayBox          | Stage-2 HostHandle で ArrayBox を共有。Stage-1 `keysS()` は改行文字列 |
 | MapBox   | `values()`        | ArrayBox          | `keys()` と同じく Stage-2 で ArrayBox を共有。Stage-1 `valuesS()` は改行文字列 |
 
+## SetBox — Map ベースの集合（Map<Key, Unit>）
+
+Everything is Box の原則に従い、Set は Map の仕組み（Eq/Hash 正規化・決定モード）を再利用して実装する。
+
+### API（最小）
+
+| Method         | Return      | Semantics |
+|----------------|-------------|-----------|
+| `add(v)`       | NullBox     | 既に存在していても No‑op（常に Null） |
+| `remove(v)`    | NullBox     | 不在なら No‑op（常に Null） |
+| `has(v)`       | BoolBox     | 値の存在判定 |
+| `size()`       | IntegerBox  | 要素数 |
+| `isEmpty()`    | BoolBox     | `size()==0` の糖衣 |
+| `clear()`      | NullBox     | 全要素削除 |
+| `toArray()`    | ArrayBox    | 順序は Map.keys() と同一（決定モードで安定） |
+
+補足
+- Set の内部は Map<Key, Unit> と等価。Unit は観測不可（Null/内部Unit）で外部挙動には影響しない。
+- 破壊系（add/remove/clear）の戻り値は NullBox に統一（Map と一貫）。
+- Eq/Hash/決定モードは Map のポリシーをそのまま継承（非Hashableキーは Fail‑Fast）。
+ - 提供形態: プラグイン `plugins/nyash-set-plugin`（`SetBox`）。`hako.toml`/`nyash.toml` に `libnyash_set_plugin.so` をマップする（type_id=15 推奨）。
+
+
 ## Shared Behaviour
 
 - **Null-first**: 存在しない要素は `NullBox` を返す（文字列による「Key not found」等は撤退済み）。

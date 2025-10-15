@@ -19,7 +19,10 @@ fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
 }
 
 fn enabled() -> bool {
-    std::env::var("NYASH_ENABLE_NYKERNEL_STUB").ok().as_deref() == Some("1")
+    crate::runtime::env_gate_box::bool_any(&[
+        "HAKO_ENABLE_NYKERNEL_STUB",
+        "NYASH_ENABLE_NYKERNEL_STUB",
+    ])
 }
 
 pub fn malloc_bytes(size: i64) -> Result<VMValue, VMError> {

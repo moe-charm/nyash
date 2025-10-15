@@ -7,6 +7,7 @@
 
 use super::super::{Effect, EffectMask, ValueId};
 use crate::mir::instruction::MirInstruction;
+use crate::mir::definitions::call_unified::Callee;
 use crate::mir::instruction_kinds as inst_meta;
 use crate::mir::types::{BarrierOp, ConstValue, WeakRefOp};
 
@@ -171,9 +172,26 @@ impl MirInstruction {
 
             MirInstruction::Return { value } => value.map(|v| vec![v]).unwrap_or_default(),
 
-            MirInstruction::Call { func, args, .. } => {
+            MirInstruction::Call { func, args, callee, .. } => {
                 let mut used = vec![*func];
                 used.extend(args);
+                // Include receiver and other embedded ids from unified callee forms
+                if let Some(c) = callee {
+                    match c {
+                        Callee::Method { receiver, .. } => {
+                            if let Some(r) = receiver { used.push(*r); }
+                        }
+                        Callee::Constructor { .. } => {
+                            // no extra ids
+                        }
+                        Callee::Closure { me_capture, captures, .. } => {
+                            if let Some(me) = me_capture { used.push(*me); }
+                            for (_name, vid) in captures { used.push(*vid); }
+                        }
+                        Callee::Value(vid) => { used.push(*vid); }
+                        Callee::ModuleFunction(_) | Callee::Global(_) | Callee::Extern(_) => {}
+                    }
+                }
                 used
             }
             MirInstruction::NewClosure { captures, me, .. } => {

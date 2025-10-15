@@ -25,6 +25,25 @@ Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI 
   - Method(String/Array).length 系は早期Externに橋渡しする（安全弁）。
   - Extern 実装は HostHandle/legacy の双方を吸収する。
 
+### SetBox — Extern 経路（Map ベース）
+
+Set は Map の意味論（Eq/Hash/決定性）を再利用する。VM は Extern("nyrt.set.*") で受け、内部的に Map に委譲する。
+
+Extern I/O（最小）
+- `nyrt.set.add(recv:Set, v:any) -> Void`（NullBox）
+- `nyrt.set.remove(recv:Set, v:any) -> Void`（NullBox）
+- `nyrt.set.has(recv:Set, v:any) -> Bool`
+- `nyrt.set.size(recv:Set) -> i64`
+- `nyrt.set.clear(recv:Set) -> Void`（NullBox）
+- `nyrt.set.toArray(recv:Set) -> Array`
+
+実装方針
+- HostHandle あり: `recv` を Map の HostHandle として扱い、`set/get/has/size/clear/keys` を利用（Unit 値で add/remove を表現）。
+- legacy 互換: 内部 MapBox を保持する SetBox でも同一の外部 Extern を経由（ABI 安定）。
+- Strict（policy=force）下でも挙動は同一（フォールバック禁止）。
+ - プロバイダ: `plugins/nyash-set-plugin` が `SetBox` を提供。`hako.toml`/`nyash.toml` の `[libraries."libnyash_set_plugin.so".SetBox]` で type_id とメソッドIDを定義。
+
+
 ## Capabilities (Policy Hooks)
 
 See `docs/reference/plugin-system/capabilities.md` for capability bit definitions (IO/NET/ENV/TIME/...).

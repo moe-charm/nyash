@@ -16,18 +16,36 @@ fn main() {
     // UNKNOWN_HANDLE (-1)
     let bad_handle: u64 = 0xFFFF_FFFF_FFFF_FFF0;
     match host_api_box::call_slot_grow(bad_handle, S::MAP_SIZE, &[]) {
-        Ok(_) => { println!("UNKNOWN_HANDLE rc=0 (unexpected)"); ok = false; }
-        Err(rc) => { println!("UNKNOWN_HANDLE rc={}", rc); if rc != -1 { ok = false; } }
+        Ok(_) => {
+            println!("UNKNOWN_HANDLE rc=0 (unexpected)");
+            ok = false;
+        }
+        Err(rc) => {
+            println!("UNKNOWN_HANDLE rc={}", rc);
+            if rc != -1 {
+                ok = false;
+            }
+        }
     }
 
     // WRONG_TYPE (-11): StringBox handle with Map.has selector
     let sb = nyash_rust::box_trait::StringBox::new("hello".to_string());
-    let sb_h = nyash_rust::runtime::host_handles::to_handle_box(Box::new(sb) as Box<dyn nyash_rust::box_trait::NyashBox>);
+    let sb_h = nyash_rust::runtime::host_handles::to_handle_box(
+        Box::new(sb) as Box<dyn nyash_rust::box_trait::NyashBox>
+    );
     let mut tlv_key = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(1);
     nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv_key, "k");
     match host_api_box::call_slot_grow(sb_h, S::MAP_HAS, &tlv_key) {
-        Ok(_) => { println!("WRONG_TYPE rc=0 (unexpected)"); ok = false; }
-        Err(rc) => { println!("WRONG_TYPE rc={}", rc); if rc != -11 { ok = false; } }
+        Ok(_) => {
+            println!("WRONG_TYPE rc=0 (unexpected)");
+            ok = false;
+        }
+        Err(rc) => {
+            println!("WRONG_TYPE rc={}", rc);
+            if rc != -11 {
+                ok = false;
+            }
+        }
     }
 
     // TLV_DECODE (-13): Array.set requires 2 args; provide only 1
@@ -38,8 +56,16 @@ fn main() {
         let mut tlv_one = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(1);
         nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut tlv_one, 0);
         match host_api_box::call_slot_grow(arr_h, S::ARRAY_SET, &tlv_one) {
-            Ok(_) => { println!("TLV_DECODE rc=0 (unexpected)"); ok = false; }
-            Err(rc) => { println!("TLV_DECODE rc={}", rc); if rc != -13 { ok = false; } }
+            Ok(_) => {
+                println!("TLV_DECODE rc=0 (unexpected)");
+                ok = false;
+            }
+            Err(rc) => {
+                println!("TLV_DECODE rc={}", rc);
+                if rc != -13 {
+                    ok = false;
+                }
+            }
         }
     }
     #[cfg(not(feature = "legacy-boxes"))]
@@ -48,6 +74,9 @@ fn main() {
         println!("TLV_DECODE rc=SKIP (plugin-only)");
     }
 
-    if ok { std::process::exit(0); } else { std::process::exit(1); }
+    if ok {
+        std::process::exit(0);
+    } else {
+        std::process::exit(1);
+    }
 }
-

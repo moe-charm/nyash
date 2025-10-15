@@ -17,17 +17,32 @@ static ADAPTER: OnceLock<VmExternAdapterBox> = OnceLock::new();
 fn build_adapter() -> VmExternAdapterBox {
     let mut map: HashMap<(String, String), HandlerFn> = HashMap::new();
 
-    // Register core externs (string/time/map ...)
-    #[allow(unused)]
+    // Register time + per‑iface externs (split modules)
+    // time.now_ms (inline — tiny)
+    map.insert(("nyrt.time".into(), "now_ms".into()), |args: &[VMValue]| {
+        let _ = args; // no args
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+        let duration = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_millis(0));
+        let millis = duration.as_millis();
+        let clamped = if millis > i64::MAX as u128 { i64::MAX } else { millis as i64 };
+        if crate::runtime::env_gate_box::bool_any(&["NYASH_VM_TRACE"]) {
+            crate::runtime::diagnostics::trace_event(
+                "vm_extern",
+                &format!("\"iface\":\"nyrt.time\",\"method\":\"now_ms\",\"value\":{}", clamped),
+            );
+        }
+        Ok(VMValue::Integer(clamped))
+    });
+    // string/array/map/set/env
     {
-        #[allow(unused_imports)]
-        use crate as nyash_rust;
-        #[path = "extern_adapter/extern_core.rs"]
-        mod extern_core;
-        extern_core::register(&mut map);
+        #[path = "extern_adapter/extern_string.rs"] mod extern_string; extern_string::register(&mut map);
+        #[path = "extern_adapter/extern_array.rs"]  mod extern_array;  extern_array::register(&mut map);
+        #[path = "extern_adapter/extern_map.rs"]    mod extern_map;    extern_map::register(&mut map);
+        #[path = "extern_adapter/extern_set.rs"]    mod extern_set;    extern_set::register(&mut map);
+        #[path = "extern_adapter/extern_env.rs"]    mod extern_env;    extern_env::register(&mut map);
     }
-
-    // string/time externs are registered via extern_adapter/extern_core.rs
 
     // Register future/async legacy externs (isolated for feature-gating/ownership)
     #[allow(unused)]
@@ -45,9 +60,7 @@ fn build_adapter() -> VmExternAdapterBox {
 
     // Final override pass removed: split modules own all handlers
 
-    // array externs are registered via extern_adapter/extern_core.rs
-
-    // map externs are registered via extern_adapter/extern_core.rs
+    // array/map externs are registered via split modules
 
     // nyrt.rune.eval(code: String) -> i64 (skeleton mock)
     // Boxed: nyrt.rune.*

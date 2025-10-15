@@ -1,6 +1,6 @@
 #![cfg(feature = "parser-c-abi")]
 use std::env;
-use std::ffi::{CString, CStr};
+use std::ffi::{CStr, CString};
 use std::fs;
 use std::os::raw::c_char;
 
@@ -16,7 +16,11 @@ struct HakoParseResult {
 
 #[allow(non_camel_case_types)]
 #[repr(i32)]
-enum HakoParseMode { RUST=0, HAKO=1, BOTH=2 }
+enum HakoParseMode {
+    RUST = 0,
+    HAKO = 1,
+    BOTH = 2,
+}
 
 extern "C" {
     fn parse_source_dual(src: *const c_char, mode: HakoParseMode) -> *mut HakoParseResult;
@@ -24,7 +28,9 @@ extern "C" {
 }
 
 fn cstr_to_string(ptr: *const c_char) -> String {
-    if ptr.is_null() { return String::new(); }
+    if ptr.is_null() {
+        return String::new();
+    }
     unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }
 
@@ -53,12 +59,15 @@ fn main() {
     let r = unsafe { &*res };
     if r.success == 1 {
         println!("OK kind={} stmts={}", cstr_to_string(r.kind), r.stmt_count);
-        unsafe { free_parse_result(res); }
+        unsafe {
+            free_parse_result(res);
+        }
         return;
     } else {
         eprintln!("ERR: {}", cstr_to_string(r.error_msg));
-        unsafe { free_parse_result(res); }
+        unsafe {
+            free_parse_result(res);
+        }
         std::process::exit(1);
     }
 }
-

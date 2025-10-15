@@ -48,6 +48,26 @@ pub fn resolve_using_with_preludes(
     let (cleaned_code, paths, alias_pairs) =
         super::resolve_prelude_paths_profiled(runner, code, filename)
             .map_err(|e| format!("using resolution error: {}", e))?;
+    if crate::config::env::resolve_trace() && !crate::config::env::cli_quiet() {
+        eprintln!("[using/trace] preludes: {} alias_pairs: {}", paths.len(), alias_pairs.len());
+        if !paths.is_empty() {
+            for p in paths.iter() { eprintln!("[using/trace] prelude: {}", p); }
+        }
+    }
+    // Self-check: modules resolved (alias_pairs>0) but no paths collected → likely AST merge or file-using gate
+    if alias_pairs.len() > 0 && paths.is_empty() {
+        if !crate::config::env::cli_quiet() {
+            eprintln!("[using/selfcheck] modules resolved but no prelude paths collected (alias_pairs={}, paths=0)", alias_pairs.len());
+            let ast_on = crate::config::env::using_ast_enabled();
+            let allow_file = crate::config::env::allow_using_file();
+            if !ast_on {
+                eprintln!("[using/selfcheck] AST merge is disabled. Enable with HAKO_USING=full or NYASH_USING_AST=1");
+            }
+            if !allow_file {
+                eprintln!("[using/selfcheck] File-using is disabled. Enable with HAKO_USING=full or HAKO_ALLOW_USING_FILE=1");
+            }
+        }
+    }
 
     // Step 2: Register aliases in modules registry (always done)
     super::register_aliases_in_modules_registry(&alias_pairs);
@@ -73,6 +93,9 @@ pub fn resolve_using_with_preludes(
             // Parse preludes to ASTs
             let parsed = super::parse_preludes_to_asts(runner, &paths)
                 .map_err(|e| format!("prelude parsing error: {}", e))?;
+            if crate::config::env::resolve_trace() && !crate::config::env::cli_quiet() {
+                eprintln!("[using/trace] parsed preludes: {}", parsed.len());
+            }
 
             // Build alias map: canonical_path -> alias
             let mut alias_map: HashMap<String, String> = HashMap::new();

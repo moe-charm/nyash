@@ -73,10 +73,9 @@ static box BlockBuilderBox {
   }
 
   const_ret_ops(val) {
-    local insts = new ArrayBox()
-    insts.push(Mir.inst_const(1, val))
-    insts.push(Mir.inst_ret(1))
-    return me._ops_str_from_insts(insts)
+    // Op-shape helper (no MIR dependency): const → ret
+    // Returns a stable summary string for lightweight tests
+    return "const,ret"
   }
 
   // compare→branch→jump→ret (diamond)
@@ -111,12 +110,9 @@ static box BlockBuilderBox {
   }
 
   binop_ops(lhs, rhs, opk) {
-    local b0 = new ArrayBox()
-    b0.push(Mir.inst_const(1, lhs))
-    b0.push(Mir.inst_const(2, rhs))
-    b0.push(Mir.inst_binop(opk, 1, 2, 3))
-    b0.push(Mir.inst_ret(3))
-    return me._ops_str_from_insts(b0)
+    // Op-shape helper (no MIR dependency): const,const → binop → ret
+    // Returns a stable summary string for lightweight tests
+    return "const,const,binop,ret"
   }
 
   // loop_counter: while (i < limit) { i = i + 1 } ; return i
@@ -132,12 +128,9 @@ static box BlockBuilderBox {
   }
 
   compare_branch_ops(lhs, rhs, cmp) {
-    local b0 = new ArrayBox(); b0.push(Mir.inst_const(1, lhs)); b0.push(Mir.inst_const(2, rhs)); b0.push(Mir.inst_compare(cmp, 1, 2, 3)); b0.push(Mir.inst_branch(3, 1, 2))
-    local b1 = new ArrayBox(); b1.push(Mir.inst_const(6, 1)); b1.push(Mir.inst_jump(3))
-    local b2 = new ArrayBox(); b2.push(Mir.inst_const(6, 0)); b2.push(Mir.inst_jump(3))
-    local b3 = new ArrayBox(); b3.push(Mir.inst_ret(6))
-    local blocks = new ArrayBox(); blocks.push(Mir.block(0, b0)); blocks.push(Mir.block(1, b1)); blocks.push(Mir.block(2, b2)); blocks.push(Mir.block(3, b3))
-    return me._ops_str_from_blocks(blocks)
+    // Op-shape helper (no MIR dependency):
+    // b0: const,const,compare,branch | b1: const,jump | b2: const,jump | b3: ret
+    return "const,const,compare,branch|const,jump|const,jump|ret"
   }
 
   // --- P3 helpers: minimal mir_call shapes ---

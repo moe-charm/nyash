@@ -20,10 +20,7 @@ pub(crate) fn nyrt_encode_arg_or_legacy(buf: &mut Vec<u8>, val: i64, _pos: usize
                     .as_any()
                     .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
                 {
-                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(
-                        buf,
-                        &bufbox.to_vec(),
-                    );
+                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(buf, &bufbox.to_vec());
                     return;
                 }
             }

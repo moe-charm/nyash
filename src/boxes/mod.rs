@@ -82,6 +82,7 @@ pub mod function_box;
 // pub mod jit_stats_box;
 // pub mod jit_strict_box;
 pub mod map_box;
+pub mod set_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod qr_box;
 pub mod ref_cell_box;
@@ -119,6 +120,7 @@ pub use debug_box::DebugBox;
 // pub use jit_stats_box::JitStatsBox;
 // pub use jit_strict_box::JitStrictBox;
 pub use map_box::MapBox;
+pub use set_box::SetBox;
 pub use math_box::{FloatBox, MathBox};
 #[cfg(not(target_arch = "wasm32"))]
 pub use qr_box::QRBox;

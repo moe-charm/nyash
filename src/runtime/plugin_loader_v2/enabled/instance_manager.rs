@@ -269,10 +269,13 @@ fn resolve_box_ids(
                     // Prefer spec-ingested type_id when available to avoid stale/incorrect config
                     let mut resolved_tid = box_conf.type_id;
                     // Sanity override for core boxes (dev): guard against stale/misparsed config
+                    let expected_array = crate::types::ids::array();
+                    let expected_map = crate::types::ids::map();
+                    let expected_string = crate::types::ids::string();
                     resolved_tid = match (box_type, resolved_tid) {
-                        ("ArrayBox", tid) if tid != 12 => 12,
-                        ("MapBox", tid) if tid != 11 => 11,
-                        ("StringBox", tid) if tid != 13 => 13,
+                        ("ArrayBox", tid) if tid != expected_array => expected_array,
+                        ("MapBox", tid) if tid != expected_map => expected_map,
+                        ("StringBox", tid) if tid != expected_string => expected_string,
                         _ => resolved_tid,
                     };
                     if let Ok(map) = loader.box_specs.read() {

@@ -18,7 +18,6 @@ use crate::ast::BinaryOperator;
 use crate::parser::{NyashParser, ParseError};
 use crate::parser::common::ParserUtils;
 use crate::tokenizer::TokenType;
-use std::collections::HashMap;
 
 impl NyashParser {
     pub(crate) fn parse_derive_then_box(&mut self) -> Result<ASTNode, ParseError> {

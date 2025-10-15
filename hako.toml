@@ -633,3 +633,23 @@ add_ret = { method_id = 6 }
 end_all = { method_id = 7 }
 to_string = { method_id = 8 }
 fini = { method_id = 4294967295 }
+
+# SetBox Plugin (Map-backed Set)
+[libraries."libnyash_set_plugin.so"]
+boxes = ["SetBox"]
+path = "plugins/nyash-set-plugin/libnyash_set_plugin.so"
+
+[libraries."libnyash_set_plugin.so".SetBox]
+type_id = 15
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_set_plugin.so".SetBox.methods]
+birth   = { method_id = 0 }
+size    = { method_id = 1 }
+has     = { method_id = 3 }
+add     = { method_id = 4 }
+remove  = { method_id = 6 }
+clear   = { method_id = 7 }
+toArray = { method_id = 15 }
+fini    = { method_id = 4294967295 }

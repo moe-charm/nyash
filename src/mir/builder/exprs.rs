@@ -167,10 +167,11 @@ impl super::MirBuilder {
                                 body.clone(),
                             )?;
                             // Index static method for fallback resolution of bare calls
-                            self.static_method_index
-                                .entry(method_name.clone())
-                                .or_insert_with(Vec::new)
-                                .push((name.clone(), params.len()));
+                            self.method_index.register_static_method(
+                                method_name.clone(),
+                                name.clone(),
+                                params.len()
+                            );
                         }
                     }
                     // Return void for declaration context

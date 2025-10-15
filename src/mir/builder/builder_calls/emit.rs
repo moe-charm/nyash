@@ -4,6 +4,7 @@ use crate::mir::builder::calls::call_unified;
 use crate::mir::builder::calls::call_target::CallTarget;
 use crate::mir::builder::calls::function_lowering;
 use crate::mir::definitions::call_unified::Callee;
+use crate::common::trace_box::TraceBox;
 
 impl MirBuilder {
     /// Unified call emission - replaces all emit_*_call methods
@@ -128,7 +129,7 @@ impl MirBuilder {
                         }
                     }
                     // 2) Unique static-method fallback: name+arity → Box.name/Arity
-                    if let Some(cands) = self.static_method_index.get(name) {
+                    if let Some(cands) = self.method_index.static_methods().get(name) {
                         let mut matches: Vec<(String, usize)> = cands
                             .iter()
                             .cloned()
@@ -161,9 +162,7 @@ impl MirBuilder {
         // If it appears here due to an upstream mix, restore the original receiver id.
         if let (Some(orig), Callee::Method { receiver: Some(r0), box_name, method, certainty }) = (orig_recv, &callee) {
             if r0.0 == 0 {
-                if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[recv-guard] fixup receiver=%%0 -> %{} for {}.{}", orig.0, box_name, method);
-                }
+                TraceBox::local_ssa(|| format!("[recv-guard] fixup receiver=%%0 -> %{} for {}.{}", orig.0, box_name, method));
                 callee = Callee::Method { box_name: box_name.clone(), method: method.clone(), receiver: Some(orig), certainty: *certainty };
             }
         }
@@ -188,12 +187,44 @@ impl MirBuilder {
         // Validate call arguments
         call_unified::validate_call_args(&callee, &args)?;
 
+        // Early normalize for Set operations to avoid BoxCall fallback on unknown methods
+        {
+            // Direct, conservative early rewrite for SetBox only (avoid BoxCall fallback)
+            let mut callee_early = callee.clone();
+            let mut changed = false;
+            if let Callee::Method { method, receiver: Some(r), .. } = &callee_early {
+                let is_set = self
+                    .origin_get(*r)
+                    .map(|s| s == "SetBox")
+                    .unwrap_or_else(|| matches!(self.value_types.get(r), Some(crate::mir::MirType::Box(b)) if b == "SetBox"));
+                let allow_map = std::env::var("HAKO_SET_ON_MAP").ok().as_deref() == Some("1");
+                let is_map = self
+                    .origin_get(*r)
+                    .map(|s| s == "MapBox")
+                    .unwrap_or_else(|| matches!(self.value_types.get(r), Some(crate::mir::MirType::Box(b)) if b == "MapBox"));
+                if is_set || (allow_map && is_map) {
+                    match method.as_str() {
+                        "add" | "remove" | "has" if args.len() == 1 => {
+                            callee_early = Callee::Extern(format!("nyrt.set.{}", method));
+                            changed = true;
+                        }
+                        "size" | "clear" | "toArray" if args.is_empty() => {
+                            callee_early = Callee::Extern(format!("nyrt.set.{}", method));
+                            changed = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if changed { callee = callee_early; }
+        }
+
         // Stability guard: decide route via RouterPolicyBox (behavior-preserving rules)
         if let Callee::Method { box_name, method, receiver: Some(r), certainty } = &callee {
             let route = crate::mir::builder::router::policy::choose_route(box_name, method, *certainty, arity_for_try);
             if let crate::mir::builder::router::policy::Route::BoxCall = route {
-                if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[router-guard] {}.{} → BoxCall fallback (recv=%{})", box_name, method, r.0);
+                if super::super::utils::builder_debug_enabled() {
+                    TraceBox::local_ssa(|| format!("[router-guard] {}.{} → BoxCall fallback (recv=%{})", box_name, method, r.0));
                 }
                 let effects = EffectMask::READ.add(Effect::ReadHeap);
                 // Force legacy once to avoid unified→boxcall→unified recursion
@@ -202,9 +233,7 @@ impl MirBuilder {
         }
 
         // Before creating the call, ensure receiver is materialized in the current block
-        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[emit-call] BEFORE materialize current_block={:?}", self.current_block);
-        }
+        TraceBox::local_ssa(|| format!("[emit-call] BEFORE materialize current_block={:?}", self.current_block));
         let callee = match callee {
             Callee::Method { box_name, method, receiver: Some(r), certainty } => {
                 Callee::Method { box_name, method, receiver: Some(r), certainty }
@@ -212,51 +241,56 @@ impl MirBuilder {
             other => other,
         };
 
-        // Finalize operands in current block (EmitGuardBox wrapper)
-        let mut callee = callee;
-        let mut args_local: Vec<ValueId> = args.clone();
-        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee, &mut args_local);
-
-        // Create MirCall instruction using the new module (pure data composition)
-        let mir_call = call_unified::create_mir_call(dst, callee.clone(), args_local.clone());
-
         // Final materialization unified — keep materialized receiver/args as-is.
-        // IMPORTANT: Do not revert receiver to the original (pre-materialization) id.
-        // Reverting can re-introduce use-before-def across block boundaries (e.g., String.size()).
-        let mut callee2 = callee.clone();
-        let mut args2 = args_local.clone();
+        // IMPORTANT: Perform materialization exactly once, right before emission (EmitGuard contract).
+        let mut callee2 = callee;
+        let mut args2: Vec<ValueId> = args.clone();
         crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee2, &mut args2);
-        // Safety net: ensure receiver/args are materialized in the CURRENT block right before emission.
-        // This defends against any late block switches that may have occurred upstream.
-        match &mut callee2 {
-            Callee::Method { receiver: Some(r), .. } => {
-                *r = self.local_recv(*r);
+        // If we early-rewrote Method(Set-like) → Extern("nyrt.set.*"), ensure receiver is present as first arg
+        if let Callee::Extern(ref name) = callee2 {
+            if name.starts_with("nyrt.set.") {
+                // Prepend original receiver if missing
+                let need_recv = match name.as_str() {
+                    s if s == "nyrt.set.size" || s == "nyrt.set.clear" || s == "nyrt.set.toArray" => args2.len() == 0,
+                    _ => args2.len() == 1, // add/remove/has expect (recv, v)
+                };
+                if need_recv {
+                    if let Some(r0) = orig_recv {
+                        let recv_local = self.local_recv(r0);
+                        let mut new_args: Vec<ValueId> = Vec::with_capacity(args2.len() + 1);
+                        new_args.push(recv_local);
+                        new_args.extend(args2.drain(..));
+                        args2 = new_args;
+                    }
+                }
             }
+        }
+        // Centralized rewrite (dispatcher): apply all normalizers in a fixed order.
+        crate::mir::builder::normalize::apply_all(self, &mut callee2, &mut args2);
+
+        // Safety net: ensure receiver/args are materialized in the CURRENT block
+        // after normalization as well (normalize may rewrite Method→Extern and
+        // construct fresh arg vectors). This avoids use‑before‑def of the new
+        // receiver/args introduced by normalization.
+        match &mut callee2 {
+            Callee::Method { receiver: Some(r), .. } => { *r = self.local_recv(*r); }
             _ => {}
         }
-        for a in args2.iter_mut() {
-            *a = self.local_arg(*a);
-        }
-        // Dev trace: show final callee/recv right before emission (guarded)
-        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") || super::super::utils::builder_debug_enabled() {
-            if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
-                if let Some(r) = receiver {
+        for a in args2.iter_mut() { *a = self.local_arg(*a); }
+        if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
+            if let Some(r) = receiver {
+                if super::super::utils::builder_debug_enabled() {
                     let rty = self.value_types.get(r).cloned();
                     let rorig = self.origin_get(*r).map(|s| s.to_string());
-                    eprintln!("[vm-call-final] bb={:?} method={} recv=%{} class={} ty={:?} orig={}",
-                        self.current_block, method, r.0, box_name, rty, rorig.as_deref().unwrap_or("-"));
-                    // Emit a compact varmap line for the receiver (dev-only)
+                    TraceBox::local_ssa(|| format!("[vm-call-final] bb={:?} method={} recv=%{} class={} ty={:?} orig={}",
+                        self.current_block, method, r.0, box_name, rty, rorig.as_deref().unwrap_or("-")));
                     crate::mir::builder::observe::varmap::emit_recv_names(self, *r, "vm-call-final");
                 }
             }
         }
 
-
-        // Centralized rewrite:
-        // - String size/len/length → Extern("nyrt.string.length")
-        // - Array  size/len/length → Extern("nyrt.array.length")
-        crate::mir::builder::normalize::string_length::normalize_string_length_call(self, &mut callee2, &mut args2);
-        crate::mir::builder::normalize::array_length::normalize_array_length_call(self, &mut callee2, &mut args2);
+        // Compose final MirCall from normalized+finalized operands for accurate effects
+        let mir_call = call_unified::create_mir_call(dst, callee2.clone(), args2.clone());
 
         // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {

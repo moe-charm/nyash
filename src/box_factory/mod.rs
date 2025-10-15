@@ -139,14 +139,14 @@ impl UnifiedBoxRegistry {
         };
 
         // When plugins are globally disabled, prefer builtin factory ordering to reduce overhead.
-        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() == Some("1") {
+        if crate::runtime::env_gate_box::bool_alias_or("NYASH_DISABLE_PLUGINS", "HAKO_DISABLE_PLUGINS", false) {
             policy = FactoryPolicy::BuiltinFirst;
         }
 
         // Quiet in JSON-only/quiet modes to avoid polluting child JSON output
-        let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+        let is_quiet = (std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1"))
+            || crate::runtime::env_gate_box::bool_alias_or("NYASH_QUIET", "HAKO_QUIET", false)
+            || (std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0"));
         if !is_quiet {
             eprintln!(
                 "[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)",
@@ -154,9 +154,9 @@ impl UnifiedBoxRegistry {
             );
             // Also emit a one-line snapshot of core type ids and their source (non-quiet only)
             let ids = [
-                ("MapBox", crate::runtime::type_registry::builtin_type_id("MapBox").unwrap_or(0)),
-                ("ArrayBox", crate::runtime::type_registry::builtin_type_id("ArrayBox").unwrap_or(0)),
-                ("StringBox", crate::runtime::type_registry::builtin_type_id("StringBox").unwrap_or(0)),
+                ("MapBox", crate::types::ids::map()),
+                ("ArrayBox", crate::types::ids::array()),
+                ("StringBox", crate::types::ids::string()),
             ];
             let mut source = "default";
             if let Ok(conf) = crate::config::nyash_toml_v2::NyashConfigV2::from_file("hako.toml")

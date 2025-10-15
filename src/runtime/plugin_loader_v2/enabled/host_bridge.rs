@@ -41,7 +41,7 @@ pub fn invoke_alloc(
     instance_id: u32,
     tlv_args: &[u8],
 ) -> (i32, usize, Vec<u8>) {
-    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+    let debug = crate::runtime::env_gate_box::debug_plugin();
     let mut cap: usize = 1024;
     let cap_max: usize = 262144;
     let mut out: Vec<u8> = vec![0u8; cap];

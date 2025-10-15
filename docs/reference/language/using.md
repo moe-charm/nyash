@@ -4,6 +4,10 @@
 
 Status: Accepted (Runner‑side resolution). Selfhost parser accepts using as no‑op and attaches `meta.usings` for future use.
 
+Quick Guide
+- Dev defaults are friendly: `HAKO_USING=full` 相当で動作（using/AST merge/file using 有効）。
+- 詳細は `docs/guides/using-system.md` を参照。
+
 WARNING — --dump-mir is parser-only
 - Files containing `using` fail with `--dump-mir` because resolution happens in the Runner. Use `--emit-mir-json <file>` to inspect MIR, or run without `--dump-mir`.
 

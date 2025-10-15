@@ -37,11 +37,6 @@ impl WeakFieldRegistryBox {
             .map(|set| set.contains(field_name))
             .unwrap_or(false)
     }
-
-    /// Clear all registered weak fields
-    pub fn clear(&mut self) {
-        self.weak_fields.clear();
-    }
 }
 
 #[cfg(test)]

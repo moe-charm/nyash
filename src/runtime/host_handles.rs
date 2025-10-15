@@ -15,6 +15,8 @@ use std::sync::{
 
 use crate::box_trait::NyashBox;
 
+pub type HostHandle = u64;
+
 struct Registry {
     next: AtomicU64,
     map: RwLock<HashMap<u64, Arc<dyn NyashBox>>>,
@@ -59,9 +61,11 @@ fn reg() -> &'static Registry {
 // --- Lightweight diagnostics (opt-in) ---
 fn trace_enabled() -> bool {
     static ON: OnceCell<bool> = OnceCell::new();
-    *ON.get_or_init(|| match std::env::var("HAKO_TRACE_HOST_HANDLE").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") | Some("yes") => true,
-        _ => false,
+    *ON.get_or_init(|| {
+        crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_HOST_HANDLE",
+            "NYASH_TRACE_HOST_HANDLE",
+        ])
     })
 }
 

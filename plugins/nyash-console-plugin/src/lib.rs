@@ -180,7 +180,6 @@ unsafe fn write_tlv_void(out: *mut u8, out_len: *mut usize) -> i32 {
 // ===== Entry points =====
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox FFI (resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

@@ -1,8 +1,9 @@
 //! builtin.rs — Legacy builtin (Rust) routing adapter (Phase 15.75 split)
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
-use crate::vm_ops::boxcall;
 use crate::box_trait::NyashBox;
+use crate::vm_ops::boxcall;
+use super::tables::ARRAY_HOST_ROUTES;
 
 /// Try routing a legacy builtin box (FileBox/CallableBox/ArrayBox/MapBox)
 /// Phase 0-mini: move FileBox arm only; others will be migrated incrementally.
@@ -165,29 +166,10 @@ pub fn try_route_builtin_box(
         #[cfg(feature = "legacy-boxes")]
         if let Some(arr) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             let _ = crate::vm_ops::boxcall::arity_guard_for("ArrayBox", method, args.len());
-            if std::env::var("NYASH_ARRAY_FORCE_HOST").ok().as_deref() == Some("1") {
+            if let Some(route) = ARRAY_HOST_ROUTES.pick(method, args.len()) {
                 let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
-                let (slot, tlv_args): (u64, Vec<u8>) = match method {
-                    m if (m == "size" || m == "len") && args.is_empty() => (102, Vec::new()),
-                    "get" if args.len() == 1 => {
-                        let args_boxes = vec![args[0].to_nyash_box()];
-                        (100, crate::runtime::plugin_ffi_common::encode_args(&args_boxes))
-                    }
-                    "set" if args.len() == 2 => {
-                        let args_boxes = vec![args[0].to_nyash_box(), args[1].to_nyash_box()];
-                        (101, crate::runtime::plugin_ffi_common::encode_args(&args_boxes))
-                    }
-                    _ => (0, Vec::new()),
-                };
-                if slot != 0 {
-                    let mut out_buf = vec![0u8; 64];
-                    let mut out_len: usize = out_buf.len();
-                    let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, slot, tlv_args.as_ptr(), tlv_args.len(), out_buf.as_mut_ptr(), &mut out_len);
-                    if rc == 0 && out_len >= 6 {
-                        if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                            if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
-                        }
-                    }
+                if let Some(v) = super::host_slot::invoke(hh, route, args) {
+                    return Ok(Some(v));
                 }
             }
             let res = if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("ArrayBox", method, args.len()) {
@@ -310,12 +292,12 @@ pub fn try_route_string_primitive(
         if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("StringBox", method, args.len()) {
             let res = match slot as u32 {
                 300 => {
-                    if std::env::var("NYASH_STRING_SIZE_FORCE_HOST").ok().as_deref() == Some("1") {
+                    if crate::runtime::env_gate_box::bool_alias_or("NYASH_STRING_SIZE_FORCE_HOST", "HAKO_STRING_SIZE_FORCE_HOST", false) {
                         let sb = Box::new(crate::box_trait::StringBox::new(s.clone())) as Box<dyn crate::box_trait::NyashBox>;
                         let hh = crate::runtime::host_handles::to_handle_box(sb);
                         let mut out_len: usize = 64;
                         let mut out_buf = vec![0u8; out_len];
-                        let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 300, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
+                        let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, crate::runtime::host_handle_router::consts::STRING_LEN, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
                         if rc == 0 {
                             if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
                                 if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }

@@ -1,6 +1,7 @@
 use nyash_rust::ast::Span;
 use nyash_rust::{ASTNode, ast::LiteralValue, ast::BinaryOperator};
 use std::time::Instant;
+use crate::common::trace_box::TraceBox;
 
 /// HIR Patch description (MVP placeholder)
 #[derive(Clone, Debug, Default)]
@@ -54,14 +55,10 @@ impl MacroEngine {
     fn expand_node(&mut self, node: &ASTNode) -> ASTNode {
         match node.clone() {
             ASTNode::Program { statements, span } => {
-                if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[macro][visit] Program: statements={}", statements.len());
-                }
+                TraceBox::macro_trace(|| format!("[macro][visit] Program: statements={}", statements.len()));
                 // Use flat_map to support multi-node expansion (e.g., @enum → BoxDecl + StaticBox)
                 let new_stmts = statements.into_iter().flat_map(|n| {
-                    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                        eprintln!("[macro][visit]  child kind...",);
-                    }
+                    TraceBox::macro_trace(|| "[macro][visit]  child kind...".to_string());
                     let expanded = self.expand_node(&n);
                     // If expansion returns a Program node, unwrap its statements
                     match expanded {
@@ -72,39 +69,29 @@ impl MacroEngine {
                 ASTNode::Program { statements: new_stmts, span }
             }
             ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, mut methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, span } => {
-                if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[macro][visit] BoxDeclaration: {} (fields={})", name, fields.len());
-                }
+                TraceBox::macro_trace(|| format!("[macro][visit] BoxDeclaration: {} (fields={})", name, fields.len()));
                 // Derive set: default Equals+ToString when macro is enabled
                 let derive_all = std::env::var("NYASH_MACRO_DERIVE_ALL").ok().as_deref() == Some("1");
                 let derive_set = std::env::var("NYASH_MACRO_DERIVE").ok().unwrap_or_else(|| "Equals,ToString".to_string());
-                if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[macro][derive] box={} derive_all={} set={}", name, derive_all, derive_set);
-                }
+                TraceBox::macro_trace(|| format!("[macro][derive] box={} derive_all={} set={}", name, derive_all, derive_set));
                 let want_equals = derive_all || derive_set.contains("Equals");
                 let want_tostring = derive_all || derive_set.contains("ToString");
                 // Philosophy-2: respect box independence — operate on public interface only
                 let field_view: &Vec<String> = &public_fields;
                 if want_equals && !methods.contains_key("equals") {
-                    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                        eprintln!("[macro][derive] equals for {} (public fields: {})", name, field_view.len());
-                    }
+                    TraceBox::macro_trace(|| format!("[macro][derive] equals for {} (public fields: {})", name, field_view.len()));
                     let m = build_equals_method(&name, field_view);
                     methods.insert("equals".to_string(), m);
                 }
                 if want_tostring && !methods.contains_key("toString") {
-                    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                        eprintln!("[macro][derive] toString for {} (public fields: {})", name, field_view.len());
-                    }
+                    TraceBox::macro_trace(|| format!("[macro][derive] toString for {} (public fields: {})", name, field_view.len()));
                     let m = build_tostring_method(&name, field_view);
                     methods.insert("toString".to_string(), m);
                 }
                 ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, span }
             }
             ASTNode::EnumDeclaration { name, variants, span } => {
-                if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[macro][visit] EnumDeclaration: {} ({} variants)", name, variants.len());
-                }
+                TraceBox::macro_trace(|| format!("[macro][visit] EnumDeclaration: {} ({} variants)", name, variants.len()));
                 // Expand @enum to BoxDeclaration + StaticBoxDeclaration
                 let box_nodes = expand_enum_to_boxes(&name, &variants, span);
                 // Return wrapped in Program for flat_map unwrapping

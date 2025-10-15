@@ -135,6 +135,13 @@ fn register_core_builtins(reg: &BoxFactoryRegistry) {
         Ok(Box::new(crate::boxes::time_box::TimerBox::new()))
     });
 
+    // SetBox is a thin wrapper over MapBox and safe to provide as builtin even under plugin-on.
+    // It delegates semantics to Extern("nyrt.set.*") via builder normalization at call sites.
+    #[cfg(feature = "legacy-boxes")]
+    reg.register_builtin("SetBox", |_args: &[Box<dyn NyashBox>]| {
+        Ok(Box::new(crate::boxes::set_box::SetBox::new()))
+    });
+
     // Thin embedded providers (Hako ABI same-face)
     // Register only when plugin policy is OFF to avoid shadowing plugin-on path.
     #[cfg(feature = "legacy-boxes")]

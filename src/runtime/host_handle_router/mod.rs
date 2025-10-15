@@ -3,6 +3,14 @@
 
 #![allow(dead_code)]
 
+// Public constants (slots / error codes)
+pub mod consts;
+
+use consts::{
+    ARRAY_GET, ARRAY_SET, ARRAY_SIZE, ERR_BAD_ARGS, ERR_BAD_RETURN, ERR_PLUGIN_FAILURE,
+    ERR_UNSUPPORTED, ERR_UNKNOWN_HANDLE, MAP_GET, MAP_HAS, MAP_SET, MAP_SIZE, STRING_LEN,
+};
+
 // Phase‑in plan:
 // - Start by handling a single, harmless slot (Array.len = 102) to validate wiring.
 // - Keep the rest returning -999 until type unification and broader routing are ready.
@@ -22,22 +30,13 @@ pub fn route_slot(
 ) -> i32 {
     // Minimal, safe implementation for ArrayBox.get/set/len (slots 100/101/102), MapBox.size/has/get/set (200/202/203/204), StringBox.len (300)
     // All other slots return -999 (unimplemented)
-    const ARRAY_GET: u64 = 100;
-    const ARRAY_SET: u64 = 101;
-    const ARRAY_LEN: u64 = 102;
-    const MAP_SIZE: u64 = 200;
-    const MAP_HAS: u64 = 202;
-    const MAP_GET: u64 = 203;
-    const MAP_SET: u64 = 204;
-    const STRING_LEN: u64 = 300;
-
     let handle = _handle;
     let selector = _selector_id;
 
-    if selector == ARRAY_LEN {
+    if selector == ARRAY_SIZE {
         // Resolve HostHandle → Arc<dyn NyashBox>
         let Some(arc) = crate::runtime::host_handles::get(handle) else {
-            return -1; // unknown handle
+            return ERR_UNKNOWN_HANDLE; // unknown handle
         };
         // Downcast to ArrayBox by type name to avoid importing concrete type in signature
         if arc.type_name() == "ArrayBox" {
@@ -51,11 +50,11 @@ pub fn route_slot(
             }
         }
         // Known selector but unsupported receiver type
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == ARRAY_GET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "ArrayBox" {
             #[cfg(feature = "legacy-boxes")]
             if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
@@ -69,14 +68,14 @@ pub fn route_slot(
                         return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == ARRAY_SET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "ArrayBox" {
             #[cfg(feature = "legacy-boxes")]
             if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
@@ -96,15 +95,15 @@ pub fn route_slot(
                         return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == MAP_SIZE {
         let Some(arc) = crate::runtime::host_handles::get(handle) else {
-            return -1;
+            return ERR_UNKNOWN_HANDLE;
         };
         if arc.type_name() == "MapBox" {
             // Plugin path (avoid legacy dependency when plugins are enabled)
@@ -114,7 +113,7 @@ pub fn route_slot(
                     let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
                     return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                 }
-                return -14;
+                return ERR_BAD_RETURN;
             }
             #[cfg(feature = "legacy-boxes")]
             if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
@@ -133,14 +132,14 @@ pub fn route_slot(
                     let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
                     return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                 }
-                return -12;
+                return ERR_PLUGIN_FAILURE;
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == MAP_HAS {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "MapBox" {
             // Plugin path
             if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
@@ -154,12 +153,12 @@ pub fn route_slot(
                                 let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
                                 return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                             }
-                            return -14;
+                            return ERR_BAD_RETURN;
                         }
-                        return -14;
+                        return ERR_BAD_RETURN;
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
             #[cfg(feature = "legacy-boxes")]
             if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
@@ -174,17 +173,17 @@ pub fn route_slot(
                             let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
                             return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                         }
-                        return -14; // unexpected return type
+                        return ERR_BAD_RETURN; // unexpected return type
                     }
                 }
-                return -13; // arg decode failed
+                return ERR_BAD_ARGS; // arg decode failed
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == MAP_GET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "MapBox" {
             // Plugin path
             if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
@@ -204,11 +203,11 @@ pub fn route_slot(
                                 let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
                                 return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                             }
-                            Err(_) => return -14,
+                            Err(_) => return ERR_BAD_RETURN,
                         }
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
             #[cfg(feature = "legacy-boxes")]
             if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
@@ -223,14 +222,14 @@ pub fn route_slot(
                         return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                     }
                 }
-                return -13; // arg decode failed
+                return ERR_BAD_ARGS; // arg decode failed
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == MAP_SET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "MapBox" {
             // Plugin path
             if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
@@ -250,7 +249,7 @@ pub fn route_slot(
                         return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
             #[cfg(feature = "legacy-boxes")]
             if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
@@ -269,19 +268,22 @@ pub fn route_slot(
                         }
                     }
                 }
-                return -13;
+                return ERR_BAD_ARGS;
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     if selector == STRING_LEN {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return -1; };
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
         if arc.type_name() == "StringBox" {
             // Test hook: simulate return-type mismatch (-14) when explicitly requested.
             // This helps boundary testing without a dedicated plugin.
-            if std::env::var("HAKO_HOSTHANDLE_TEST_RET_MISMATCH").ok().as_deref() == Some("1") {
-                return -14;
+            if crate::runtime::env_gate_box::bool_any(&[
+                "HAKO_HOSTHANDLE_TEST_RET_MISMATCH",
+                "NYASH_HOSTHANDLE_TEST_RET_MISMATCH",
+            ]) {
+                return ERR_BAD_RETURN;
             }
             if let Some(sb) = arc.as_any().downcast_ref::<crate::StringBox>() {
                 let n = sb.value.len() as i64;
@@ -290,7 +292,7 @@ pub fn route_slot(
                 return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
             }
         }
-        return -11;
+        return ERR_UNSUPPORTED;
     }
 
     // Default: not implemented yet

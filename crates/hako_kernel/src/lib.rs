@@ -297,33 +297,47 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
 #[export_name = "nyrt.array.size"]
 pub extern "C" fn nyrt_array_size(handle: i64) -> i64 {
     use nyash_rust::{boxes::array::ArrayBox, runtime::host_handles as handles};
-    if handle <= 0 { return 0; }
+    if handle <= 0 {
+        return 0;
+    }
     if let Some(obj) = handles::get(handle as u64) {
-        if let Some(arr) = obj.as_any().downcast_ref::<ArrayBox>() { return arr.len() as i64; }
+        if let Some(arr) = obj.as_any().downcast_ref::<ArrayBox>() {
+            return arr.len() as i64;
+        }
     }
     0
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyrt.array.size"]
-pub extern "C" fn nyrt_array_size_nonlegacy(_handle: i64) -> i64 { 0 }
+pub extern "C" fn nyrt_array_size_nonlegacy(_handle: i64) -> i64 {
+    0
+}
 
 // Map.size(handle) -> i64
 #[cfg(feature = "legacy-bridge")]
 #[export_name = "nyrt.map.size"]
 pub extern "C" fn nyrt_map_size(handle: i64) -> i64 {
-    use nyash_rust::{ box_trait::IntegerBox, boxes::map_box::MapBox, runtime::host_handles as handles };
-    if handle <= 0 { return 0; }
+    use nyash_rust::{
+        box_trait::IntegerBox, boxes::map_box::MapBox, runtime::host_handles as handles,
+    };
+    if handle <= 0 {
+        return 0;
+    }
     if let Some(obj) = handles::get(handle as u64) {
         if let Some(map) = obj.as_any().downcast_ref::<MapBox>() {
             let size_box = map.size();
-            if let Some(int_box) = size_box.as_any().downcast_ref::<IntegerBox>() { return int_box.value; }
+            if let Some(int_box) = size_box.as_any().downcast_ref::<IntegerBox>() {
+                return int_box.value;
+            }
         }
     }
     0
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyrt.map.size"]
-pub extern "C" fn nyrt_map_size_nonlegacy(_handle: i64) -> i64 { 0 }
+pub extern "C" fn nyrt_map_size_nonlegacy(_handle: i64) -> i64 {
+    0
+}
 
 // box.from_f64(val) -> handle
 // Helper: build a FloatBox and return a handle
@@ -337,21 +351,28 @@ pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.box.from_f64"]
-pub extern "C" fn nyash_box_from_f64_nonlegacy(_val: f64) -> i64 { 0 }
+pub extern "C" fn nyash_box_from_f64_nonlegacy(_val: f64) -> i64 {
+    0
+}
 
 // box.from_i64(val) -> handle
 // Helper: build an IntegerBox and return a handle
 #[cfg(feature = "legacy-bridge")]
 #[export_name = "nyash.box.from_i64"]
 pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
-    use nyash_rust::{ box_trait::{IntegerBox, NyashBox}, runtime::host_handles as handles };
+    use nyash_rust::{
+        box_trait::{IntegerBox, NyashBox},
+        runtime::host_handles as handles,
+    };
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(IntegerBox::new(val));
     nyash_rust::runtime::global_hooks::gc_alloc(8);
     handles::to_handle_arc(arc) as i64
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.box.from_i64"]
-pub extern "C" fn nyash_box_from_i64_nonlegacy(_val: i64) -> i64 { 0 }
+pub extern "C" fn nyash_box_from_i64_nonlegacy(_val: i64) -> i64 {
+    0
+}
 
 // env.box.new(type_name: *const i8) -> handle (i64)
 // Minimal shim for Core-13 pure AOT: constructs Box via registry by name (no args)
@@ -756,7 +777,10 @@ pub extern "C" fn main() -> i32 {
     // --version: print minimal build metadata and exit 0
     let mut want_version = false;
     for a in std::env::args() {
-        if a == "--version" || a == "-V" { want_version = true; break; }
+        if a == "--version" || a == "-V" {
+            want_version = true;
+            break;
+        }
     }
     if want_version {
         let commit = option_env!("HAKO_BUILD_COMMIT").unwrap_or("unknown");

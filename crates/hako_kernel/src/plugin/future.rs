@@ -511,4 +511,11 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.future.spawn_instance3_i64"]
-pub extern "C" fn nyash_future_spawn_instance3_i64(_a0: i64, _a1: i64, _a2: i64, _argc: i64) -> i64 { 0 }
+pub extern "C" fn nyash_future_spawn_instance3_i64(
+    _a0: i64,
+    _a1: i64,
+    _a2: i64,
+    _argc: i64,
+) -> i64 {
+    0
+}

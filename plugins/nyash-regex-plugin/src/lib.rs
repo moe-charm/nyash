@@ -41,7 +41,6 @@ static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox ABI v2 (resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

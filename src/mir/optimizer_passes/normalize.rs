@@ -326,12 +326,11 @@ pub fn normalize_legacy_instructions(
             for inst in &mut block.instructions {
                 if let I::Call { dst, func: _, callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name)), args, effects } = inst {
                     let (box_name, method_opt) = match name.as_str() {
-                        "nyrt.string.length" => ("StringBox", Some("size")),
-                        "nyrt.string.indexOf" => ("StringBox", Some("indexOf")),
-                        "nyrt.string.lastIndexOf" => ("StringBox", Some("lastIndexOf")),
-                        "nyrt.string.substring" => ("StringBox", Some("substring")),
-                        "nyrt.string.charAt" => ("StringBox", Some("charAt")),
-                        "nyrt.string.replace" => ("StringBox", Some("replace")),
+                        // Keep the string family as Extern to avoid fragile receiver materialization;
+                        // unification already normalizes Method→Extern earlier in the builder.
+                        // Reverting here can drop the in-block Copy via DCE if receiver bookkeeping
+                        // regresses; prefer Extern for stability.
+                        n if n.starts_with("nyrt.string.") => ("", None),
                         // Keep array.size as Extern (do not revert to Method)
                         "nyrt.map.size"      => ("MapBox",    Some("size")),
                         "nyrt.map.keys"      => ("MapBox",    Some("keys")),

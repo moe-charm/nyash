@@ -50,7 +50,10 @@ pub fn ensure_loaded(_config_path: Option<&str>) {
             }
         }
         // Stage-2 flag (Map.values()/keys() → HostHandle Array)
-        let stage2 = std::env::var("NYASH_PLUGIN_MAP_ARRAY_HANDLE").ok().as_deref() == Some("1");
+        let stage2 = crate::runtime::env_gate_box::bool_any(&[
+            "NYASH_PLUGIN_MAP_ARRAY_HANDLE",
+            "HAKO_PLUGIN_MAP_ARRAY_HANDLE",
+        ]);
         // Runtime anchors presence (dlsym) check
         let (anchors_ok, missing) = anchors_dlsym_check();
         let _ = ANCHORS_OK.set(anchors_ok);
@@ -102,7 +105,7 @@ pub fn new_box(
 
     let plugin_on = crate::runtime::env_gate_box::plugin_policy_on()
         && !crate::runtime::env_gate_box::plugins_disabled();
-    let strict = match crate::common::env_helpers::get_string_with_alias("HAKO_PLUGIN_POLICY","NYASH_PLUGIN_POLICY").unwrap_or_else(||"auto".to_string()).to_ascii_lowercase().as_str() { "force" => true, _ => false };
+    let strict = crate::runtime::env_gate_box::plugin_policy_force();
 
     // Fail‑Fast if strict and host anchors are missing
     if strict {

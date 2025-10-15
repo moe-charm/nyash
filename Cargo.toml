@@ -189,6 +189,7 @@ nyash-map-plugin   = { path = "plugins/nyash-map-plugin", optional = true }
 nyash-string-plugin= { path = "plugins/nyash-string-plugin", optional = true }
 nyash-filebox-plugin = { path = "plugins/nyash-filebox-plugin", optional = true }
 nyash-json-plugin    = { path = "plugins/nyash-json-plugin", optional = true }
+nyash-set-plugin     = { path = "plugins/nyash-set-plugin", optional = true }
 
 # 日時処理
 chrono = "0.4"

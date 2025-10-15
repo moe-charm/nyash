@@ -141,9 +141,9 @@ pub(super) fn load_plugin(
                 if let Some(spec_cur) = super::specs::get_spec(loader, lib_name, box_type) {
                     if spec_cur.type_id.is_none() {
                         let default_tid = match box_type.as_str() {
-                            "ArrayBox" => Some(12u32),
-                            "MapBox" => Some(11u32),
-                            "StringBox" => Some(13u32),
+                            "ArrayBox" => Some(crate::types::ids::array()),
+                            "MapBox" => Some(crate::types::ids::map()),
+                            "StringBox" => Some(crate::types::ids::string()),
                             _ => None,
                         };
                         if let Some(tid) = default_tid {
@@ -167,9 +167,9 @@ pub(super) fn load_plugin(
                 );
                 // Even when spec is missing, record known type_id defaults for core boxes
                 let default_tid = match box_type.as_str() {
-                    "ArrayBox" => Some(12u32),
-                    "MapBox" => Some(11u32),
-                    "StringBox" => Some(13u32),
+                    "ArrayBox" => Some(crate::types::ids::array()),
+                    "MapBox" => Some(crate::types::ids::map()),
+                    "StringBox" => Some(crate::types::ids::string()),
                     _ => None,
                 };
                 if let Some(tid) = default_tid {

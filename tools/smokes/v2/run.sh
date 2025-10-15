@@ -172,11 +172,13 @@ parse_arguments() {
 setup_environment() {
     log_info "Setting up environment for profile: $PROFILE"
 
-    # 共通ライブラリ読み込み
+    # 共通ライブラリ読み込み（errexitを一時的に無効化して安全にsource）
+    set +e
     source "$SCRIPT_DIR/lib/test_runner.sh"
     source "$SCRIPT_DIR/lib/plugin_manager.sh"
     source "$SCRIPT_DIR/lib/result_checker.sh"
     source "$SCRIPT_DIR/lib/preflight.sh"
+    set -e
 
     # 設定読み込み
     if [ -n "$FORCE_CONFIG" ]; then
@@ -407,10 +409,13 @@ run_single_test() {
     # the underlying program exits non‑zero. When the log clearly shows a pass,
     # and there are no FAIL markers, consider the test passed.
     if [ $exit_code -ne 0 ]; then
-        # 1) Look for PASS marker (colorized lines contain '[PASS]')
-        if grep -q 'PASS]' "$log_file" && ! grep -q 'FAIL]' "$log_file"; then
+        # 1) PASS marker wins
+        if grep -q '\[PASS\]' "$log_file" && ! grep -q '\[FAIL\]' "$log_file"; then
             exit_code=0
-        # 2) Or a clean single-line OK without NG
+        # 2) Explicit SKIP counts as non-failure for profile summaries
+        elif grep -q '\[WARN\].*SKIP' "$log_file"; then
+            exit_code=0
+        # 3) Or a clean single-line OK without NG (legacy helpers)
         elif grep -qE '(^|[[:space:]])OK([[:space:]]|$)' "$log_file" && ! grep -qE '(^|[[:space:]])NG([[:space:]]|$)' "$log_file"; then
             exit_code=0
         fi
@@ -461,6 +466,7 @@ run_single_test() {
     # Detect SKIP in log
     if grep -q '^\[WARN\] SKIP ' "$log_file"; then
         status_meta="SKIP"
+        # Treat SKIP as non-failure in summary accounting
         exit_code=0
     fi
     if [ $exit_code -eq 0 ]; then

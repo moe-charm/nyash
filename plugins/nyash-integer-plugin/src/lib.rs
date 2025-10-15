@@ -40,7 +40,6 @@ define_instance_storage!(IntInstance);
 
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox FFI (resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

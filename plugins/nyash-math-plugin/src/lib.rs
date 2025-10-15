@@ -83,7 +83,6 @@ mod tlv {
 
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox ABI v2 (resolve/invoke_id per box) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

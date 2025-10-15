@@ -46,7 +46,6 @@ define_instance_storage!(StrInstance);
 
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox FFI v2 only - no v1 compatibility =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

@@ -35,6 +35,7 @@ pub mod parser; // using historical parser.rs
 pub mod scope_tracker; // Box lifecycle tracking for VM
 pub mod stdlib;
 pub mod tokenizer;
+pub mod types;
 pub mod type_box; // TypeBox system (arithmetic moved from box_trait.rs)
 
 pub mod value;

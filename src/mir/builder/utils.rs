@@ -103,19 +103,26 @@ impl super::MirBuilder {
             self.local_ssa_map.clear();
             // BlockSchedule materialize cache is per-block as well
             self.schedule_mat_map.clear();
+            // Drop any stale pending copies for this block id (fresh block)
+            self.pending_entry_pin_copies.remove(&block_id);
             // Entry materialization for pinned slots only when not suppressed.
             // This provides block-local defs in single-predecessor flows without touching user vars.
             if !self.suppress_pin_entry_copy_next {
                 // First pass: copy all pin slots and remember old->new mapping
-                let names: Vec<String> = self.variable_map.keys().cloned().collect();
+                let mut names: Vec<String> = self.variable_map.keys().cloned().collect();
+                names.sort();
+                let mut pending: Vec<super::MirInstruction> = Vec::new();
                 for name in names.iter() {
                     if !name.starts_with("__pin$") { continue; }
                     if let Some(&src) = self.variable_map.get(name) {
                         let dst = self.value_gen.next();
-                        self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
+                        pending.push(super::MirInstruction::Copy { dst, src });
                         crate::mir::builder::metadata::propagate::propagate(self, src, dst);
                         self.variable_map.insert(name.clone(), dst);
                     }
+                }
+                if !pending.is_empty() {
+                    self.pending_entry_pin_copies.insert(block_id, pending);
                 }
             }
             // Reset suppression flag after use (one-shot)

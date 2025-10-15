@@ -236,7 +236,7 @@ fn resolve_type_info(loader: &PluginLoaderV2, box_type: &str) -> BidResult<(Stri
 
 /// Decode TLV result into a NyashBox
 fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn NyashBox>>> {
-    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+    let debug = crate::runtime::env_gate_box::debug_plugin();
     if debug {
         eprintln!("[decode_tlv_result] ENTER: box_type={} data.len()={}", box_type, data.len());
     }

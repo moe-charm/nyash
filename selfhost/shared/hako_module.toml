@@ -17,6 +17,10 @@ json.mir_v1_adapter = "json/mir_v1_adapter.hako"
 json.core.json_cursor = "json/json_cursor.hako"
 json.utils.json_utils = "json/json_utils.hako"
 
+# MIR helpers (exported as stable module names)
+mir.schema = "mir/mir_schema_box.hako"
+mir.builder = "mir/block_builder_box.hako"
+
 [private]
 # Internal builders kept private for now
 # json/mir_builder2.hako, json/json_inst_encode_box.hako

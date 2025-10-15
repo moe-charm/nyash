@@ -1,6 +1,7 @@
 use std::sync::{Mutex, OnceLock};
 use nyash_rust::ASTNode;
 use crate::LiteralValue;
+use crate::common::trace_box::TraceBox;
 
 /// MacroBox API — user-extensible macro expansion units (experimental)
 ///
@@ -26,9 +27,7 @@ pub fn register(m: &'static dyn MacroBox) {
     // avoid duplicates
     if !guard.iter().any(|e| e.name() == m.name()) {
         guard.push(m);
-        if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[macro][box] registered {}", m.name());
-        }
+        TraceBox::macro_trace(|| format!("[macro][box] registered {}", m.name()));
     }
 }
 
@@ -47,12 +46,12 @@ pub fn expand_all_once(ast: &ASTNode) -> ASTNode {
     let reg = registry();
     let guard = reg.lock().expect("macro registry poisoned");
     let mut cur = ast.clone();
-    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
+    TraceBox::macro_trace(|| {
         let names: Vec<&str> = guard.iter().map(|m| m.name()).collect();
-        eprintln!("[macro][box] registry: {} boxes {:?}", names.len(), names);
-    }
+        format!("[macro][box] registry: {} boxes {:?}", names.len(), names)
+    });
     for m in guard.iter() {
-        if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") { eprintln!("[macro][box] applying {}", m.name()); }
+        TraceBox::macro_trace(|| format!("[macro][box] applying {}", m.name()));
         let out = m.expand(&cur);
         cur = out;
     }
@@ -201,8 +200,8 @@ impl MacroBox for SelfhostMinMacro {
         }
         let mut changed = false;
         let out = go(ast, &mut changed);
-        if changed && std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[macro][selfhost_min] replaced json/map/arr calls");
+        if changed {
+            TraceBox::macro_trace(|| "[macro][selfhost_min] replaced json/map/arr calls".to_string());
         }
         out
     }

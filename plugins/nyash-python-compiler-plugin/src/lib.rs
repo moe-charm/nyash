@@ -15,7 +15,6 @@ static NEXT_ID: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(1));
 
 // legacy v1 abi/init removed
 
-
 // ===== TypeBox ABI v2 (resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {

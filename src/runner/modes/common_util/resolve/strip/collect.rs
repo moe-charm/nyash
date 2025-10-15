@@ -671,13 +671,13 @@ pub fn collect_using_and_strip(
                                     if verbose { crate::runner::trace::log(format!("[using/fallback] alias='{}' -> '{}'", alias, canon)); }
                                     alias_pairs.push((alias, canon));
                                 }
-                                if should_skip_prelude_path(&path_str) {
+                if should_skip_prelude_path(&path_str) {
                     if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (noise filter)", path_str)); }
                 } else {
                     prelude_paths.push(path_str);
                 }
-                                continue;
-                            }
+                            continue;
+                        }
                         }
                         // As a final dev-friendly allowance: if the target looks like a namespace
                         // and nyash.toml/env provided [modules] entries under that prefix, accept

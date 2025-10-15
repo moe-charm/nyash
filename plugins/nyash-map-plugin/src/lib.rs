@@ -152,45 +152,51 @@ fn map_keys_values_stage2(
         }
         // Lock scope separation: Extract data BEFORE calling host functions
         // (avoids deadlock when nyrt_host_call_slot -> ArrayBox -> array-plugin needs INSTANCES lock)
-        let data_to_insert: Vec<(i64, MapVal)> = match with_instance!(instance_id, |inst: &MapInstance| {
-            if method_id == METHOD_KEYS {
-                // Extract keys as strings (sorted)
-                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                    &inst.data_i64,
-                    &inst.data_str,
-                );
-                keys.into_iter()
-                    .enumerate()
-                    .map(|(idx, k)| (idx as i64, MapVal::Str(k)))
-                    .collect()
-            } else {
-                // Extract values (aligned to sorted keys)
-                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                    &inst.data_i64,
-                    &inst.data_str,
-                );
-                let aligned = hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
-                aligned
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, v)| {
-                        let val = match v {
-                            Some(mv) => mv.clone(),
-                            None => MapVal::Str(String::new()),
-                        };
-                        (idx as i64, val)
-                    })
-                    .collect()
-            }
-        }) {
-            Ok(data) => data,
-            Err(_) => return NYB_E_INVALID_HANDLE,
-        };  // ← Lock released here!
+        let data_to_insert: Vec<(i64, MapVal)> =
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                if method_id == METHOD_KEYS {
+                    // Extract keys as strings (sorted)
+                    let keys = hako_core_map::keys_sorted_from_maps_i64_str(
+                        &inst.data_i64,
+                        &inst.data_str,
+                    );
+                    keys.into_iter()
+                        .enumerate()
+                        .map(|(idx, k)| (idx as i64, MapVal::Str(k)))
+                        .collect()
+                } else {
+                    // Extract values (aligned to sorted keys)
+                    let keys = hako_core_map::keys_sorted_from_maps_i64_str(
+                        &inst.data_i64,
+                        &inst.data_str,
+                    );
+                    let aligned =
+                        hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
+                    aligned
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, v)| {
+                            let val = match v {
+                                Some(mv) => mv.clone(),
+                                None => MapVal::Str(String::new()),
+                            };
+                            (idx as i64, val)
+                        })
+                        .collect()
+                }
+            }) {
+                Ok(data) => data,
+                Err(_) => return NYB_E_INVALID_HANDLE,
+            }; // ← Lock released here!
 
         // Now populate ArrayBox WITHOUT holding INSTANCES lock
         for (i, val) in data_to_insert.into_iter() {
             if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                eprintln!("[map-plugin] stage2 insert idx={} variant={}", i, tlv_codec::v_to_string(&val));
+                eprintln!(
+                    "[map-plugin] stage2 insert idx={} variant={}",
+                    i,
+                    tlv_codec::v_to_string(&val)
+                );
             }
             let tlv = match val {
                 MapVal::I64(n) => build_tlv_i64_i64(i, n),
@@ -198,7 +204,7 @@ fn map_keys_values_stage2(
                 MapVal::Handle(t, inst_id) => {
                     // Prefer PluginHandle (tag=8). HostHandle conversion remains available elsewhere if needed.
                     build_tlv_i64_handle(i, t, inst_id)
-                },
+                }
                 MapVal::Host(h) => build_tlv_i64_host_handle(i, h),
             };
             let mut cap: usize = 64;
@@ -218,7 +224,10 @@ fn map_keys_values_stage2(
                 }
                 if rc == -3 {
                     if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[map-plugin] SHORT_BUFFER on Array.set: cap={} need?>={} rc={}", cap, out_len, rc);
+                        eprintln!(
+                            "[map-plugin] SHORT_BUFFER on Array.set: cap={} need?>={} rc={}",
+                            cap, out_len, rc
+                        );
                     }
                     cap = cap.saturating_mul(2);
                     if cap > 64 * 1024 {
@@ -257,7 +266,14 @@ extern "C" fn mapbox_invoke_id(
             if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
                 eprintln!("[map-plugin] METHOD_KEYS/VALUES stage2 enable=true (default)");
             }
-            return map_keys_values_stage2(instance_id, method_id, args, args_len, result, result_len);
+            return map_keys_values_stage2(
+                instance_id,
+                method_id,
+                args,
+                args_len,
+                result,
+                result_len,
+            );
         }
         METHOD_BIRTH => {
             // Create new MapBox instance. Return format is gated for migration:
@@ -312,12 +328,10 @@ extern "C" fn mapbox_invoke_id(
                 Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
-        METHOD_FINI => {
-            match remove_instance(instance_id) {
-                Some(_) => NYB_SUCCESS,
-                None => NYB_E_PLUGIN_ERROR,
-            }
-        }
+        METHOD_FINI => match remove_instance(instance_id) {
+            Some(_) => NYB_SUCCESS,
+            None => NYB_E_PLUGIN_ERROR,
+        },
         METHOD_GET => {
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
                 match with_instance!(instance_id, |inst: &MapInstance| {
@@ -327,7 +341,12 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Handle(t, i)) => {
                             if *t == TYPE_ID_ARRAY {
                                 unsafe {
-                                    extern "C" { fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64; }
+                                    extern "C" {
+                                        fn nyash_host_from_plugin_handle(
+                                            type_id: u32,
+                                            instance_id: u32,
+                                        ) -> u64;
+                                    }
                                     let h = nyash_host_from_plugin_handle(*t, *i);
                                     write_tlv_host_handle(h as u64, result, result_len)
                                 }
@@ -345,7 +364,7 @@ extern "C" fn mapbox_invoke_id(
                                 }
                             }
                             NYB_SUCCESS
-                        },
+                        }
                     }
                 }) {
                     Ok(rc) => rc,
@@ -359,7 +378,12 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Handle(t, i)) => {
                             if *t == TYPE_ID_ARRAY {
                                 unsafe {
-                                    extern "C" { fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64; }
+                                    extern "C" {
+                                        fn nyash_host_from_plugin_handle(
+                                            type_id: u32,
+                                            instance_id: u32,
+                                        ) -> u64;
+                                    }
                                     let h = nyash_host_from_plugin_handle(*t, *i);
                                     write_tlv_host_handle(h as u64, result, result_len)
                                 }
@@ -377,7 +401,7 @@ extern "C" fn mapbox_invoke_id(
                                 }
                             }
                             NYB_SUCCESS
-                        },
+                        }
                     }
                 }) {
                     Ok(rc) => rc,
@@ -421,7 +445,10 @@ extern "C" fn mapbox_invoke_id(
                 return NYB_E_INVALID_ARGS;
             };
             if debug {
-                eprintln!("[map-plugin] set value variant={}", tlv_codec::v_to_string(&val));
+                eprintln!(
+                    "[map-plugin] set value variant={}",
+                    tlv_codec::v_to_string(&val)
+                );
             }
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
                 match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
@@ -544,17 +571,20 @@ extern "C" fn mapbox_invoke_id(
                     Some(MapVal::Handle(t, i)) => {
                         if (*t == TYPE_ID_ARRAY) {
                             unsafe {
-                                extern "C" { fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64; }
+                                extern "C" {
+                                    fn nyash_host_from_plugin_handle(
+                                        type_id: u32,
+                                        instance_id: u32,
+                                    ) -> u64;
+                                }
                                 let h = nyash_host_from_plugin_handle(*t, *i);
                                 write_tlv_host_handle(h as u64, result, result_len)
                             }
                         } else {
                             write_tlv_handle(*t, *i, result, result_len)
                         }
-                    },
-                    Some(MapVal::Host(h)) => {
-                        write_tlv_host_handle(*h as u64, result, result_len)
                     }
+                    Some(MapVal::Host(h)) => write_tlv_host_handle(*h as u64, result, result_len),
                     None => {
                         unsafe {
                             if !result_len.is_null() {
@@ -562,7 +592,7 @@ extern "C" fn mapbox_invoke_id(
                             }
                         }
                         NYB_SUCCESS
-                    },
+                    }
                 }
             }) {
                 Ok(rc) => rc,
@@ -605,12 +635,9 @@ extern "C" fn mapbox_invoke_id(
         }
         METHOD_VALUES_S => {
             match with_instance!(instance_id, |inst: &MapInstance| {
-                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                    &inst.data_i64,
-                    &inst.data_str,
-                );
-                let aligned =
-                    hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
+                let keys =
+                    hako_core_map::keys_sorted_from_maps_i64_str(&inst.data_i64, &inst.data_str);
+                let aligned = hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
                 let mut vals: Vec<String> = Vec::with_capacity(keys.len());
                 for v in aligned.into_iter() {
                     vals.push(v.map(|vv| v_to_string(vv)).unwrap_or_default());

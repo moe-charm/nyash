@@ -42,12 +42,11 @@ static SSOT_REG: OnceCell<Option<SsotRegistry>> = OnceCell::new();
 fn ssot_load() -> Option<&'static SsotRegistry> {
     SSOT_REG.get_or_init(|| {
         // Allow disabling SSOT at runtime for compatibility or bisecting.
-        let disabled = std::env::var("HAKO_REGISTRY_SSOT_DISABLE")
-            .ok()
-            .or_else(|| std::env::var("NYASH_REGISTRY_SSOT_DISABLE").ok())
-            .map(|v| v.to_ascii_lowercase())
-            .map(|v| matches!(v.as_str(), "1" | "true" | "on"))
-            .unwrap_or(false);
+        let disabled = crate::runtime::env_gate_box::bool_alias_or(
+            "HAKO_REGISTRY_SSOT_DISABLE",
+            "NYASH_REGISTRY_SSOT_DISABLE",
+            false,
+        );
         if disabled { return None; }
         let raw = REGISTRY_SSOT_RAW?;
         let parsed: SsotRoot = match toml::from_str(raw) { Ok(v)=>v, Err(_)=> return Some(SsotRegistry::default()) };

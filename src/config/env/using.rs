@@ -1,11 +1,27 @@
 //! Using/namespace system configuration
 
+fn hako_using_mode() -> Option<String> {
+    std::env::var("HAKO_USING").ok()
+}
+
 pub fn enable_using() -> bool {
-    std::env::var("NYASH_USING").ok().as_deref() != Some("0")
+    match hako_using_mode().as_deref() {
+        Some("off") | Some("0") => false,
+        _ => std::env::var("NYASH_USING").ok().as_deref() != Some("0"),
+    }
 }
 
 pub fn using_ast_enabled() -> bool {
-    std::env::var("NYASH_USING_AST").ok().as_deref() == Some("1")
+    match hako_using_mode().as_deref() {
+        Some("off") | Some("0") => false,
+        Some("basic") => false,
+        Some("full") => true,
+        _ => match std::env::var("NYASH_USING_AST").ok().as_deref() {
+            Some("0") => false,
+            // Default: ON to reduce setup friction (dev-friendly)
+            _ => true,
+        },
+    }
 }
 
 pub fn using_profile() -> String {
@@ -34,7 +50,12 @@ pub fn using_namespace_alias() -> bool {
 }
 
 pub fn allow_using_file() -> bool {
-    std::env::var("NYASH_ALLOW_USING_FILE").ok().as_deref() == Some("1")
+    match hako_using_mode().as_deref() {
+        Some("off") | Some("0") => false,
+        Some("basic") => false,
+        Some("full") => true,
+        _ => std::env::var("NYASH_ALLOW_USING_FILE").ok().as_deref() != Some("0"),
+    }
 }
 
 pub fn ns_policy_module_first() -> bool {

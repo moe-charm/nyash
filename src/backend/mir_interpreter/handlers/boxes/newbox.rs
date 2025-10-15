@@ -45,6 +45,8 @@ impl MirInterpreter {
         }
         // ProviderBox path above is the single source of truth for Plugin→Registry→Embedded.
 
+        // No special-cases under plugin-on: SetBox must come from plugin provider
+
         // Forbid instantiation of flow/static entry boxes (dev guard):
         // Heuristic: when flow is enabled and a `<Class>.main/0` exists but there is
         // no `<Class>.birth/N`, treat the class as a flow/static box and reject `new`.

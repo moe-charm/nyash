@@ -12,8 +12,10 @@ use crate::mir::ValueId;
 //   ValueId that would not have a Copy in the current block.
 //
 // Rules
-// - finalize_call_operands MUST be called immediately before any MirInstruction::Call emission
-//   in unified paths.
+// - finalize_call_operands MUST be called exactly once, immediately before any
+//   MirInstruction::Call emission in unified paths (emit_unified_call).
+// - Call normalizers MUST NOT call LocalSSA; they must reuse the already
+//   materialized receiver/args provided by EmitGuard.
 // - verify_after_call MAY be called right after emission (dev only) to assert block invariants.
 //
 // Rationale

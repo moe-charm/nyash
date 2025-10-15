@@ -2,8 +2,15 @@
 
 **Important / 重要**
 - Primary names are `HAKO_*`. `NYASH_*` are compatibility aliases. Use `HAKO_*` in new scripts/docs; runners mirror common `NYASH_*` → `HAKO_*` non‑destructively.
+- Prefer CLI flags / profiles first; keep ENV toggles short‑lived for experiments only.  
+  CLI/Profiles を優先し、ENV は短命な開発補助（実験後は元に戻すこと）。
 
 Key variables (current)
+- `HAKO_USING` — unified using mode (full|basic|off). New primary.
+  - `full`（既定）: using + AST merge + file using をすべて有効化（開発体験重視）。
+  - `basic`: using のみ（AST merge と file using は無効）。
+  - `off`/`0`: using 無効。
+  - 互換: `NYASH_USING`/`NYASH_USING_AST`/`NYASH_ALLOW_USING_FILE` は引き続き動作しますが、`HAKO_USING` が指定された場合はそちらを優先します。
 - `HAKO_PLUGIN_POLICY` (auto|off|force) — primary plugin load policy (preferred)
   - `auto`（既定）: Plugin優先。未提供/失敗時は互換の範囲でbuiltinへフォールバック可。
   - `off`: Plugin無効（すべてbuiltin/embedded）。
@@ -95,28 +102,46 @@ TTL/cleanup
 Adapter/Fallbacks
 - Stage‑1 keys/values fallback is implemented in `runtime/adapters/map_keys_values_stage1.rs` and is active when `NYASH_PLUGIN_MAP_ARRAY_HANDLE` is not `1`.
 - Stage‑2 (HostHandle arrays) requires `NYASH_PLUGIN_MAP_ARRAY_HANDLE=1` and returns real arrays; identity/parity tests are part of plugin‑on smokes.
-# Environment Variables Guide
-## HostHandle Router (development flags)
 
-These flags force specific methods to route via HostHandleRouter early slots. They are for observation during phased rollout and default to OFF unless profiles enable them.
+### Test Hooks (HostHandleRouter)
 
-- Array
-  - `NYASH_ARRAY_SIZE_FORCE_HOST=1` → slot 102 (`len/size/length`)
-- Map
-  - `NYASH_MAP_SIZE_FORCE_HOST=1` → slot 200 (`size/len`)
-  - `NYASH_MAP_HAS_FORCE_HOST=1`  → slot 202 (`has/1`)
-  - `NYASH_MAP_GET_FORCE_HOST=1`  → slot 203 (`get/1`)
-  - `NYASH_MAP_SET_FORCE_HOST=1`  → slot 204 (`set/2`)
-- String
-  - `NYASH_STRING_SIZE_FORCE_HOST=1` → slot 300 (`size/len/length`)
+- `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1` (alias `NYASH_HOSTHANDLE_TEST_RET_MISMATCH`)
+  - Forces String.len HostHandle route to return `ERR_BAD_RETURN (-14)` for boundary smoke tests.
+- `HAKO_TRACE_HOST_HANDLE=1` (alias `NYASH_TRACE_HOST_HANDLE`)
+  - Enables HostHandle alloc/get trace logging.
 
-Notes
-- Flags are development-only and will be removed once unified routes are stable.
-- Quick profile enables a minimal, safe subset; plugins profile enables broader coverage for Stage‑2 verification.
+### Scheduler & Task scopes
 
-## Test Hooks (HostHandleRouter)
+- `HAKO_SCHED_TRACE=1` / alias `NYASH_SCHED_TRACE`
+  - Trace each poll cycle (moved/ran/budget).
+- `HAKO_SCHED_POLL_BUDGET=<N>` / alias `NYASH_SCHED_POLL_BUDGET`
+  - Limit tasks per poll (default 1, values ≤0 are ignored).
+- `HAKO_TASK_SCOPE_JOIN_MS=<ms>` / alias `NYASH_TASK_SCOPE_JOIN_MS`
+  - Join timeout for scope teardown (default 1000ms).
 
-- `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1`
-  - Purpose: Simulate a return-type mismatch (e.g., String.size expecting Integer but receiving non-Integer) to validate boundary handling (−14).
-  - Scope: Affects String.size (slot 300) HostHandle path; returns `-14` directly when enabled.
-  - Usage: Enable only in boundary tests (plugins profile). Do not use in normal runs.
+### Plugin Map keys()/values() Stage gate
+
+- `HAKO_PLUGIN_MAP_ARRAY_HANDLE=1` / alias `NYASH_PLUGIN_MAP_ARRAY_HANDLE`
+  - Enables Stage‑2 HostHandle arrays for Map.keys()/values(). When unset, Stage‑1 shim (`keysS/valuesS`) remains active.
+
+### Dev stubs
+
+- `HAKO_ENABLE_NYKERNEL_STUB=1` / alias `NYASH_ENABLE_NYKERNEL_STUB`
+  - Activates the nykernel dev heap (malloc/load/store stub).
+
+All runtime consumers read these via `env_gate_box` helpers to keep alias handling consistent.
+
+### Runtime HostHandle & Scheduler flags
+
+- `HAKO_ARRAY_FORCE_HOST` / `NYASH_ARRAY_FORCE_HOST` — map Array.size/get/set into HostHandle slots; pair with `HAKO_ARRAY_SIZE_FORCE_HOST` when only len/size is desired.
+- `HAKO_MAP_FORCE_HOST` / `NYASH_MAP_FORCE_HOST` — enable Map.size/has/get/set HostHandle slots; per-method toggles (`HAKO_MAP_SIZE_FORCE_HOST`, etc.) refine coverage.
+- `HAKO_STRING_SIZE_FORCE_HOST` / `NYASH_STRING_SIZE_FORCE_HOST` — route String.len/size through HostHandle slot 300.
+- `HAKO_HOSTHANDLE_TEST_RET_MISMATCH` / `NYASH_HOSTHANDLE_TEST_RET_MISMATCH` — boundary testing hook returning `ERR_BAD_RETURN (-14)` for String.len.
+- `HAKO_TRACE_HOST_HANDLE` / `NYASH_TRACE_HOST_HANDLE` — opt-in trace logging for HostHandle alloc/get.
+- `HAKO_SCHED_TRACE` / `NYASH_SCHED_TRACE` — trace `poll()` scheduling cycles.
+- `HAKO_SCHED_POLL_BUDGET` / `NYASH_SCHED_POLL_BUDGET` — limit queue drain per poll (default 1, <=0 ignored).
+- `HAKO_TASK_SCOPE_JOIN_MS` / `NYASH_TASK_SCOPE_JOIN_MS` — timeout (ms) for task scope teardown joins (default 1000).
+- `HAKO_PLUGIN_MAP_ARRAY_HANDLE` / `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage-2 HostHandle arrays for Map.keys()/values(); unset keeps Stage-1 shim (`keysS`/`valuesS`).
+- `HAKO_ENABLE_NYKERNEL_STUB` / `NYASH_ENABLE_NYKERNEL_STUB` — enable nykernel dev heap stub (malloc/load/store).
+
+All values are normalized via `env_gate_box` helpers so aliases stay in sync. Prefer `HAKO_*` when introducing new scripts or docs.

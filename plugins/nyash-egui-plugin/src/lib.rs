@@ -113,7 +113,6 @@ pub static nyash_typebox_EguiBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 
 // legacy v1 abi/init removed
 
-
 // ===== TLV helpers (version=1) =====
 fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {

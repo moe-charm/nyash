@@ -2,7 +2,7 @@
 
 **脱Rust大作戦: Gate方式による段階的実装**
 
-状態: 実行中（Gate A実装中）
+状態: 実行中（Gate A 安定化・Gate B 着手）
 期間: 6-8週間 (2025-12-21 - 2026-02-中旬)
 
 ---
@@ -49,15 +49,15 @@
 
 ---
 
-## 📊 Phase 20.5のGate構成
+## 📊 Phase 20.5のGate構成（進捗）
 
 ```
-Gate A（実装中）: Parser v1（Hakorune製）→ Canonical AST JSON
+Gate A（安定）: Parser v1（Hakorune製）→ Canonical AST JSON
   ├─ DoD: ~10ケース PASS、非決定性ゼロ、キーソート
   ├─ CLI: --dump-ast-json, --emit-ast-json
   └─ Smoke: 9件追加済み（quick-selfhost）
 
-Gate B（次）: MIR Builder v1（最小16命令）
+Gate B（進行中）: MIR Builder v1（最小16命令）
   ├─ DoD: 16命令到達可能、ゴールデンJSON一致
   └─ 4本スモーク（const+ret, add+ret, eq+branch, lt+branch）
 

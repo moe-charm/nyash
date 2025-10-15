@@ -32,7 +32,9 @@ pub extern "C" fn nyash_map_size_h(handle: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.size_h"]
-pub extern "C" fn nyash_map_size_h(_handle: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_size_h(_handle: i64) -> i64 {
+    0
+}
 
 // get_h: (map_handle, key_i64) -> value_handle
 #[cfg(feature = "legacy-bridge")]
@@ -67,7 +69,9 @@ pub extern "C" fn nyash_map_get_h(handle: i64, key: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.get_h"]
-pub extern "C" fn nyash_map_get_h(_handle: i64, _key: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_get_h(_handle: i64, _key: i64) -> i64 {
+    0
+}
 
 // get_hh: (map_handle, key_handle) -> value_handle
 #[cfg(feature = "legacy-bridge")]
@@ -104,7 +108,9 @@ pub extern "C" fn nyash_map_get_hh(handle: i64, key_any: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.get_hh"]
-pub extern "C" fn nyash_map_get_hh(_handle: i64, _key_any: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_get_hh(_handle: i64, _key_any: i64) -> i64 {
+    0
+}
 
 // set_h: (map_handle, key_i64, val) -> i64 (ignored/0)
 #[cfg(feature = "legacy-bridge")]
@@ -152,7 +158,9 @@ pub extern "C" fn nyash_map_set_h(handle: i64, key: i64, val: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.set_h"]
-pub extern "C" fn nyash_map_set_h(_handle: i64, _key: i64, _val: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_set_h(_handle: i64, _key: i64, _val: i64) -> i64 {
+    0
+}
 
 // set_hh: (map_handle, key_any: handle or i64, val_any: handle or i64) -> i64
 #[cfg(feature = "legacy-bridge")]
@@ -196,7 +204,9 @@ pub extern "C" fn nyash_map_set_hh(handle: i64, key_any: i64, val_any: i64) -> i
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.set_hh"]
-pub extern "C" fn nyash_map_set_hh(_handle: i64, _key_any: i64, _val_any: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_set_hh(_handle: i64, _key_any: i64, _val_any: i64) -> i64 {
+    0
+}
 
 // has_hh: (map_handle, key_any: handle or i64) -> i64 (0/1)
 #[cfg(feature = "legacy-bridge")]
@@ -233,7 +243,9 @@ pub extern "C" fn nyash_map_has_hh(handle: i64, key_any: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.has_hh"]
-pub extern "C" fn nyash_map_has_hh(_handle: i64, _key_any: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_has_hh(_handle: i64, _key_any: i64) -> i64 {
+    0
+}
 
 // has_h: (map_handle, key_i64) -> i64 (0/1)
 #[cfg(feature = "legacy-bridge")]
@@ -259,4 +271,6 @@ pub extern "C" fn nyash_map_has_h(handle: i64, key: i64) -> i64 {
 }
 #[cfg(not(feature = "legacy-bridge"))]
 #[export_name = "nyash.map.has_h"]
-pub extern "C" fn nyash_map_has_h(_handle: i64, _key: i64) -> i64 { 0 }
+pub extern "C" fn nyash_map_has_h(_handle: i64, _key: i64) -> i64 {
+    0
+}

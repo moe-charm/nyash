@@ -63,12 +63,6 @@ impl FieldOriginRegistryBox {
 
         None
     }
-
-    /// Clear all registered field origins
-    pub fn clear(&mut self) {
-        self.value_field_origins.clear();
-        self.box_field_origins.clear();
-    }
 }
 
 #[cfg(test)]

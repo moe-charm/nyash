@@ -12,6 +12,7 @@ pub mod ctx;
 pub mod test_harness;
 
 use nyash_rust::ASTNode;
+use crate::common::trace_box::TraceBox;
 
 /// Enable/disable macro system via env gate.
 pub fn enabled() -> bool {
@@ -31,11 +32,11 @@ pub fn maybe_expand_and_dump(ast: &ASTNode, _dump_only: bool) -> ASTNode {
     // Initialize user macro boxes (if any, behind env gates)
     self::macro_box::init_builtin();
     self::macro_box_ny::init_from_env();
-    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") { eprintln!("[macro] input AST: {:?}", ast); }
+    TraceBox::macro_trace(|| format!("[macro] input AST: {:?}", ast));
     let mut eng = self::engine::MacroEngine::new();
     let (out, _patches) = eng.expand(ast);
     let out2 = maybe_inject_test_harness(&out);
-    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
+    TraceBox::macro_trace(|| {
         fn count_calls(n: &nyash_rust::ASTNode, acc: &mut std::collections::HashMap<String, usize>) {
             use nyash_rust::ast::ASTNode as A;
             match n.clone() {
@@ -53,9 +54,13 @@ pub fn maybe_expand_and_dump(ast: &ASTNode, _dump_only: bool) -> ASTNode {
         }
         let mut acc = std::collections::HashMap::new();
         count_calls(&out2, &mut acc);
-        if !acc.is_empty() { eprintln!("[macro] call census: {:?}", acc); }
-        eprintln!("[macro] output AST: {:?}", out2);
-    }
+        let mut msg = String::new();
+        if !acc.is_empty() {
+            msg.push_str(&format!("[macro] call census: {:?}\n", acc));
+        }
+        msg.push_str(&format!("[macro] output AST: {:?}", out2));
+        msg
+    });
     out2
 }
 

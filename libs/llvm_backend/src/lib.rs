@@ -10,8 +10,18 @@ pub extern "C" fn llvm_compile_mir_to_object(
     if mir_json_path.is_null() || output_path.is_null() {
         return -1;
     }
-    let mir_path = unsafe { match CStr::from_ptr(mir_json_path).to_str() { Ok(s) => s.to_string(), Err(_) => return -1 } };
-    let out_path = unsafe { match CStr::from_ptr(output_path).to_str() { Ok(s) => s.to_string(), Err(_) => return -1 } };
+    let mir_path = unsafe {
+        match CStr::from_ptr(mir_json_path).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return -1,
+        }
+    };
+    let out_path = unsafe {
+        match CStr::from_ptr(output_path).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return -1,
+        }
+    };
 
     // Call the Python llvmlite harness to compile MIR JSON → object file
     // Expect script at tools/llvmlite_harness.py relative to repository root
@@ -73,4 +83,3 @@ pub extern "C" fn llvm_compile_mir_to_ll(
         _ => -1,
     }
 }
-

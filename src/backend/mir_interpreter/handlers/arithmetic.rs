@@ -168,8 +168,43 @@ impl MirInterpreter {
     }
 
     pub(super) fn handle_copy(&mut self, dst: ValueId, src: ValueId) -> Result<(), VMError> {
-        let v = self.reg_load(src)?;
-        self.regs.insert(dst, v);
-        Ok(())
+        // Defensive: some pipelines may place a Copy before the source has a
+        // definition in the current block (e.g., entry scheduling artifacts).
+        // Behavior:
+        // - If src is defined: perform normal copy.
+        // - If src is undefined but dst already has a value: treat as no-op (keep dst).
+        // - Otherwise: respect strict mode unless tolerate_void is enabled, in which
+        //   case initialize dst as Void to keep execution progressing in dev contexts.
+        match self.reg_load(src) {
+            Ok(v) => {
+                self.regs.insert(dst, v);
+                Ok(())
+            }
+            Err(e) => {
+                if self.regs.contains_key(&dst) {
+                    if super::VmConfig::global().general_trace {
+                        eprintln!(
+                            "[vm-copy] src undefined v%{} → no-op; keep dst v%{}",
+                            src.as_u32(),
+                            dst.as_u32()
+                        );
+                    }
+                    return Ok(());
+                }
+                if super::VmConfig::global().tolerate_void {
+                    if super::VmConfig::global().general_trace {
+                        eprintln!(
+                            "[vm-copy] src undefined v%{} → init dst v%{} = Void (tolerate)",
+                            src.as_u32(),
+                            dst.as_u32()
+                        );
+                    }
+                    self.regs.insert(dst, super::VMValue::Void);
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }

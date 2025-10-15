@@ -46,6 +46,8 @@ impl BoxFactory for BuiltinBoxFactory {
             "BoolBox" => builtin_impls::bool_box::create(args),
 
             // ArrayBox/MapBox removed — use plugin providers
+            // SetBox is a thin wrapper around MapBox (legacy helper)
+            "SetBox" => builtin_impls::set_box::create(args),
 
             // Phase 2.6: DELETE LAST (critical for logging)
             "ConsoleBox" => builtin_impls::console_box::create(args),
@@ -68,6 +70,7 @@ impl BoxFactory for BuiltinBoxFactory {
             // Collections/common
             "ConsoleBox",
             "NullBox",
+            "SetBox",
         ]
     }
 

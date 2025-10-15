@@ -358,7 +358,7 @@ run_nyash_vm() {
     local ENV_PREFIX=( )
     if [ "${SMOKES_CLEAN_ENV:-0}" = "1" ]; then
         ENV_PREFIX=(env -u NYASH_DEBUG_ENABLE -u NYASH_DEBUG_KINDS -u NYASH_DEBUG_SINK \
-                        -u NYASH_RESOLVE_FIX_BRACES -u NYASH_USING_AST \
+                        -u NYASH_RESOLVE_FIX_BRACES \
                         -u NYASH_VM_TRACE -u NYASH_VM_VERIFY_MIR -u NYASH_VM_TOLERATE_VOID \
                         -u NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN)
     fi

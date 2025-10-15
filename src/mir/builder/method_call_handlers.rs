@@ -178,9 +178,15 @@ impl MirBuilder {
                 if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
             }
             // Conservative fallback: size/length/len with 0 args → treat receiver as string-like
-            // This avoids fragile Method(receiver) on unknown types in selfhost JSON scanners.
+            // Guarded: only when receiver is NOT a known Box type (except inferred String)
             if (method == "size" || method == "length" || method == "len") && arg_values.is_empty() {
-                if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
+                let is_known_box = match self.origin_get(object_value) {
+                    Some(cls) => cls != "StringBox",
+                    None => matches!(self.value_types.get(&object_value), Some(MirType::Box(b)) if b != "StringBox"),
+                };
+                if !is_known_box {
+                    if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
+                }
             }
         }
 

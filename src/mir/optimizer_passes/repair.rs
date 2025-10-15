@@ -23,6 +23,14 @@ pub fn repair_string_len_receivers(module: &mut MirModule) -> OptimizationStats 
                             patches.push((idx, *r, *dst, Callee::Method { box_name: box_name.clone(), method: method.clone(), receiver: Some(*r), certainty: crate::mir::definitions::call_unified::TypeCertainty::Known }, *effects, args.clone()));
                         }
                     }
+                    // Also repair already-normalized extern calls
+                    if let MirInstruction::Call { dst, callee: Some(Callee::Extern(name)), args, effects, .. } = inst {
+                        let name_str = name.as_str();
+                        if (name_str == "nyrt.string.length" || name_str == "nyrt.array.size") && args.len() == 1 {
+                            let r = args[0];
+                            patches.push((idx, r, *dst, Callee::Extern(name.clone()), *effects, args.clone()));
+                        }
+                    }
                 }
             }
 
@@ -70,6 +78,16 @@ pub fn repair_string_len_receivers(module: &mut MirModule) -> OptimizationStats 
                                 dst: dst_opt,
                                 func: ValueId::new(0),
                                 callee: Some(Callee::Extern(extern_name.to_string())),
+                                args: vec![recv_local],
+                                effects: effects_clone,
+                            }
+                        }
+                        Callee::Extern(name) if (name == "nyrt.string.length" || name == "nyrt.array.size") => {
+                            // Already extern: only patch the receiver arg to the fresh local
+                            MirInstruction::Call {
+                                dst: dst_opt,
+                                func: ValueId::new(0),
+                                callee: Some(Callee::Extern(name)),
                                 args: vec![recv_local],
                                 effects: effects_clone,
                             }
@@ -127,6 +145,56 @@ pub fn repair_boxcall_receivers(module: &mut MirModule) -> OptimizationStats {
                         box_val: recv_local,
                         method,
                         method_id,
+                        args: args_clone,
+                        effects: effects_clone,
+                    };
+                    applied += 1;
+                    stats.intrinsic_optimizations += 1;
+                }
+            }
+        }
+    }
+    stats
+}
+
+/// Generic repair: materialize Method receivers directly before call sites.
+///
+/// Inserts `Copy recv_local <- recv_old` immediately before every
+/// `Call{ callee=Method{ receiver=Some(recv_old) } }` and rewrites the call to
+/// use `recv_local`. This avoids use-before-def across basic blocks when the
+/// receiver was defined in a different block.
+pub fn repair_method_receivers(module: &mut MirModule) -> OptimizationStats {
+    let mut stats = OptimizationStats::new();
+    for (_fname, func) in module.functions.iter_mut() {
+        let bids: Vec<_> = func.block_ids();
+        for bid in bids {
+            let mut patches: Vec<(usize, ValueId, Option<ValueId>, Callee, Vec<ValueId>, crate::mir::EffectMask)> = Vec::new();
+            if let Some(block) = func.blocks.get(&bid) {
+                for (idx, inst) in block.instructions.iter().enumerate() {
+                    if let MirInstruction::Call { dst, callee: Some(Callee::Method { box_name, method, receiver: Some(r), certainty }), args, effects, .. } = inst {
+                        // Record patch for any Method call (class/method kept)
+                        let cal = Callee::Method { box_name: box_name.clone(), method: method.clone(), receiver: Some(*r), certainty: *certainty };
+                        patches.push((idx, *r, *dst, cal, args.clone(), *effects));
+                    }
+                }
+            }
+            if patches.is_empty() { continue; }
+            let mut applied = 0usize;
+            for (idx, recv_old, dst_opt, callee_clone, args_clone, effects_clone) in patches.into_iter() {
+                let recv_local = { let id = func.next_value_id; func.next_value_id += 1; ValueId::new(id) };
+                if let Some(block) = func.blocks.get_mut(&bid) {
+                    let at = idx + applied;
+                    block.instructions.insert(at, MirInstruction::Copy { dst: recv_local, src: recv_old });
+                    let new_call = match callee_clone {
+                        Callee::Method { box_name, method, certainty, .. } => {
+                            Callee::Method { box_name, method, receiver: Some(recv_local), certainty }
+                        }
+                        other => other,
+                    };
+                    block.instructions[at + 1] = MirInstruction::Call {
+                        dst: dst_opt,
+                        func: ValueId::new(0),
+                        callee: Some(new_call),
                         args: args_clone,
                         effects: effects_clone,
                     };

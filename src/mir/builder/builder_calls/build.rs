@@ -438,7 +438,7 @@ impl MirBuilder {
                 Err(_e) => {
                     // dev trace removed
                     // Fallback: if exactly one static method with this name and arity is known, call it.
-                    if let Some(cands) = self.static_method_index.get(&name) {
+                    if let Some(cands) = self.method_index.static_methods().get(&name) {
                         let mut matches: Vec<(String, usize)> = cands
                             .iter()
                             .cloned()
@@ -455,7 +455,7 @@ impl MirBuilder {
                     } else if let Some(dot) = name.rfind('.') {
                         // Qualified input like Alias.Box.method → try method-name fallback
                         let method_only = &name[dot + 1..];
-                        if let Some(cands2) = self.static_method_index.get(method_only) {
+                        if let Some(cands2) = self.method_index.static_methods().get(method_only) {
                             let mut matches: Vec<(String, usize)> = cands2
                                 .iter()
                                 .cloned()

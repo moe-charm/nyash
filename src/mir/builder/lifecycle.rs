@@ -19,10 +19,11 @@ impl super::MirBuilder {
                 } else {
                     for (mname, mast) in methods {
                         if let ASTNode::FunctionDeclaration { params, .. } = mast {
-                            self.static_method_index
-                                .entry(mname.clone())
-                                .or_insert_with(Vec::new)
-                                .push((name.clone(), params.len()));
+                            self.method_index.register_static_method(
+                                mname.clone(),
+                                name.clone(),
+                                params.len()
+                            );
                         }
                     }
                 }
@@ -92,10 +93,11 @@ impl super::MirBuilder {
                                     if let N::FunctionDeclaration { params, body, .. } = mast {
                                         let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
                                         self.lower_static_method_as_function(func_name, params.clone(), body.clone())?;
-                                        self.static_method_index
-                                            .entry(mname.clone())
-                                            .or_insert_with(Vec::new)
-                                            .push((name.clone(), params.len()));
+                                        self.method_index.register_static_method(
+                                            mname.clone(),
+                                            name.clone(),
+                                            params.len()
+                                        );
                                     }
                                 }
                             }
@@ -126,7 +128,11 @@ impl super::MirBuilder {
                                     if !*is_static {
                                         let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
                                         // Index instance method for rewrite gating
-                                        self.instance_method_index.insert((name.clone(), mname.clone(), params.len()));
+                                        self.method_index.register_instance_method(
+                                            name.clone(),
+                                            mname.clone(),
+                                            params.len()
+                                        );
                                         self.lower_method_as_function(
                                             func_name,
                                             name.clone(),

@@ -1,9 +1,9 @@
 //! MirJsonBuilderMin plugin (minimal) — emits MIR(JSON v0) strings
 
-use std::ffi::CStr;
-use std::os::raw::c_char;
 use hako_abi_impl::tlv::{read_arg_i64, read_arg_string, write_tlv_string};
 use hako_abi_impl::{define_instance_storage, with_instance_mut};
+use std::ffi::CStr;
+use std::os::raw::c_char;
 
 // Error codes (aligned)
 const OK: i32 = 0;
@@ -46,7 +46,9 @@ fn esc(s: &str) -> String {
 }
 
 extern "C" fn resolve(name: *const c_char) -> u32 {
-    if name.is_null() { return 0; }
+    if name.is_null() {
+        return 0;
+    }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         "birth" => M_BIRTH,
@@ -87,7 +89,10 @@ extern "C" fn invoke_id(
         })
         .unwrap_or(E_INVALID_METHOD),
         M_START_FUNCTION => {
-            let name = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return E_INVALID_ARGS };
+            let name = match read_arg_string(args, args_len, 0) {
+                Some(s) => s,
+                None => return E_INVALID_ARGS,
+            };
             with_instance_mut!(instance_id, |inst: &mut Builder| {
                 inst.buf.push_str("{\"name\":\"");
                 inst.buf.push_str(&esc(&name));
@@ -97,19 +102,33 @@ extern "C" fn invoke_id(
             .unwrap_or(E_INVALID_METHOD)
         }
         M_START_BLOCK => {
-            let id = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return E_INVALID_ARGS };
+            let id = match read_arg_i64(args, args_len, 0) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
             with_instance_mut!(instance_id, |inst: &mut Builder| {
                 inst.first_inst = true;
-                inst.buf.push_str(&format!("{{\"id\":{},\"instructions\":[", id));
+                inst.buf
+                    .push_str(&format!("{{\"id\":{},\"instructions\":[", id));
                 OK
             })
             .unwrap_or(E_INVALID_METHOD)
         }
         M_ADD_CONST => {
-            let dst = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return E_INVALID_ARGS };
-            let val = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return E_INVALID_ARGS };
+            let dst = match read_arg_i64(args, args_len, 0) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
+            let val = match read_arg_i64(args, args_len, 1) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
             with_instance_mut!(instance_id, |inst: &mut Builder| {
-                if !inst.first_inst { inst.buf.push(','); } else { inst.first_inst = false; }
+                if !inst.first_inst {
+                    inst.buf.push(',');
+                } else {
+                    inst.first_inst = false;
+                }
                 inst.buf.push_str(&format!(
                     "{{\"op\":\"const\",\"dst\":{},\"value\":{{\"type\":\"i64\",\"value\":{}}}}}",
                     dst, val
@@ -119,25 +138,52 @@ extern "C" fn invoke_id(
             .unwrap_or(E_INVALID_METHOD)
         }
         M_ADD_COMPARE => {
-            let kind = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return E_INVALID_ARGS };
-            let lhs = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return E_INVALID_ARGS };
-            let rhs = match read_arg_i64(args, args_len, 2) { Some(v) => v, None => return E_INVALID_ARGS };
-            let dst = match read_arg_i64(args, args_len, 3) { Some(v) => v, None => return E_INVALID_ARGS };
+            let kind = match read_arg_string(args, args_len, 0) {
+                Some(s) => s,
+                None => return E_INVALID_ARGS,
+            };
+            let lhs = match read_arg_i64(args, args_len, 1) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
+            let rhs = match read_arg_i64(args, args_len, 2) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
+            let dst = match read_arg_i64(args, args_len, 3) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
             with_instance_mut!(instance_id, |inst: &mut Builder| {
-                if !inst.first_inst { inst.buf.push(','); } else { inst.first_inst = false; }
+                if !inst.first_inst {
+                    inst.buf.push(',');
+                } else {
+                    inst.first_inst = false;
+                }
                 inst.buf.push_str(&format!(
                     "{{\"op\":\"compare\",\"kind\":\"{}\",\"dst\":{},\"lhs\":{},\"rhs\":{}}}",
-                    esc(&kind), dst, lhs, rhs
+                    esc(&kind),
+                    dst,
+                    lhs,
+                    rhs
                 ));
                 OK
             })
             .unwrap_or(E_INVALID_METHOD)
         }
         M_ADD_RET => {
-            let val = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return E_INVALID_ARGS };
+            let val = match read_arg_i64(args, args_len, 0) {
+                Some(v) => v,
+                None => return E_INVALID_ARGS,
+            };
             with_instance_mut!(instance_id, |inst: &mut Builder| {
-                if !inst.first_inst { inst.buf.push(','); } else { inst.first_inst = false; }
-                inst.buf.push_str(&format!("{{\"op\":\"ret\",\"value\":{}}}", val));
+                if !inst.first_inst {
+                    inst.buf.push(',');
+                } else {
+                    inst.first_inst = false;
+                }
+                inst.buf
+                    .push_str(&format!("{{\"op\":\"ret\",\"value\":{}}}", val));
                 OK
             })
             .unwrap_or(E_INVALID_METHOD)
@@ -149,7 +195,8 @@ extern "C" fn invoke_id(
         .unwrap_or(E_INVALID_METHOD),
         M_TO_STRING => {
             // Return TLV string of current buffer
-            let s = with_instance_mut!(instance_id, |inst: &mut Builder| inst.buf.clone()).unwrap_or_default();
+            let s = with_instance_mut!(instance_id, |inst: &mut Builder| inst.buf.clone())
+                .unwrap_or_default();
             unsafe { write_tlv_string(&s, result, result_len) }
         }
         M_FINI => OK,
@@ -186,6 +233,10 @@ pub static nyash_plugin_name: &[u8] = b"nyash-mirjsonbuildermin\0";
 pub static nyash_plugin_version: &[u8] = b"0.1.0\0";
 
 #[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 { OK }
+pub extern "C" fn nyash_plugin_init() -> i32 {
+    OK
+}
 #[no_mangle]
-pub extern "C" fn nyash_plugin_fini() -> i32 { OK }
+pub extern "C" fn nyash_plugin_fini() -> i32 {
+    OK
+}

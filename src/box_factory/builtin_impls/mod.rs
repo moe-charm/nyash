@@ -28,3 +28,5 @@ pub mod console_box;   // DELETE: Phase 2.6 (LAST - critical for logging)
 // Special consideration
 #[cfg(feature = "legacy-boxes")]
 pub mod null_box;      // DISCUSS: Keep as primitive?
+#[cfg(feature = "legacy-boxes")]
+pub mod set_box;       // Thin wrapper over MapBox (legacy helper)

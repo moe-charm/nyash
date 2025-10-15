@@ -5,8 +5,8 @@
 
 use nyash_rust::cli::CliConfig;
 use nyash_rust::config::env as env_config;
-use nyash_rust::runner::NyashRunner;
 use nyash_rust::runner::modes::common_util::exec;
+use nyash_rust::runner::NyashRunner;
 
 /// Thin entry point - delegates to CLI parsing and runner execution
 fn main() {
@@ -18,7 +18,10 @@ fn main() {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(name) = exe.file_name().and_then(|s| s.to_str()) {
             let quiet = nyash_rust::config::env::cli_quiet();
-            if name == "nyash" && !quiet && std::env::var("NYASH_JSON_ONLY").ok().as_deref() != Some("1") {
+            if name == "nyash"
+                && !quiet
+                && std::env::var("NYASH_JSON_ONLY").ok().as_deref() != Some("1")
+            {
                 eprintln!("[deprecate] CLI name 'nyash' is deprecated; use 'hako' instead.");
             }
         }
@@ -29,8 +32,14 @@ fn main() {
     // Tools helpers: --which / --doctor tools
     if let Some(tool) = &config.which_tool {
         match which_tool(tool) {
-            Some((p, origin)) => { println!("{} ({})", p, origin); std::process::exit(0); },
-            None => { eprintln!("not found: {}", tool); std::process::exit(1); }
+            Some((p, origin)) => {
+                println!("{} ({})", p, origin);
+                std::process::exit(0);
+            }
+            None => {
+                eprintln!("not found: {}", tool);
+                std::process::exit(1);
+            }
         }
     }
     if config.doctor_tools {
@@ -54,21 +63,43 @@ fn which_tool(name: &str) -> Option<(String, &'static str)> {
     let cwd = std::env::current_dir().ok();
     match name {
         "plugin-tester" => {
-            if let Some(mut p) = cwd.clone() { p.push("tools/plugin-tester/target/release/plugin-tester"); if p.exists() { return Some((p.display().to_string(), "workspace")); } }
-            which::which("plugin-tester").ok().map(|p| (p.display().to_string(), "PATH"))
+            if let Some(mut p) = cwd.clone() {
+                p.push("tools/plugin-tester/target/release/plugin-tester");
+                if p.exists() {
+                    return Some((p.display().to_string(), "workspace"));
+                }
+            }
+            which::which("plugin-tester")
+                .ok()
+                .map(|p| (p.display().to_string(), "PATH"))
         }
         "llvm-harness" => {
-            if let Some(mut p) = cwd.clone() { p.push("tools/llvmlite_harness.py"); if p.exists() { return Some((p.display().to_string(), "workspace")); } }
-            if let Some(p0) = cwd { let mut q = PathBuf::from(p0); q.push("apps/llvm/harness.py"); if q.exists() { return Some((q.display().to_string(), "workspace")); } }
+            if let Some(mut p) = cwd.clone() {
+                p.push("tools/llvmlite_harness.py");
+                if p.exists() {
+                    return Some((p.display().to_string(), "workspace"));
+                }
+            }
+            if let Some(p0) = cwd {
+                let mut q = PathBuf::from(p0);
+                q.push("apps/llvm/harness.py");
+                if q.exists() {
+                    return Some((q.display().to_string(), "workspace"));
+                }
+            }
             None
         }
         "ny-llvmc" => {
             let p = exec::resolve_ny_llvmc();
-            if p.exists() { Some((p.display().to_string(), "resolver")) } else { None }
+            if p.exists() {
+                Some((p.display().to_string(), "resolver"))
+            } else {
+                None
+            }
         }
-        other => {
-            which::which(other).ok().map(|p| (p.display().to_string(), "PATH"))
-        }
+        other => which::which(other)
+            .ok()
+            .map(|p| (p.display().to_string(), "PATH")),
     }
 }
 

@@ -81,7 +81,6 @@ use pytypes::{DecodedValue, PyOwned};
 
 // legacy v1 abi/init removed
 
-
 fn handle_py_runtime(
     method_id: u32,
     _instance_id: u32,

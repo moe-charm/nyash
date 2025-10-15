@@ -116,15 +116,8 @@ pub struct MirBuilder {
     plugin_method_sigs: HashMap<(String, String), super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
-    /// Index of static methods seen during lowering: name -> [(BoxName, arity)]
-    pub(super) static_method_index: std::collections::HashMap<String, Vec<(String, usize)>>,
-    /// Index of instance methods seen during lowering: (BoxName, method, arity)
-    pub(super) instance_method_index: std::collections::HashSet<(String, String, usize)>,
-
-    /// Fast lookup: method+arity tail → candidate function names (e.g., ".str/0" → ["JsonNode.str/0", ...])
-    pub(super) method_tail_index: std::collections::HashMap<String, Vec<String>>,
-    /// Source size snapshot to detect when to rebuild the tail index
-    pub(super) method_tail_index_source_len: usize,
+    /// Method index registry (centralized tracking for static/instance/tail indexes)
+    pub(super) method_index: indexes::method_index::MethodIndexBox,
 
     // include guards removed
 
@@ -178,6 +171,8 @@ pub struct MirBuilder {
     pub(super) local_ssa_map: HashMap<(BasicBlockId, ValueId, u8), ValueId>,
     /// BlockSchedule cache: deduplicate materialize copies per (bb, src)
     pub(super) schedule_mat_map: HashMap<(BasicBlockId, ValueId), ValueId>,
+    /// Pending entry pin copies (emitted after PHI, before first non-PHI instruction)
+    pending_entry_pin_copies: HashMap<BasicBlockId, Vec<super::MirInstruction>>,
 }
 
 impl MirBuilder {
@@ -202,11 +197,8 @@ impl MirBuilder {
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,
-            static_method_index: std::collections::HashMap::new(),
-            instance_method_index: std::collections::HashSet::new(),
-            method_tail_index: std::collections::HashMap::new(),
-            method_tail_index_source_len: 0,
-            
+            method_index: indexes::method_index::MethodIndexBox::new(),
+
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
             if_merge_stack: Vec::new(),
@@ -229,6 +221,7 @@ impl MirBuilder {
 
             local_ssa_map: HashMap::new(),
             schedule_mat_map: HashMap::new(),
+            pending_entry_pin_copies: HashMap::new(),
         }
     }
 
@@ -297,55 +290,23 @@ impl MirBuilder {
     }
 
     // ----------------------
-    // Method tail index (performance helper)
+    // Method index (delegated to MethodIndexBox)
     // ----------------------
-    fn rebuild_method_tail_index(&mut self) {
-        self.method_tail_index.clear();
-        if let Some(ref module) = self.current_module {
-            for name in module.functions.keys() {
-                if let (Some(dot), Some(slash)) = (name.rfind('.'), name.rfind('/')) {
-                    if slash > dot {
-                        let tail = &name[dot..];
-                        self.method_tail_index
-                            .entry(tail.to_string())
-                            .or_insert_with(Vec::new)
-                            .push(name.clone());
-                    }
-                }
-            }
-            self.method_tail_index_source_len = module.functions.len();
-        } else {
-            self.method_tail_index_source_len = 0;
-        }
-    }
-
-    fn ensure_method_tail_index(&mut self) {
-        let need_rebuild = match self.current_module {
-            Some(ref refmod) => self.method_tail_index_source_len != refmod.functions.len(),
-            None => self.method_tail_index_source_len != 0,
-        };
-        if need_rebuild {
-            self.rebuild_method_tail_index();
-        }
-    }
-
     pub(super) fn method_candidates(&mut self, method: &str, arity: usize) -> Vec<String> {
-        self.ensure_method_tail_index();
-        let tail = format!(".{}{}", method, format!("/{}", arity));
-        self.method_tail_index
-            .get(&tail)
-            .cloned()
-            .unwrap_or_default()
+        if let Some(ref module) = self.current_module {
+            self.method_index.find_candidates(&module.functions, method, arity)
+        } else {
+            vec![]
+        }
     }
 
     pub(super) fn method_candidates_tail<S: AsRef<str>>(&mut self, tail: S) -> Vec<String> {
-        self.ensure_method_tail_index();
-        self.method_tail_index
-            .get(tail.as_ref())
-            .cloned()
-            .unwrap_or_default()
+        if let Some(ref module) = self.current_module {
+            self.method_index.find_candidates_by_tail(&module.functions, tail.as_ref())
+        } else {
+            vec![]
+        }
     }
-
 
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
@@ -404,6 +365,22 @@ impl MirBuilder {
                 msg.push_str("\nHint: symbol appears in using module(s): ");
                 msg.push_str(&suggest.join(", "));
                 msg.push_str("\nConsider adding 'using <module> [as Alias]' or check nyash.toml [using].");
+                // Additional debug info (when using system is enabled but symbol unresolved)
+                let using_on = crate::config::env::enable_using();
+                let ast_on = crate::config::env::using_ast_enabled();
+                let allow_file = crate::config::env::allow_using_file();
+                if using_on {
+                    msg.push_str("\nDebug Info:");
+                    msg.push_str(&format!("\n  Using enabled: {}", using_on));
+                    msg.push_str(&format!("\n  AST prelude merge: {}", ast_on));
+                    msg.push_str(&format!("\n  File using allowed: {}", allow_file));
+                    if !ast_on {
+                        msg.push_str("\nQuick fix: set HAKO_USING=full or NYASH_USING_AST=1");
+                    }
+                    if !allow_file {
+                        msg.push_str("\nQuick fix: set HAKO_USING=full or HAKO_ALLOW_USING_FILE=1");
+                    }
+                }
             }
             Err(msg)
         }
@@ -487,6 +464,12 @@ impl MirBuilder {
     /// Emit an instruction to the current basic block
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
         let block_id = self.current_block.ok_or("No current basic block")?;
+        let is_phi = matches!(&instruction, MirInstruction::Phi { .. });
+        let mut pending_pin_copies = if !is_phi {
+            self.pending_entry_pin_copies.remove(&block_id)
+        } else {
+            None
+        };
 
         // Precompute debug metadata to avoid borrow conflicts later
         let _dbg_fn_name = self
@@ -514,6 +497,24 @@ impl MirBuilder {
                 ));
             }
             if let Some(block) = function.get_block_mut(block_id) {
+                if let Some(mut pending) = pending_pin_copies.take() {
+                    for copy_inst in pending.drain(..) {
+                        if utils::builder_debug_enabled() {
+                            if let MirInstruction::Copy { dst, src } = &copy_inst {
+                                eprintln!(
+                                    "[BUILDER] emit @bb{} (pending pin) -> copy %{} := %{}",
+                                    block_id,
+                                    dst.as_u32(),
+                                    src.as_u32()
+                                );
+                            } else {
+                                eprintln!("[BUILDER] emit @bb{} (pending pin) -> {:?}", block_id, copy_inst);
+                            }
+                        }
+                        crate::mir::builder::effects::verify_instruction_effects(&copy_inst);
+                        block.add_instruction(copy_inst);
+                    }
+                }
                 if utils::builder_debug_enabled() {
                     eprintln!(
                         "[BUILDER] emit @bb{} -> {}",

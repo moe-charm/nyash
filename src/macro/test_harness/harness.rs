@@ -4,6 +4,7 @@
 
 use nyash_rust::ast::{ASTNode as A, BinaryOperator, LiteralValue, Span};
 use std::collections::HashMap;
+use crate::common::trace_box::TraceBox;
 
 use super::json_args::{InstanceSpec, TestArgSpec, TestPlan};
 
@@ -423,9 +424,7 @@ pub fn build_harness_ast(ast: &nyash_rust::ASTNode, tests: Vec<TestPlan>) -> nya
             }
         }
         if has_main_fn && !(force || entry_mode.is_some()) {
-            if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-                eprintln!("[macro][test] existing main detected; skip harness (set --test-entry or NYASH_TEST_FORCE=1)");
-            }
+            TraceBox::macro_trace(|| "[macro][test] existing main detected; skip harness (set --test-entry or NYASH_TEST_FORCE=1)".to_string());
             return nyash_rust::ASTNode::Program {
                 statements: out_stmts,
                 span,
@@ -477,9 +476,7 @@ pub fn inject_test_harness(
     apply_filter(&mut tests);
 
     if tests.is_empty() {
-        if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[macro][test] no tests found (functions starting with 'test_')");
-        }
+        TraceBox::macro_trace(|| "[macro][test] no tests found (functions starting with 'test_')".to_string());
         return ast.clone();
     }
 

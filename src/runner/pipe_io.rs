@@ -12,27 +12,45 @@
 use super::*;
 use serde_json::Value as J;
 
+fn unwrap_value_in_place(x: &mut J) {
+    if let Some(v) = x.get("value").and_then(|y| y.as_u64()) {
+        *x = J::from(v as u32);
+    }
+}
+
 fn gate_c_canonicalize_mir_json(v: &mut J) {
     if let Some(funcs) = v.get_mut("functions").and_then(|x| x.as_array_mut()) {
         for f in funcs.iter_mut() {
             if let Some(blocks) = f.get_mut("blocks").and_then(|x| x.as_array_mut()) {
                 for b in blocks.iter_mut() {
-                    if let Some(insts) = b.get_mut("instructions").and_then(|x| x.as_array_mut()) {
-                        for inst in insts.iter_mut() {
-                            // dst: {type:..., value:N} → N
-                            if let Some(dst) = inst.get_mut("dst") {
-                                if let Some(val) = dst.get("value").and_then(|x| x.as_u64()) { *dst = J::from(val as u32); }
+            if let Some(insts) = b.get_mut("instructions").and_then(|x| x.as_array_mut()) {
+                for inst in insts.iter_mut() {
+                    // dst: {type:..., value:N} → N
+                    if let Some(dst) = inst.get_mut("dst") { unwrap_value_in_place(dst); }
+                    // ret.value: {type:..., value:N} → N
+                    let op_name = inst.get("op").and_then(|x| x.as_str()).map(|s| s.to_string());
+                    if let Some(op) = op_name.as_deref() {
+                        match op {
+                            "ret" | "return" => {
+                                if let Some(vv) = inst.get_mut("value") { unwrap_value_in_place(vv); }
                             }
-                            // ret.value: {type:..., value:N} → N
-                            if let Some(op) = inst.get("op").and_then(|x| x.as_str()) {
-                                if op == "ret" || op == "return" {
-                                    if let Some(vv) = inst.get_mut("value") {
-                                        if let Some(val) = vv.get("value").and_then(|x| x.as_u64()) { *vv = J::from(val as u32); }
-                                    }
-                                }
+                            "binop" | "compare" => {
+                                if let Some(lhs) = inst.get_mut("lhs") { unwrap_value_in_place(lhs); }
+                                if let Some(rhs) = inst.get_mut("rhs") { unwrap_value_in_place(rhs); }
                             }
+                            "branch" => {
+                                if let Some(cond) = inst.get_mut("cond") { unwrap_value_in_place(cond); }
+                                if let Some(th) = inst.get_mut("then") { unwrap_value_in_place(th); }
+                                if let Some(el) = inst.get_mut("else") { unwrap_value_in_place(el); }
+                            }
+                            "jump" => {
+                                if let Some(t) = inst.get_mut("target") { unwrap_value_in_place(t); }
+                            }
+                            _ => {}
                         }
                     }
+                }
+            }
                 }
             }
         }
@@ -67,7 +85,10 @@ impl NyashRunner {
                     let mut v: J = match serde_json::from_str(&json) { Ok(x) => x, Err(_) => return true };
                     gate_c_canonicalize_mir_json(&mut v);
                     let json2 = serde_json::to_string(&v).unwrap_or_default();
-                    if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                    if let Ok(mut module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                        // Gate B safety: run optimizer repairs (materialize receivers)
+                        let mut opt = crate::mir::optimizer::MirOptimizer::new();
+                        let _ = opt.optimize_module(&mut module);
                         use crate::backend::MirInterpreter;
                         let mut interp = MirInterpreter::new();
                         if let Ok(result) = interp.execute_module(&module) {
@@ -89,7 +110,9 @@ impl NyashRunner {
                 let mut v: J = match serde_json::from_str(&buf) { Ok(x) => x, Err(_) => return true };
                 gate_c_canonicalize_mir_json(&mut v);
                 let json2 = serde_json::to_string(&v).unwrap_or_default();
-                if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                if let Ok(mut module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                    let mut opt = crate::mir::optimizer::MirOptimizer::new();
+                    let _ = opt.optimize_module(&mut module);
                     use crate::backend::MirInterpreter;
                     let mut interp = MirInterpreter::new();
                     if let Ok(result) = interp.execute_module(&module) {
@@ -170,7 +193,9 @@ impl NyashRunner {
                 std::env::set_var("NYASH_DISABLE_PLUGINS", "1");
                 std::env::set_var("NYASH_CHECK_CONTRACTS", "0");
                 match super::mir_json_reader::parse_mir_json_v0_to_module(&buf) {
-                    Ok(module) => {
+                    Ok(mut module) => {
+                        let mut opt = crate::mir::optimizer::MirOptimizer::new();
+                        let _ = opt.optimize_module(&mut module);
                         use crate::backend::MirInterpreter;
                         let mut interp = MirInterpreter::new();
                         match interp.execute_module(&module) {
@@ -199,7 +224,9 @@ impl NyashRunner {
             let mut v: J = match serde_json::from_str(&buf) { Ok(x) => x, Err(_) => return true };
             gate_c_canonicalize_mir_json(&mut v);
             let json2 = serde_json::to_string(&v).unwrap_or_default();
-            if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+            if let Ok(mut module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                let mut opt = crate::mir::optimizer::MirOptimizer::new();
+                let _ = opt.optimize_module(&mut module);
                 use crate::backend::MirInterpreter;
                 let mut interp = MirInterpreter::new();
                 if let Ok(result) = interp.execute_module(&module) {

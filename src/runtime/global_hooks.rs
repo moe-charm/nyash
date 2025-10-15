@@ -173,10 +173,13 @@ pub fn pop_task_scope() {
         { popped = st.group_stack.pop(); }
     }
     if do_join {
-        let ms: u64 = std::env::var("NYASH_TASK_SCOPE_JOIN_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1000);
+        let ms = crate::runtime::env_gate_box::string_alias_or(
+            "NYASH_TASK_SCOPE_JOIN_MS",
+            "HAKO_TASK_SCOPE_JOIN_MS",
+            "1000",
+        )
+        .parse::<u64>()
+        .unwrap_or(1000);
         #[cfg(feature = "legacy-boxes")]
         if let Some(ref inner) = popped {
             // Join this group's outstanding futures
