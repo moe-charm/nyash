@@ -32,6 +32,31 @@ impl MirInterpreter {
         args: &[ValueId],
     ) -> Result<(), VMError> {
 
+        // DEBUG: Trace ALL BoxCall at entry
+        if std::env::var("HAKO_DEBUG_BOXCALL_ARGV").is_ok() {
+            let recv_vm = self.reg_load(box_val).unwrap_or(VMValue::Void);
+            eprintln!("[BOXCALL-ENTRY] method={} recv={:?} args_len={}",
+                      method,
+                      match &recv_vm {
+                          VMValue::String(s) => format!("String(\"{}\")", if s.len() > 20 { &s[..20] } else { s }),
+                          VMValue::Integer(i) => format!("Integer({})", i),
+                          VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
+                          VMValue::Void => "Void".into(),
+                          _ => "Other".into(),
+                      },
+                      args.len());
+            for (idx, &arg_id) in args.iter().enumerate() {
+                let arg_vm = self.reg_load(arg_id).unwrap_or(VMValue::Void);
+                eprintln!("[BOXCALL-ENTRY]   args[{}]={:?}", idx, match &arg_vm {
+                    VMValue::String(s) => format!("String(\"{}\")", if s.len() > 20 { &s[..20] } else { s }),
+                    VMValue::Integer(i) => format!("Integer({})", i),
+                    VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
+                    VMValue::Void => "Void".into(),
+                    _ => "Other".into(),
+                });
+            }
+        }
+
         // Unborn guard for plugin instance methods (except birth)
         crate::vm_ops::boxcall::preflight_unborn(self, box_val, method)?;
 
@@ -229,11 +254,43 @@ impl MirInterpreter {
                 None
             }
         } {
-            // Build argv: pass receiver as first arg (me)
+            // Build argv: decide whether to pass receiver as first arg
+            // - If func.params.len() == args.len(): static box method, don't pass receiver
+            // - If func.params.len() == args.len() + 1: instance method with 'me', pass receiver
             let recv_vm = self.reg_load(box_val)?;
-            let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
-            argv.push(recv_vm);
+            let pass_receiver = func.params.len() == args.len() + 1;
+            let mut argv: Vec<VMValue> = Vec::with_capacity(if pass_receiver { 1 + args.len() } else { args.len() });
+            if pass_receiver {
+                argv.push(recv_vm.clone());
+            }
             for a in args { argv.push(self.reg_load(*a)?); }
+
+            // DEBUG: Trace BoxCall user-method fallback argv
+            if std::env::var("HAKO_DEBUG_BOXCALL_ARGV").is_ok() {
+                eprintln!("[BOXCALL-ARGV] method={} recv_vm={:?} args_len={} func_params_len={} pass_receiver={} argv_len={}",
+                          method,
+                          match &recv_vm {
+                              VMValue::String(s) => format!("String({})", s),
+                              VMValue::Integer(i) => format!("Integer({})", i),
+                              VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
+                              VMValue::Void => "Void".into(),
+                              _ => "Other".into(),
+                          },
+                          args.len(),
+                          func.params.len(),
+                          pass_receiver,
+                          argv.len());
+                for (idx, v) in argv.iter().enumerate() {
+                    eprintln!("[BOXCALL-ARGV]   argv[{}]={:?}", idx, match v {
+                        VMValue::String(s) => format!("String({})", s),
+                        VMValue::Integer(i) => format!("Integer({})", i),
+                        VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
+                        VMValue::Void => "Void".into(),
+                        _ => "Other".into(),
+                    });
+                }
+            }
+
             let ret = self.exec_function_inner(&func, Some(&argv))?;
             if let Some(d) = dst { self.regs.insert(d, ret); }
             return Ok(());

@@ -605,7 +605,23 @@ impl MirInterpreter {
         // Exact match first
         if let Some(func) = self.functions.get(&want_name).cloned() {
             let mut argv: Vec<VMValue> = Vec::new();
-            for a in args { argv.push(self.reg_load(*a)?); }
+            for (idx, a) in args.iter().enumerate() {
+                let vm_val = self.reg_load(*a)?;
+                if std::env::var("HAKO_DEBUG_MODULE_FN_ARGS").is_ok() {
+                    eprintln!("[MODULE-FN-ARGS] {}  arg[{}]: ValueId={:?} → VMValue={}",
+                              want_name, idx, a, match &vm_val {
+                        VMValue::String(s) => format!("String({})", s),
+                        VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
+                        VMValue::Integer(i) => format!("Integer({})", i),
+                        VMValue::Bool(b) => format!("Bool({})", b),
+                        VMValue::Float(f) => format!("Float({})", f),
+                        VMValue::Void => "Void".to_string(),
+                        #[cfg(feature = "legacy-boxes")]
+                        VMValue::Future(_) => "Future".to_string(),
+                    });
+                }
+                argv.push(vm_val);
+            }
             {
                 let r = self.exec_function_inner(&func, Some(&argv));
                 if is_birth_fn {

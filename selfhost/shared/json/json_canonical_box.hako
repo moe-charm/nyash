@@ -6,17 +6,19 @@
 static box JsonCanonicalBox {
   canonicalize(json) {
     // Guard: enable only when HAKO_JSON_CANON is truthy
+    local payload = "" + json
     local e = hostbridge.extern_invoke("env.local.get", ["HAKO_JSON_CANON"])
-    if e == null { return json }
+    if e == null { return payload }
     // accept common truthy values
-    if e != "1" && e != "true" && e != "on" && e != "yes" { return json }
+    if e != "1" && e != "true" && e != "on" && e != "yes" { return payload }
     // Bridge to host via extern invoke (iface.method form): "nyash.json.canonicalize_h"
     // Arguments: [ json: String ]
     // Return: String (canonicalized JSON)
     local args = new ArrayBox()
-    args.push(json)
+    if args.birth != null { args.birth() }
+    args.push(payload)
     local out = hostbridge.extern_invoke("nyash.json.canonicalize_h", args)
-    if out == null { return json }
+    if out == null { return payload }
     return out
   }
 }

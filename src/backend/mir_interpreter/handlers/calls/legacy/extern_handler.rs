@@ -4,6 +4,40 @@
 use super::super::super::*;
 
 impl MirInterpreter {
+    fn normalize_extern_arg(&mut self, value: VMValue) -> VMValue {
+        match value {
+            VMValue::BoxRef(bx) => {
+                if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                    return VMValue::String(sb.value.clone());
+                }
+                if let Some(ib) = bx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    return VMValue::Integer(ib.value);
+                }
+                if let Some(bb) = bx.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                    return VMValue::Bool(bb.value);
+                }
+                if let Some(pb) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    if pb.box_type == "ArrayBox" {
+                        let recv = VMValue::BoxRef(bx.clone());
+                        if let Ok(VMValue::Integer(n)) = crate::runtime::method_router_box::route(self, &recv, &"length".to_string(), &[]) {
+                            if n == 1 {
+                                let idx = VMValue::Integer(0);
+                                if let Ok(elem) = crate::runtime::method_router_box::route(self, &recv, &"get".to_string(), &[idx]) {
+                                    return self.normalize_extern_arg(elem);
+                                }
+                            }
+                        }
+                    } else if pb.box_type == "StringBox" {
+                        if let Ok(VMValue::String(s)) = crate::runtime::method_router_box::route(self, &VMValue::BoxRef(bx.clone()), &"value".to_string(), &[]) {
+                            return VMValue::String(s);
+                        }
+                    }
+                }
+                VMValue::BoxRef(bx)
+            }
+            other => other,
+        }
+    }
     pub(crate) fn execute_extern_function(
         &mut self,
         extern_name: &str,
@@ -180,9 +214,8 @@ impl MirInterpreter {
                     if let VMValue::BoxRef(bx) = &val {
                         if let Some(arr) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
                             for i in 0..arr.len() {
-                                forwarded.push(VMValue::from_nyash_box(
-                                    arr.get(Box::new(crate::box_trait::IntegerBox::new(i as i64)))
-                                ));
+                                let elem = arr.get(Box::new(crate::box_trait::IntegerBox::new(i as i64)));
+                                forwarded.push(self.normalize_extern_arg(VMValue::from_nyash_box(elem)));
                             }
                         } else if bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
                             // Plugin ArrayBox
@@ -191,9 +224,14 @@ impl MirInterpreter {
                             for i in 0..n {
                                 let idx = VMValue::Integer(i as i64);
                                 let vv = crate::runtime::method_router_box::route(self, &val, &"get".to_string(), &[idx])?;
-                                forwarded.push(vv);
+                                forwarded.push(self.normalize_extern_arg(vv));
                             }
+                        } else {
+                            // Unknown box — treat as primitive via normalize
+                            forwarded.push(self.normalize_extern_arg(VMValue::BoxRef(bx.clone())));
                         }
+                    } else {
+                        forwarded.push(self.normalize_extern_arg(val));
                     }
                 }
 
@@ -206,7 +244,20 @@ impl MirInterpreter {
                 let iface_name = parts.next().unwrap_or("");
 
                 // Try extern adapter
+                if std::env::var("HAKO_DEBUG_TRAMPOLINE").is_ok() {
+                    eprintln!("[TRAMPOLINE] extern_invoke: target={}.{} forwarded_len={} forwarded[0]={:?}",
+                              iface_name, method_name, forwarded.len(),
+                              forwarded.get(0));
+                }
                 if let Some(r) = self.extern_call_public(iface_name, method_name, &forwarded) {
+                    if std::env::var("HAKO_DEBUG_TRAMPOLINE").is_ok() {
+                        eprintln!("[TRAMPOLINE] extern_invoke result: {:?}", match &r {
+                            Ok(VMValue::String(s)) => format!("Ok(String({}))", s),
+                            Ok(VMValue::BoxRef(b)) => format!("Ok(BoxRef({}))", b.type_name()),
+                            Ok(v) => format!("Ok({:?})", v),
+                            Err(e) => format!("Err({:?})", e),
+                        });
+                    }
                     return r;
                 }
 
