@@ -20,11 +20,15 @@ Updates (today)
   - Added normalize dispatcher `normalize::apply_all` and routed unified emission through it (String/Array length, Set ops). Individual normalizers remain pure (no re‑materialize).
 - Gate C canonicalizer expanded
   - `{type:"i64", value:N}` now unwrapped for lhs/rhs/cond/then/else/target in addition to dst/ret.value. Runner executes minimal v0 JSON more robustly.
-- Router ergonomics
+- Router ergonomics / table化の前進
   - Introduced HostHandle slot ID consts (Array:102, Map:200/202/203/204). Replaced magic numbers in plugin router.
   - Centralized slot/error consts at `src/runtime/host_handle_router/consts.rs` and switched `method_router_box/plugin.rs` to use them.
   - Added proposal: `docs/development/proposals/router-table-policy-typeids.md` (table‑driven router sketch, plugin policy entrypoint, Type ID single source plan).
   - Env reads unified via `env_gate_box` in plugin router for feature flags (NYASH_* / HAKO_* aliases accepted).
+  - New: `env_gate_box::plugin_policy_force()` を追加し、strict(force) 判定の単一起点化。`method_router_box/mod.rs`/`provider_box/mod.rs` へ適用。
+  - New: HostHandle slot 実行を `method_router_box/host_slot.rs` に共通化し、builtin/plugin 双方から利用（TLV/ERR_BUF_SMALL リトライを一元化）。
+  - New: builtin ルーターでも Array/Map の表（get/set/size/has）を適用し、判定と ENV 導線を統一。
+  - New: primitive String でも表テーブルを利用（HostHandle 経路→Fallback の順序を統一）。
   - Added `src/types/ids.rs` as a thin, centralized accessor for core type IDs (Map/Array/String) backed by TypeRegistry.
 - Smokes noise control
   - `tools/smokes/v2/lib/plugin_manager.sh`: honor `SMOKES_STRICT_NOISE=1` to downgrade non‑fatal plugin rebuild errors to WARN (reduces log anxiety when rechecks succeed).
@@ -32,12 +36,17 @@ Updates (today)
   - Direct interpreter path is now the default for `--nyvm-json-file` / `--nyvm-pipe` with numeric-only output (single line). The older Ny wrapper path remains available behind `NYASH_GATE_C_DIRECT=1` (dev only).
 - Builder normalization boxed: String length calls unified via `normalize::string_length` (Method/ModuleFunction → Extern("nyrt.string.length")).
   - Legacy emission also normalizes Array length (Method → Extern("nyrt.array.length")) to avoid use-before-def on receivers.
+  - Optimizer guard: `nyrt.string.*` を Extern→Method に戻さない。family 全体に適用し安定化。
 - MIR repair pre-pass: ensure in-block Copy(receiver) right before StringBox.(size|len|length) Method calls (safety net). Gated verify (`NYASH_VERIFY_STRING_RECV_COPY=1`).
+- DCE/used_values の固定化: Method(receiver) の receiver を used_values() に含める仕様を単体テストで固定（直線/分岐/ループ）。
+- start_new_block の pin Copy を PHI直後/最初の通常命令の直前に遅延発行し、エントリ順序を安定化。
 - Router split polish: moved primitive String routing out of `mod.rs` into `builtin::try_route_string_primitive` and delegate from entry. `mod.rs` now only resolves MethodRef/HostHandle, then delegates: plugin → builtin.
 - Plugin normalize (skeleton): added gated helper (`HAKO_PLUGIN_NORMALIZE=1`) in plugin box router; currently a no-op for stable types, ready for phase-in.
 - Plugin strict policy (Fail‑Fast): forbid builtin fallback when plugins are ON and provider exists (`HAKO_PLUGIN_POLICY=force`).
   - Router enforces error instead of delegating to builtin; doc updated; strict smoke added.
   - Added smokes: strict_plugin_map_size_vm (PASS), strict_plugin_fallback_block_vm (PASS), strict_plugin_array_unknown_method_vm (PASS)
+  - quick: host_handle_router_string_len_vm (PASS) / host_handle_router_map_set_effect_vm (PASS)
+  - quick: parity_array_size_vm / parity_map_size_has_vm（plugins）PASS（setbox の再ビルド警告は既知）
 - New smokes (plugins profile): parity_array_size_vm.sh, parity_map_size_has_vm.sh (lean, semantics-only).
 - SetBox (Map-backed) — pluginized（コア昇格・緑）
   - VM externs: `nyrt.set.{add,remove,has,size,clear,toArray}` 維持（Set 受けを直委譲）。
@@ -151,6 +160,14 @@ Updates (today)
   - Builder: Set.* → Extern 正規化（EmitGuard準拠）
   - Smokes: add/has/size、remove idempotent、toArray（deterministic順）
   - plugin‑only build 確認
+  - 状態: 仕様/extern/builder/smokes は整備済みだが、動的再ビルドの警告が残る（セットボックスの配置/ビルド安定化を仕上げ）
+  
+- [x] Plugin strict 判定の単一起点（env_gate_box::plugin_policy_force）
+- [x] HostHandle slot 実行の共通化（method_router_box/host_slot.rs）
+- [x] builtin Array 表適用（get/set/size の表駆動・ENV 導線統一）
+- [x] Optimizer guard（nyrt.string.* family の Extern ↔ Method 巻き戻し抑止）
+- [x] DCE/used_values ユニット固定（直線/分岐/ループ）
+- [x] start_new_block の Copy 順序安定化（PHI→pin Copy→本体）
 - P1 — quality of life
   - [ ] Doctor: structured error messages（missing clang/llvmlite/allowlist/lib paths）
   - [ ] Harness: tighter logs for `--target windows` & optional IR dump hint
@@ -195,5 +212,8 @@ Updates (today)
   - Added central type ID helpers at `src/types/ids.rs`.
 
 Open items (next)
-- Fix quick: host_handle_router_string_len_vm (use-before-def) by ensuring builder materializes String receiver in all paths (Method/Extern) and verifying via repair.
-- Fix quick: host_handle_router_map_set_effect_vm by enforcing receiver materialize before size() following set(); confirm Box/Plugin path invariants.
+- Router 表テーブル: 境界ケースのメッセージ整合と docs 追記（Set 系は extern 経路のみで維持）
+- env_gate の残掃き（直 `std::env` 参照の残骸を `env_gate_box` に寄せきる）
+- extern_adapter のレガシー掃除（ハブ以外の重複/未使用を削除、登録導線を一本化）
+- Type ID ヘルパーの採用拡張（周辺モジュールの手動判定/直比較の見落としがないか最終スイープ）
+- SetBox の動的再ビルド/配置の安定化（smokes での警告解消）

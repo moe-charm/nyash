@@ -61,6 +61,13 @@ Gate B（進行中）: MIR Builder v1（最小16命令）
   ├─ DoD: 16命令到達可能、ゴールデンJSON一致
   └─ 4本スモーク（const+ret, add+ret, eq+branch, lt+branch）
 
+補足（安定化トピック — 反映済み）
+- Router 表駆動（String/Map/Array の最小ルート）を builtin/plugin 双方で共有し、ENV 導線を `env_gate_box` へ集約。
+- Plugin strict（`HAKO_PLUGIN_POLICY=force`）の Fail‑Fast を `env_gate_box::plugin_policy_force()` で単一起点化。
+- MIR ビルダーのエントリ Copy 配置を PHI→pin Copy→本体へ固定化（use‑before‑def 抑止）。
+- DCE の used_values() に Method(receiver) を含める経路を単体テストで固定（直線/分岐/ループ）。
+- Optimizer で `nyrt.string.*` family を Extern に固定（Extern→Method への巻き戻し抑止）。
+
 Gate C（その次）: VM Foundations PoC（5命令 via HostBridge）
   ├─ 命令: const, binop, compare, jump, ret
   ├─ HostBridge経由で実行
