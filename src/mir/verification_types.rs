@@ -114,6 +114,12 @@ pub enum VerificationError {
         instruction_index: usize,
         method: String,
     },
+    /// Builder must not overwrite function parameters (Fail-Fast guard)
+    ParameterReassigned {
+        value: ValueId,
+        block: BasicBlockId,
+        instruction_index: usize,
+    },
     /// Method(StringBox.size/len/length) must have an in-block receiver Copy right before call (dev-gated)
     MethodReceiverMissingLocalCopy {
         block: BasicBlockId,
@@ -315,6 +321,13 @@ impl std::fmt::Display for VerificationError {
                     f,
                     "Method receiver missing in block {} at {} for {} (receiver must be explicit when Known)",
                     block, instruction_index, method
+                )
+            }
+            VerificationError::ParameterReassigned { value, block, instruction_index } => {
+                write!(
+                    f,
+                    "Function parameter {} reassigned in block {} at instruction {}",
+                    value, block, instruction_index
                 )
             }
             VerificationError::MethodReceiverMissingLocalCopy { block, instruction_index, method, receiver } => {

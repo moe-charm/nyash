@@ -67,6 +67,8 @@ pub(crate) enum PropertyKind {
 }
 
 /// MIR builder for converting AST to SSA form
+pub mod guards;
+
 pub struct MirBuilder {
     /// Current module being built
     pub(super) current_module: Option<MirModule>,
@@ -490,6 +492,15 @@ impl MirBuilder {
 
     /// Emit an instruction to the current basic block
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
+        // Phase 2.4 — ParameterGuardBox: prevent overwriting function parameters
+        let guard = crate::mir::builder::guards::parameter_guard::ParameterGuardBox::new();
+        let param_snapshot: Option<Vec<ValueId>> = self
+            .current_function
+            .as_ref()
+            .map(|f| f.params.clone());
+        if let Some(ref params) = param_snapshot {
+            guard.check(&instruction, params)?;
+        }
         let block_id = self.current_block.ok_or("No current basic block")?;
         let is_phi = matches!(&instruction, MirInstruction::Phi { .. });
         let mut pending_pin_copies = if !is_phi {
@@ -526,6 +537,9 @@ impl MirBuilder {
             if let Some(block) = function.get_block_mut(block_id) {
                 if let Some(mut pending) = pending_pin_copies.take() {
                     for copy_inst in pending.drain(..) {
+                        if let Some(ref params) = param_snapshot {
+                            guard.check(&copy_inst, params)?;
+                        }
                         if utils::builder_debug_enabled() {
                             if let MirInstruction::Copy { dst, src } = &copy_inst {
                                 eprintln!(

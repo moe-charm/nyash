@@ -13,6 +13,7 @@ mod awaits;
 mod barrier;
 mod legacy;
 mod compare;
+mod params;
 mod static_self_fields;
 mod phi_inputs;
 mod utils;
@@ -123,6 +124,15 @@ impl MirVerifier {
         if std::env::var("NYASH_VERIFY_STRING_RECV_COPY").ok().as_deref() == Some("1") {
             if let Err(mut recv_errors) = string_receivers::check_string_len_receiver_materialized(function) {
                 local_errors.append(&mut recv_errors);
+            }
+        }
+
+        // 9.9. Parameters must remain immutable (builder guard fallback)
+        if crate::config::env::builder_param_guard_enabled()
+            || std::env::var("NYASH_VERIFY_PARAM_GUARD").ok().as_deref() == Some("1")
+        {
+            if let Err(mut param_errors) = params::check_no_parameter_reassignment(function) {
+                local_errors.append(&mut param_errors);
             }
         }
 

@@ -1,6 +1,17 @@
-use crate::mir::{MirInstruction, MirModule, ValueId};
+use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
 use crate::mir::definitions::call_unified::Callee;
 use crate::mir::optimizer_stats::OptimizationStats;
+
+#[inline]
+fn allocate_local_avoiding_params(func: &mut MirFunction) -> ValueId {
+    loop {
+        let candidate = ValueId::new(func.next_value_id);
+        func.next_value_id += 1;
+        if !func.params.contains(&candidate) {
+            return candidate;
+        }
+    }
+}
 
 /// Light repair pass: ensure StringBox.(size|len|length) method calls have an in-block
 /// receiver copy immediately before the call site. This defends against use-before-def
@@ -39,32 +50,8 @@ pub fn repair_string_len_receivers(module: &mut MirModule) -> OptimizationStats 
             // Apply patches with running offset
             let mut applied = 0usize;
             for (idx, recv_old, dst_opt, callee_clone, effects_clone, args_clone) in patches.into_iter() {
-                // Allocate new id before borrowing the block mutably
-                let recv_local = {
-                    let id = func.next_value_id;
-                    // Increment function's next id
-                    // SAFETY: we do not hold any &mut to blocks here
-                    // (we'll borrow after computing this value)
-                    // so this split is fine for borrow checker
-                    // Since field is public, adjust directly.
-                    // Then wrap into ValueId
-                    //
-                    // Equivalent to func.next_value_id()
-                    // but avoids mutable borrow conflict with block
-                    //
-                    // Update counter
-                    //
-                    // NOTE: keep in sync with MirFunction::next_value_id semantics
-                    
-                    // Actually update
-                    // (we need a second mutable borrow – so perform in a tiny scope without &mut block)
-                    
-                    // Use a raw pointer-like pattern by re-borrowing func mutably via a block
-                    // This closure is a no-op placeholder; we will update below when we have unique borrow.
-                    ValueId::new(id)
-                };
-                // Now update the counter properly (separate step to satisfy borrow rules)
-                func.next_value_id += 1;
+                // Allocate new id before borrowing the block mutably (skip parameter ids)
+                let recv_local = allocate_local_avoiding_params(func);
 
                 if let Some(block) = func.blocks.get_mut(&bid) {
                     let at = idx + applied;
@@ -136,7 +123,7 @@ pub fn repair_boxcall_receivers(module: &mut MirModule) -> OptimizationStats {
             if patches.is_empty() { continue; }
             let mut applied = 0usize;
             for (idx, recv_old, dst_opt, method, method_id, args_clone, effects_clone) in patches.into_iter() {
-                let recv_local = { let id = func.next_value_id; func.next_value_id += 1; ValueId::new(id) };
+                let recv_local = allocate_local_avoiding_params(func);
                 if let Some(block) = func.blocks.get_mut(&bid) {
                     let at = idx + applied;
                     block.instructions.insert(at, MirInstruction::Copy { dst: recv_local, src: recv_old });
@@ -181,7 +168,7 @@ pub fn repair_method_receivers(module: &mut MirModule) -> OptimizationStats {
             if patches.is_empty() { continue; }
             let mut applied = 0usize;
             for (idx, recv_old, dst_opt, callee_clone, args_clone, effects_clone) in patches.into_iter() {
-                let recv_local = { let id = func.next_value_id; func.next_value_id += 1; ValueId::new(id) };
+                let recv_local = allocate_local_avoiding_params(func);
                 if let Some(block) = func.blocks.get_mut(&bid) {
                     let at = idx + applied;
                     block.instructions.insert(at, MirInstruction::Copy { dst: recv_local, src: recv_old });

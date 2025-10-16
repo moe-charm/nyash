@@ -217,6 +217,15 @@
   - MIR 側は Box 型として `me` を扱い、VM 実行時に実体 Arc<NyashBox> が注入される。後続のマクロ/Verifier 強化に備えて受領者が具体化された。
 
 ### 残タスク（Phase A 継続）
+- ✅ **ParameterGuardBox 拡張**  
+  Builder（pending entry copy を含む）と optimizer `repair_*` で `dst ∈ params` を禁止済み。v%0 上書き事故を構造的に遮断。
+- ✅ **Verifier 層の追加**  
+  `check_no_parameter_reassignment` を追加し、MIR 完成後もパラメータ再定義を Fail‑Fast。
+- **EmitGuard 後の ArrayBox.size 固定（継続中）**  
+  `map.values()` → `.size()` の連鎖を `nyrt.array.size` へ確実に正規化し、EmitGuard の一度だけで素材化が済むよう整理する（Normalizer で Method 巻き戻し禁止）。現在 json_query_vm で `String("0") < 1` という残バグを追跡中。
+- **RouterPolicy のログ拡張**  
+  `Route::BoxCall` 強制時の理由を mat-trace に記録し、Singleton 正規化後の逸脱調査を容易にする。
+
 ### Phase A‑1e — Map.size 正規化 & Extern 安定化（完了）
 - 目的: `MapBox.(size|len|length)` を `Extern("nyrt.map.size")` に統一し、Method 形の残存で起きる受領者素材化漏れを排除。
 - 実装:

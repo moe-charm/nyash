@@ -54,11 +54,24 @@ Updates (today - 2025-10-16 continued)
       - Claude誤診: `current_fn_singleton` を関数パラメータ %0 を返すように修正
       - 問題: static box methodには me パラメータが存在しない
       - 結果: 呼び出し順が壊れる → 無限ループ・不定動作
-      - **ChatGPT5修正**: `emit_static_me_placeholder` でvoidシングルトン生成・キャッシュに戻した
+    - **ChatGPT5修正**: `emit_static_me_placeholder` でvoidシングルトン生成・キャッシュに戻した
       - VM側で void プレースホルダ → `static_singleton::get()` で実体化
     - 結果: ✅ MIR正常生成 `call_module_fn Main.test_loop/2(%5_void, %6, %7)` (3引数正しい)
     - テスト: ✅ 最小再現ケース実行成功（エラーなし）
     - 状況: ✅ json_query_vm 無限ループ解消（修正2の間違いが原因だった）
+
+### P0 次アクション（2025-10-18）
+1. **ParameterGuardBox の全面適用（完了）**  
+   - Builder 本体と `pending_entry_pin_copies`、optimizer `repair_*` で `dst ∈ params` 禁止を導入済み。ParameterGuardBox は ENV トグル (`NYASH_BUILDER_PARAM_GUARD=0`) で無効化可能。
+2. **Verifier の保険ガード追加（完了）**  
+   - `check_no_parameter_reassignment` により、MIR 完成後もパラメータ再定義を Fail‑Fast。
+3. **ArrayBox.size Extern 経路の固定**  
+   - `map.values()` → `.size()` で確実に `Extern("nyrt.array.size")` が発行されるよう fast-path を調整。EmitGuard 後の一度きりの素材化で完結させる。  
+   - Optimizer でも `nyrt.array.size` を Method に戻さないルールを String/Map と対称に整備する。
+4. **スモーク／ユニットの追加**  
+   - json_query_vm（plugins on/off）を PASS させる再実行＋SMOKES_CAPTURE。  
+   - DCE/used_values のユニットで Method(receiver) の Copy が保持されることをロック。  
+   - ParameterGuardBox の ON/OFF を検証する小テストを追加し、将来の regress を防ぐ。
 
 - **レガシーコード削除調査完了** (2025-10-16 continued)
   - ✅ Task先生4人並列調査 → 191行即時削除可能 + 箱化候補181行発見
