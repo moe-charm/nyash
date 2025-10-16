@@ -37,6 +37,14 @@ pub trait LoopPhiOps {
         dst: ValueId,
         inputs: Vec<(BasicBlockId, ValueId)>,
     ) -> Result<(), String>;
+    /// Update an already-emitted PHI at block start, matching by `dst`.
+    /// Implementations must keep the PHI at the block start and only replace inputs.
+    fn update_phi_inputs_at_block_start(
+        &mut self,
+        block: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String>;
     fn update_var(&mut self, name: String, value: ValueId);
     fn get_variable_at_block(&mut self, name: &str, block: BasicBlockId) -> Option<ValueId>;
     fn debug_verify_phi_inputs(&mut self, _merge_bb: BasicBlockId, _inputs: &[(BasicBlockId, ValueId)]) {}
@@ -115,7 +123,8 @@ pub fn seal_incomplete_phis_with<O: LoopPhiOps>(
         phi.known_inputs.push((latch_id, value_after));
 
         ops.debug_verify_phi_inputs(block_id, &phi.known_inputs);
-        ops.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
+        // PHI は prepare 時に既に挿入済み。ここでは inputs を更新するだけにする。
+        ops.update_phi_inputs_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
         ops.update_var(phi.var_name.clone(), phi.phi_id);
     }
     Ok(())
@@ -126,13 +135,16 @@ pub fn seal_incomplete_phis_with<O: LoopPhiOps>(
 /// and rebinding the variable to the newly allocated Phi result in the builder.
 pub fn prepare_loop_variables_with<O: LoopPhiOps>(
     ops: &mut O,
-    _header_id: BasicBlockId,
+    header_id: BasicBlockId,
     preheader_id: BasicBlockId,
     current_vars: &std::collections::HashMap<String, ValueId>,
 ) -> Result<Vec<IncompletePhi>, String> {
     let mut incomplete_phis: Vec<IncompletePhi> = Vec::new();
     for (var_name, &value_before) in current_vars.iter() {
         let phi_id = ops.new_value();
+        // 1) 直ちにヘッダ先頭に PHI を挿入（既知の preheader 入力のみ）
+        ops.emit_phi_at_block_start(header_id, phi_id, vec![(preheader_id, value_before)])?;
+        // 2) 不完全 PHI として記録（後で continue/latch 由来の入力を追加更新）
         let inc = IncompletePhi {
             phi_id,
             var_name: var_name.clone(),

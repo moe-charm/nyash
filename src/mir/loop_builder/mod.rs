@@ -131,6 +131,34 @@ impl<'a> LoopBuilder<'a> {
         }
     }
 
+    /// 既に挿入済みの PHI（dst をキー）に対し、入力のみを更新する。
+    pub(super) fn update_phi_inputs_at_block_start(
+        &mut self,
+        block_id: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
+        if let Some(ref mut function) = self.parent_builder.current_function {
+            if let Some(block) = function.get_block_mut(block_id) {
+                for inst in block.instructions.iter_mut() {
+                    if let MirInstruction::Phi { dst: d, inputs: in_ref } = inst {
+                        if *d == dst {
+                            *in_ref = inputs;
+                            return Ok(());
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                Err(format!("PHI dst %{} not found at block {}", dst.as_u32(), block_id.as_u32()))
+            } else {
+                Err(format!("Block {} not found", block_id))
+            }
+        } else {
+            Err("No current function".to_string())
+        }
+    }
+
     #[allow(dead_code)]
     pub(super) fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.parent_builder.current_function {
@@ -259,6 +287,14 @@ impl crate::mir::phi_core::loop_phi::LoopPhiOps for LoopBuilder<'_> {
         inputs: Vec<(BasicBlockId, ValueId)>,
     ) -> Result<(), String> {
         self.emit_phi_at_block_start(block, dst, inputs)
+    }
+    fn update_phi_inputs_at_block_start(
+        &mut self,
+        block: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
+        self.update_phi_inputs_at_block_start(block, dst, inputs)
     }
     fn update_var(&mut self, name: String, value: ValueId) { self.update_variable(name, value) }
     fn get_variable_at_block(&mut self, name: &str, block: BasicBlockId) -> Option<ValueId> {
