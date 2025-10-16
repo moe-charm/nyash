@@ -12,7 +12,7 @@ categories = ["development-tools::parsing", "interpreters"]
 
 # Default features - minimal CLI only
 [features]
-default = ["cli", "plugins", "host-anchors", "legacy-boxes"]
+default = ["cli", "plugins", "host-anchors"]
 # Legacy features removed - archive cleaned up
 e2e = []
 cli = []

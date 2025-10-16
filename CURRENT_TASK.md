@@ -143,6 +143,10 @@ Open issues / blockers
      - SetBox: `add/has/size` のローカル素材化を再確認（EmitGuard 経路の統一）。
      - FileBox: read/write 経路の undefined ValueId を解消（Call 発行を guard 経由に統一）。
      - Array slice: レガシー extern 依存を段階撤退し、必要なら専用 Bridge を追加。
+  12. Legacy 排他運用の明文化と適用
+      - AGENTS.md に「Legacy Boxes と Plugins — 排他運用」を追記（済）。
+      - `docs/guides/build-modes.md` を追加（モード・コマンド・ルータ方針）（済）。
+      - Cargo default から `legacy-boxes` を外す検討（plugin‑only を既定に）と CI への plugin‑only ライン追加。
 - **P1 — quality of life**
   - Doctor: structured error messages（missing clang/llvmlite/allowlist/lib paths）
   - Harness: tighter logs for `--target windows` & optional IR dump hint

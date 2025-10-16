@@ -197,7 +197,31 @@ fn check_layer_boundary() {
 - 一元化: 受け渡しの素材化は EmitGuard（LocalSSA）で一度だけ。Normalizer は再素材化しない。
 - 性能境界: 迂回のための O(N) ループ作成・全件再構築は禁止（必要なら責務のある層で実装）。
 
-### 6.1 Operators Ownership（演算子の責務の明文化）
+### 6.1 Legacy Boxes と Plugins — 排他運用ポリシー（重要）
+
+目的
+- AI/開発者が誤って `src/boxes/`（レガシー埋め込み）に手を入れたり依存を増やしたりしないよう、ビルドモードと参照ガイドを明確化する。
+
+原則（強制）
+- 既定（default）は plugin-only。`legacy-boxes` は既定OFF。必要なときのみ明示的にON。
+- `src/boxes/` への参照・変更はすべて `#[cfg(feature="legacy-boxes")]` ガード配下に限定。新規コードにレガシー経路を増やさない。
+- ルータのフォールバック禁止（Fail‑Fast）: plugins-only モードでは builtin（legacy）へ静かに落とさない。legacy-only では plugin 経路に落とさない。
+- 迷ったら「箱（plugin）」で解決。どうしても plugin で実現不能な場合のみ、短命の直接埋め込み（doc/TTL 付き）を認める。
+
+モード（排他的）
+- plugin-only: `cargo build --release --no-default-features -F cli,plugins,host-anchors`
+- legacy-only: `cargo build --release --no-default-features -F cli,legacy-boxes,host-anchors`
+- mixed（移行期のみ）: `-F plugins,legacy-boxes`（フォールバック禁止のまま）。
+
+AI/開発者ガイド
+- 参照禁止: `crate::boxes::*`（新規）。やむを得ず触る場合は `#[cfg(feature="legacy-boxes")]` を必ず付ける。
+- 追加機能は plugin 側に実装。必要なら staticlib で埋め込み（Feature 名: `static-*-plugin` など）。
+- tests/smokes はプロファイルでモードを分ける（plugins/legacy/mixed）。ENV で動的切替しない（再現性確保）。
+
+ドキュメント
+- 運用手順とコマンドは `docs/guides/build-modes.md` を参照。CI は plugin-only を必須ラインとする。
+
+### 6.2 Operators Ownership（演算子の責務の明文化）
 
 目的
 - VM/JIT/LLVM の実装差やフォールバックで挙動が分岐しないよう、演算子の意味論を「MIRで確定」する。
