@@ -140,10 +140,22 @@ impl MirBuilder {
                     let _ = builder.emit_call_with_guard(
                         Some(dst),
                         name_const,
-                        crate::mir::Callee::Extern(full),
+                        crate::mir::Callee::Extern(full.clone()),
                         argv_loc,
                         crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
                     );
+                    match full.as_str() {
+                        "nyrt.map.values" | "nyrt.map.keys" => {
+                            builder
+                                .value_types
+                                .insert(dst, crate::mir::MirType::Box("ArrayBox".into()));
+                            builder.origin_register(dst, "ArrayBox".to_string());
+                        }
+                        "nyrt.map.size" => {
+                            builder.value_types.insert(dst, crate::mir::MirType::Integer);
+                        }
+                        _ => {}
+                    }
                     builder.annotate_call_result_from_func_name(dst, method);
                     return Some(dst);
                 }
@@ -179,7 +191,7 @@ impl MirBuilder {
             }
             // Conservative fallback: size/length/len with 0 args → treat receiver as string-like
             // Guarded: only when receiver is NOT a known Box type (except inferred String)
-            if (method == "size" || method == "length" || method == "len") && arg_values.is_empty() {
+            if (method == "length" || method == "len") && arg_values.is_empty() {
                 let is_known_box = match self.origin_get(object_value) {
                     Some(cls) => cls != "StringBox",
                     None => matches!(self.value_types.get(&object_value), Some(MirType::Box(b)) if b != "StringBox"),

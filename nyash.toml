@@ -56,7 +56,7 @@ hakorune.vm.extern_call_handler = "selfhost/hakorune-vm/extern_call_handler.hako
 hakorune.vm.boxcall_handler = "selfhost/hakorune-vm/boxcall_handler.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
-selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "selfhost/shared/json/mir_builder_min.hako"

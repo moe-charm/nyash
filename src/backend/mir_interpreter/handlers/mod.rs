@@ -118,6 +118,33 @@ impl MirInterpreter {
                 self.handle_debug(message, *value)?;
             }
             MirInstruction::Print { value, .. } => self.handle_print(*value)?,
+            MirInstruction::TypeOp { dst, op, value, ty } => {
+                // Minimal TypeOp support (Check only). Cast is a no-op by default.
+                match op {
+                    crate::mir::TypeOpKind::Check => {
+                        let v = self.reg_load(*value)?;
+                        let res = match ty {
+                            crate::mir::MirType::String => matches!(v, super::VMValue::String(_)),
+                            crate::mir::MirType::Integer => matches!(v, super::VMValue::Integer(_)),
+                            crate::mir::MirType::Float => matches!(v, super::VMValue::Float(_)),
+                            crate::mir::MirType::Bool => matches!(v, super::VMValue::Bool(_)),
+                            crate::mir::MirType::Void | crate::mir::MirType::Unknown => matches!(v, super::VMValue::Void),
+                            crate::mir::MirType::Box(name) => match v {
+                                super::VMValue::BoxRef(bx) => bx.type_name() == name.as_str(),
+                                _ => false,
+                            },
+                            crate::mir::MirType::Array(_) => false,
+                            crate::mir::MirType::Future(_) => false,
+                        };
+                        self.regs.insert(*dst, super::VMValue::Bool(res));
+                    }
+                    crate::mir::TypeOpKind::Cast => {
+                        // Conservative: pass-through (no actual cast). Future work can add real casts.
+                        let v = self.reg_load(*value)?;
+                        self.regs.insert(*dst, v);
+                    }
+                }
+            }
             MirInstruction::BarrierRead { .. }
             | MirInstruction::BarrierWrite { .. }
             | MirInstruction::Barrier { .. }

@@ -2,7 +2,7 @@
 use super::super::{Effect, EffectMask, MirBuilder, MirInstruction, ValueId};
 use crate::mir::builder::calls::call_unified;
 use crate::mir::builder::calls::call_target::CallTarget;
-use crate::mir::builder::calls::function_lowering;
+use crate::mir::builder::calls::legacy_bridge::LegacyCallBridgeBox;
 use crate::mir::definitions::call_unified::Callee;
 use crate::common::trace_box::TraceBox;
 
@@ -122,8 +122,27 @@ impl MirBuilder {
                         if name.contains('.') && name.contains('/') && module.functions.contains_key(name) {
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
                             let mut args2 = args.clone();
+                            if self.method_index.static_signature(name).is_some() {
+                                if let Some(fun) = module.functions.get(name) {
+                                    if fun.params.len() == args2.len() + 1 {
+                                        if let Some((box_name, _)) = name.split_once('.') {
+                                            let me = self.current_fn_singleton(box_name);
+                                            let mut with_me = Vec::with_capacity(args2.len() + 1);
+                                            with_me.push(me);
+                                            with_me.extend(args2.drain(..));
+                                            args2 = with_me;
+                                        }
+                                    }
+                                }
+                            }
                             crate::mir::builder::ssa::local::finalize_args(self, &mut args2);
-                            self.emit_instruction(MirInstruction::Call { dst: Some(dstv), func: ValueId::new(0), callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name.to_string())), args: args2, effects: EffectMask::IO })?;
+                            self.emit_call_with_guard(
+                                Some(dstv),
+                                ValueId::new(0),
+                                crate::mir::definitions::call_unified::Callee::ModuleFunction(name.to_string()),
+                                args2,
+                                EffectMask::IO,
+                            )?;
                             self.annotate_call_result_from_func_name(dstv, name);
                             return Ok(());
                         }
@@ -141,14 +160,29 @@ impl MirBuilder {
                             // Emit unified ModuleFunction instead of legacy string-based call
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
                             let mut args2 = args.clone();
+                            if self.method_index.static_signature(&func_name).is_some() {
+                                if let Some(ref module) = self.current_module {
+                                    if let Some(fun) = module.functions.get(&func_name) {
+                                        if fun.params.len() == args2.len() + 1 {
+                                            if let Some((box_name, _)) = func_name.split_once('.') {
+                                                let me = self.current_fn_singleton(box_name);
+                                                let mut with_me = Vec::with_capacity(args2.len() + 1);
+                                                with_me.push(me);
+                                                with_me.extend(args2.drain(..));
+                                                args2 = with_me;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             crate::mir::builder::ssa::local::finalize_args(self, &mut args2);
-                            self.emit_instruction(MirInstruction::Call {
-                                dst: Some(dstv),
-                                func: ValueId::new(0),
-                                callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(func_name.clone())),
-                                args: args2,
-                                effects: EffectMask::IO,
-                            })?;
+                            self.emit_call_with_guard(
+                                Some(dstv),
+                                ValueId::new(0),
+                                crate::mir::definitions::call_unified::Callee::ModuleFunction(func_name.clone()),
+                                args2,
+                                EffectMask::IO,
+                            )?;
                             self.annotate_call_result_from_func_name(dstv, func_name);
                             return Ok(());
                         }
@@ -241,10 +275,30 @@ impl MirBuilder {
             other => other,
         };
 
-        // Final materialization unified — keep materialized receiver/args as-is.
-        // IMPORTANT: Perform materialization exactly once, right before emission (EmitGuard contract).
+        // If ModuleFunction belongs to a static box normalized to singleton `me`,
+        // and the concrete function in current module expects one more parameter
+        // than currently provided, prepend the per-function singleton as the first arg.
         let mut callee2 = callee;
         let mut args2: Vec<ValueId> = args.clone();
+        if let crate::mir::definitions::call_unified::Callee::ModuleFunction(ref fname) = callee2 {
+            if self.method_index.static_signature(fname).is_some() {
+                if let Some(ref module) = self.current_module {
+                    if let Some(fun) = module.functions.get(fname) {
+                        if fun.params.len() == args2.len() + 1 {
+                            if let Some((box_name, _)) = fname.split_once('.') {
+                                let me = self.current_fn_singleton(box_name);
+                                let mut with_me = Vec::with_capacity(args2.len() + 1);
+                                with_me.push(me);
+                                with_me.extend(args2.drain(..));
+                                args2 = with_me;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Final materialization unified — keep materialized receiver/args as-is.
+        // IMPORTANT: Perform materialization exactly once, right before emission (EmitGuard contract).
         crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee2, &mut args2);
         // If we early-rewrote Method(Set-like) → Extern("nyrt.set.*"), ensure receiver is present as first arg
         if let Callee::Extern(ref name) = callee2 {
@@ -291,6 +345,42 @@ impl MirBuilder {
 
         // Compose final MirCall from normalized+finalized operands for accurate effects
         let mir_call = call_unified::create_mir_call(dst, callee2.clone(), args2.clone());
+        if let Some(dst_id) = mir_call.dst {
+            if let Callee::Extern(name) = &mir_call.callee {
+                if std::env::var("NYASH_DEBUG_MAP_VALUES").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[map-values-debug] extern callee={} dst={:?}",
+                        name,
+                        mir_call.dst
+                    );
+                }
+                match name.as_str() {
+                    "nyrt.map.values" | "nyrt.map.keys" => {
+                        self.value_types
+                            .insert(dst_id, crate::mir::MirType::Box("ArrayBox".into()));
+                        self.origin_register(dst_id, "ArrayBox".to_string());
+                        if super::super::utils::builder_debug_enabled() {
+                            super::super::utils::builder_debug_log(&format!(
+                                "[annotate] extern {} dst=%{} -> origin=ArrayBox",
+                                name,
+                                dst_id.0
+                            ));
+                        }
+                        if std::env::var("NYASH_DEBUG_MAP_VALUES").ok().as_deref() == Some("1") {
+                            let ty = self.value_types.get(&dst_id).cloned();
+                            let origin = self.origin_get(dst_id).map(|s| s.to_string());
+                            eprintln!(
+                                "[map-values] dst=%{} ty={:?} origin={:?}",
+                                dst_id.0,
+                                ty,
+                                origin
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {
@@ -314,246 +404,9 @@ impl MirBuilder {
         target: CallTarget,
         args: Vec<ValueId>,
     ) -> Result<(), String> {
-        // DEPRECATION (Phase‑in): prefer `emit_unified_call` for new code paths.
-        // This legacy path remains for compatibility while we converge all
-        // call emission (Global/Extern/Method/Constructor) through the unified
-        // callee model and RouterPolicy. Behavior is unchanged.
-        match target {
-            CallTarget::Method { receiver, method, box_type: _ } => {
-                // Centralized rewrite: string size/len/length (0 args) → Extern("nyrt.string.length")
-                {
-                    let mut callee = Callee::Method { box_name: "StringBox".to_string(), method: method.clone(), receiver: Some(receiver), certainty: crate::mir::definitions::call_unified::TypeCertainty::Union };
-                    let mut argv = Vec::<ValueId>::new();
-                    let changed = crate::mir::builder::normalize::string_length::normalize_string_length_call(self, &mut callee, &mut argv);
-                    if changed {
-                        crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
-                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                        let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.string.length")?;
-                        self.emit_instruction(MirInstruction::Call {
-                            dst: Some(dstv),
-                            func: name_const,
-                            callee: Some(callee),
-                            args: argv,
-                            effects: EffectMask::READ.add(Effect::ReadHeap),
-                        })?;
-                        // Annotate result as Integer
-                        self.value_types.insert(dstv, crate::mir::MirType::Integer);
-                        return Ok(());
-                    }
-                }
-                // Centralized rewrite: array size/len/length (0 args) → Extern("nyrt.array.length")
-                {
-                    let mut callee = Callee::Method { box_name: "ArrayBox".to_string(), method: method.clone(), receiver: Some(receiver), certainty: crate::mir::definitions::call_unified::TypeCertainty::Union };
-                    let mut argv = Vec::<ValueId>::new();
-                    let changed = crate::mir::builder::normalize::array_length::normalize_array_length_call(self, &mut callee, &mut argv);
-                    if changed {
-                        crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
-                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                        let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.array.size")?;
-                        self.emit_instruction(MirInstruction::Call {
-                            dst: Some(dstv),
-                            func: name_const,
-                            callee: Some(callee),
-                            args: argv,
-                            effects: EffectMask::READ.add(Effect::ReadHeap),
-                        })?;
-                        // Annotate result as Integer
-                        self.value_types.insert(dstv, crate::mir::MirType::Integer);
-                        return Ok(());
-                    }
-                }
-                // Special-case: instance.birth(args) should invoke lowered ModuleFunction (user-defined birth)
-                if method == "birth" {
-                    let (cls, _cert) = crate::mir::builder::infer::receiver::infer_receiver(
-                        None,
-                        &method,
-                        receiver,
-                        |vid| self.origin_get(vid).map(|s| s.to_string()),
-                        &self.value_types,
-                    );
-                    let me_local = self.local_recv(receiver);
-                    let mut call_args: Vec<ValueId> = Vec::with_capacity(args.len() + 1);
-                    call_args.push(me_local);
-                    call_args.extend(args.into_iter());
-                    crate::mir::builder::ssa::local::finalize_args(self, &mut call_args);
-                    let out = dst.unwrap_or_else(|| self.value_gen.next());
-                    let fname = function_lowering::generate_method_function_name(&cls, &method, call_args.len() - 1);
-                    let name_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(out),
-                        func: name_val,
-                        callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fname.clone())),
-                        args: call_args,
-                        effects: EffectMask::IO,
-                    })?;
-                    self.annotate_call_result_from_func_name(out, &fname);
-                    return Ok(());
-                }
-                // Prod rewrite: when user instance BoxCall is disallowed by policy,
-                // lower `obj.method(a,b)` into module function `Class.method/Arity(me,a,b)`.
-                // This preserves stable prod semantics without requiring unified-call flag.
-                if !crate::config::env::vm_allow_user_instance_boxcall() {
-                    let (cls, _cert) = crate::mir::builder::infer::receiver::infer_receiver(
-                        None,
-                        &method,
-                        receiver,
-                        |vid| self.origin_get(vid).map(|s| s.to_string()),
-                        &self.value_types,
-                    );
-                    let me_local = self.local_recv(receiver);
-                    let mut call_args: Vec<ValueId> = Vec::with_capacity(args.len() + 1);
-                    call_args.push(me_local);
-                    call_args.extend(args.into_iter());
-                    crate::mir::builder::ssa::local::finalize_args(self, &mut call_args);
-                    let out = dst.unwrap_or_else(|| self.value_gen.next());
-                    let fname = function_lowering::generate_method_function_name(&cls, &method, call_args.len() - 1);
-                    let name_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(out),
-                        func: name_val,
-                        callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fname.clone())),
-                        args: call_args,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
-                    self.annotate_call_result_from_func_name(out, &fname);
-                    return Ok(());
-                }
-                // Legacy fallback: Box/Plugin call
-                self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO, false)
-            },
-            CallTarget::Constructor(box_type) => {
-                // Use existing NewBox
-                let dst = dst.ok_or("Constructor must have destination")?;
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst,
-                    box_type,
-                    args,
-                    auto_birth: None,
-                })
-            },
-            CallTarget::Extern(name) => {
-                // Unified path: emit Call with callee=Extern("iface.method")
-                let mut args = args;
-                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                // Normalize dotted name; accept bare as "nyash.<name>"
-                let full_name = if name.contains('.') { name } else { format!("nyash.{}", name) };
-                // Compute effects for extern
-                let (iface, method) = full_name.rsplit_once('.').unwrap_or(("nyash", full_name.as_str()));
-                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects(iface, method);
-                self.emit_instruction(MirInstruction::Call {
-                    dst,
-                    func: ValueId::new(0),
-                    callee: Some(crate::mir::definitions::call_unified::Callee::Extern(full_name)),
-                    args,
-                    effects,
-                })
-            },
-            CallTarget::Global(name) => {
-                // Early rewrite for dotted StringBox methods: StringBox.size/1 → Extern("nyrt.string.length")
-                if (name.starts_with("StringBox.size") || name.starts_with("StringBox.length") || name.starts_with("StringBox.len")) && args.len() == 1 {
-                    let recv_local = self.local_recv(args[0]);
-                    let mut argv = vec![recv_local];
-                    crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
-                    let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                    let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.string.length")?;
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dstv),
-                        func: name_const,
-                        callee: Some(crate::mir::definitions::call_unified::Callee::Extern("nyrt.string.length".to_string())),
-                        args: argv,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
-                    self.value_types.insert(dstv, crate::mir::MirType::Integer);
-                    return Ok(());
-                }
-                let normalized = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, args.len()) {
-                    Ok(full) => full,
-                    Err(_) => format!("{}/{}", name, args.len()),
-                };
-                // Special-case: route hostbridge.* globals to Extern("hostbridge.*") for unified HostBridge
-                if name.starts_with("hostbridge.") {
-                    let mut args = args;
-                    crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst,
-                        func: ValueId::new(0),
-                        callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name.clone())),
-                        args,
-                        effects: crate::mir::builder::calls::extern_calls::compute_extern_effects("hostbridge", name.strip_prefix("hostbridge.").unwrap_or("")),
-                    })?;
-                    return Ok(());
-                }
-                // Prefer direct ModuleFunction when available in current module (avoids legacy string callee)
-                // Use CallNameResolverBox::normalize to ensure fully qualified form before lookup.
-                if let Some(ref module) = self.current_module {
-                    // Only attempt module function lookup when the name looks like Class.method or fully-qualified.
-                    if name.contains('.') {
-                        let want = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, args.len()) {
-                            Ok(full) => full,
-                            Err(_) => name.clone(), // keep raw if it cannot be normalized (unlikely when contains '.')
-                        };
-                        if module.functions.contains_key(&want) {
-                            let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
-                            let mut args = args;
-                            crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                            self.emit_instruction(MirInstruction::Call {
-                                dst: Some(actual_dst),
-                                func: ValueId::new(0),
-                                callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(want.clone())),
-                                args,
-                                effects: EffectMask::IO,
-                            })?;
-                            self.annotate_call_result_from_func_name(actual_dst, &want);
-                            return Ok(());
-                        }
-                    }
-                }
-                // First-class: JSON.stringify(any) → arg0.toJSON() (arity 1→0)
-                if name == "JSON.stringify/1" || name.starts_with("JSON.stringify") {
-                    if let Some(recv) = args.get(0).cloned() {
-                        let argv: Vec<super::super::ValueId> = Vec::new();
-                        let recv_local = self.local_recv(recv);
-                        self.emit_box_or_plugin_call(dst, recv_local, "toJSON".to_string(), None, argv, EffectMask::READ, false)?;
-                        return Ok(());
-                    }
-                }
-                // Emit unified Global callee instead of legacy string-based call
-                let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
-                let mut args = args;
-                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                self.emit_instruction(MirInstruction::Call {
-                    dst: Some(actual_dst),
-                    func: ValueId::new(0),
-                    callee: Some(crate::mir::definitions::call_unified::Callee::Global(normalized.clone())),
-                    args,
-                    effects: EffectMask::IO,
-                })?;
-                self.annotate_call_result_from_func_name(actual_dst, normalized);
-                Ok(())
-            },
-            CallTarget::Value(func_val) => {
-                let mut args = args;
-                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                self.emit_instruction(MirInstruction::Call {
-                    dst,
-                    func: func_val,
-                    callee: Some(crate::mir::definitions::call_unified::Callee::Value(func_val)),
-                    args,
-                    effects: EffectMask::IO,
-                })
-            },
-            CallTarget::Closure { params, captures, me_capture } => {
-                let dst = dst.ok_or("Closure creation must have destination")?;
-                self.emit_instruction(MirInstruction::NewClosure {
-                    dst,
-                    params,
-                    body: vec![], // Empty body for now
-                    captures,
-                    me: me_capture,
-                })
-            },
-        }
+        LegacyCallBridgeBox::new(self).emit(dst, target, args)
     }
+
 
     // Phase 2 Migration: Convenience methods that use emit_unified_call
 

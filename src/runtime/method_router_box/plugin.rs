@@ -50,7 +50,7 @@ pub fn try_route_plugin_box(
     {
         // StringBox — early host path for len/size/length (dev/test)
         if p.box_type == "StringBox" {
-            if let Some((route, value)) =
+            if let Some((_route, value)) =
                 super::host_slot::try_invoke_arc(bx, STRING_HOST_ROUTES, method, args)
             {
                 if std::env::var("NYASH_DEBUG_HOST_SLOT").ok().as_deref() == Some("1") {

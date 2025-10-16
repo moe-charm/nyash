@@ -121,7 +121,7 @@ impl MirBuilder {
             Err(e) => return Some(Err(e)),
         };
         // Prefer unified ModuleFunction callee to avoid legacy recursion
-        let mut args_local = arg_values.clone();
+        let args_local = arg_values.clone();
         if let Err(e) = self.emit_call_with_guard(
             Some(result_id),
             super::super::ValueId::new(0),

@@ -1,7 +1,7 @@
 // extern_rune_dev.rs — nyrt.rune.* (dev mock evaluator)
 use std::collections::HashMap;
 
-use crate::backend::vm_types::{VMError, VMValue};
+use crate::backend::vm_types::VMValue;
 
 pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
     // nyrt.rune.eval(code: String) -> i64 (skeleton mock)
@@ -32,4 +32,3 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
         Ok(VMValue::Integer(-3))
     });
 }
-

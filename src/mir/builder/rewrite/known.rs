@@ -1,4 +1,4 @@
-use super::super::{Effect, EffectMask, MirBuilder, MirInstruction, ValueId};
+use super::super::{Effect, EffectMask, MirBuilder, ValueId};
 
 /// Gate: whether instance→function rewrite is enabled.
 fn rewrite_enabled() -> bool {

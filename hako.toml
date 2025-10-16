@@ -162,7 +162,7 @@ timer = "core.timer.TimerBox"
 
 # Resolve duplicate namespaces explicitly (prefer apps/* paths)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
-selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"

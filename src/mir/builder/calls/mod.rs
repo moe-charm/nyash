@@ -25,6 +25,8 @@ pub mod call_unified;
 
 // Re-export commonly used items
 
+// Legacy compatibility bridge
+pub mod legacy_bridge;
 
 
 

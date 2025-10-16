@@ -48,7 +48,22 @@ pub fn write_mapval_tlv(value: &MapVal, result: *mut u8, result_len: *mut usize)
     match value {
         MapVal::I64(n) => write_tlv_i64(*n, result, result_len),
         MapVal::Str(s) => write_tlv_string(s, result, result_len),
-        MapVal::Handle(t, i) => write_tlv_handle(*t, *i, result, result_len),
+        MapVal::Handle(t, i) => {
+            if *t == crate::TYPE_ID_ARRAY {
+                unsafe {
+                    extern "C" {
+                        fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64;
+                    }
+                    let h = nyash_host_from_plugin_handle(*t, *i);
+                    if h == 0 {
+                        return crate::NYB_E_PLUGIN_ERROR;
+                    }
+                    write_tlv_host_handle(h, result, result_len)
+                }
+            } else {
+                write_tlv_handle(*t, *i, result, result_len)
+            }
+        }
         MapVal::Host(h) => write_tlv_host_handle(*h, result, result_len),
     }
 }

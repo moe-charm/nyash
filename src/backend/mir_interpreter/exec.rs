@@ -47,8 +47,31 @@ impl MirInterpreter {
         self.scope.push_scope();
 
         if let Some(args) = arg_vals {
+            // Phase-31 compatibility: only static box functions tagged during lowering should synthesize `me`.
+            let mut args_coerced: Option<Vec<VMValue>> = None;
+            let needs_me = func
+                .metadata
+                .optimization_hints
+                .iter()
+                .any(|hint| hint == "static_singleton_me");
+            if needs_me && func.signature.name.contains('.') && func.signature.name.rfind('/').is_some() {
+                if args.len() + 1 == func.params.len() {
+                    if let Some(dot) = func.signature.name.find('.') {
+                        let class = &func.signature.name[..dot];
+                        let me_val = match crate::runtime::static_singleton::get(class) {
+                            Ok(single) => VMValue::BoxRef(single),
+                            Err(_) => VMValue::Void, // static-only boxes cannot be instantiated; pass Void as placeholder
+                        };
+                        let mut v = Vec::with_capacity(args.len() + 1);
+                        v.push(me_val);
+                        v.extend_from_slice(args);
+                        args_coerced = Some(v);
+                    }
+                }
+            }
+            let args_ref: &[VMValue] = args_coerced.as_deref().unwrap_or(args);
             for (i, pid) in func.params.iter().enumerate() {
-                let v = args.get(i).cloned().unwrap_or(VMValue::Void);
+                let v = args_ref.get(i).cloned().unwrap_or(VMValue::Void);
                 self.regs.insert(*pid, v.clone());
             }
             if super::VmConfig::global().param_trace {

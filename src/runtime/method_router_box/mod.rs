@@ -10,8 +10,8 @@ mod map_callable;
 mod method_ref;
 mod plugin;
 mod builtin;
-mod tables;
-mod host_slot;
+pub(crate) mod tables;
+pub(crate) mod host_slot;
 
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};

@@ -105,13 +105,13 @@ impl MirBuilder {
             if module.functions.contains_key(&func_name) {
                 let dst = self.value_gen.next();
                 let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &func_name)?;
-                self.emit_instruction(super::super::MirInstruction::Call {
-                    dst: Some(dst),
-                    func: fun_val,
-                    callee: Some(crate::mir::Callee::ModuleFunction(func_name.clone())),
-                    args: arg_values,
-                    effects: EffectMask::READ.add(Effect::ReadHeap),
-                })?;
+                self.emit_call_with_guard(
+                    Some(dst),
+                    fun_val,
+                    crate::mir::Callee::ModuleFunction(func_name.clone()),
+                    arg_values,
+                    EffectMask::READ.add(Effect::ReadHeap),
+                )?;
                 // Minimal type/origin annotation when available
                 self.annotate_call_result_from_func_name(dst, &func_name);
                 return Ok(dst);

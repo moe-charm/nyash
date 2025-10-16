@@ -331,10 +331,10 @@ pub fn normalize_legacy_instructions(
                         // Reverting here can drop the in-block Copy via DCE if receiver bookkeeping
                         // regresses; prefer Extern for stability.
                         n if n.starts_with("nyrt.string.") => ("", None),
-                        // Keep array.size as Extern (do not revert to Method)
-                        "nyrt.map.size"      => ("MapBox",    Some("size")),
-                        "nyrt.map.keys"      => ("MapBox",    Some("keys")),
-                        "nyrt.map.values"    => ("MapBox",    Some("values")),
+                        // Keep map/array size extern to reuse EmitGuard materialization guarantees.
+                        "nyrt.map.size"      => ("", None),
+                        "nyrt.map.keys"      => ("", None::<&'static str>),
+                        "nyrt.map.values"    => ("", None::<&'static str>),
                         _ => ("", None),
                     };
                     if let Some(m) = method_opt {

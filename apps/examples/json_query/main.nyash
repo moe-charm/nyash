@@ -70,6 +70,9 @@ static box Main {
   // Returns a JSON substring for the value or null if not found
   eval_path_text(json_text, path) {
     local DEBUG = 0  // set to 1 for ad-hoc debug
+    // Guard: ensure json_text is a String (defensive against upstream mismatches)
+    // Phase-31 bring-up may pass non-String in edge cases; coerce to String for text-slicing.
+    if ! json_text.is("String") { json_text = "" + json_text }
     local cur_text = json_text
     local i = 0
     loop(i < path.size()) {

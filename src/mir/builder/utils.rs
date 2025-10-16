@@ -166,13 +166,13 @@ impl super::MirBuilder {
             call_args.push(recv_local);
             call_args.extend(argv.drain(..));
             let out = dst.unwrap_or_else(|| self.value_gen.next());
-            self.emit_instruction(super::MirInstruction::Call {
-                dst: Some(out),
-                func: name_val,
-                callee: Some(crate::mir::definitions::Callee::ModuleFunction(fname.clone())),
-                args: call_args,
+            self.emit_call_with_guard(
+                Some(out),
+                name_val,
+                crate::mir::definitions::Callee::ModuleFunction(fname.clone()),
+                call_args,
                 effects,
-            })?;
+            )?;
             self.annotate_call_result_from_func_name(out, &fname);
             return Ok(());
         }

@@ -666,6 +666,22 @@ impl MirBuilder {
         // 4. Build object value for remaining cases
         let object_value = self.build_expression(object)?;
 
+        // Array size fast-path when type/origin already known (e.g., map.values()).
+        if (method == "size" || method == "len" || method == "length") && arguments.is_empty() {
+            let is_array = self
+                .origin_get(object_value)
+                .map(|s| s == "ArrayBox")
+                .unwrap_or_else(|| {
+                    matches!(
+                        self.value_types.get(&object_value),
+                        Some(MirType::Box(b)) if b == "ArrayBox"
+                    )
+                });
+            if is_array {
+                return self.emit_array_size_call(object_value);
+            }
+        }
+
         let router = crate::mir::builder::router::call_router::CallRoutingBox::new();
         if let Some(route) = router.decide_method_route(self.origin_get(object_value), &method, arguments.len()) {
             match route {

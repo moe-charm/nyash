@@ -12,10 +12,15 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
                 _ => None,
             }
         }
-        // env.future.new() -> Future
-        map.insert(("env.future".into(), "new".into()), |_args: &[VMValue]| {
+        // env.future.new(value?) -> Future
+        // Fix: respect optional first argument and set result immediately when provided
+        map.insert(("env.future".into(), "new".into()), |args: &[VMValue]| {
             let fut = crate::boxes::future::FutureBox::new();
             crate::runtime::global_hooks::register_future_to_current_group(&fut);
+            if let Some(first) = args.get(0) {
+                // Initialize future with provided value (boxed)
+                fut.set_result(first.to_nyash_box());
+            }
             Ok(VMValue::from_nyash_box(Box::new(fut)))
         });
         // env.future.set(future, value) -> Void
@@ -31,6 +36,17 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
         // env.future.await(future) -> any
         map.insert(("env.future".into(), "await".into()), |args: &[VMValue]| {
             let first = args.get(0).ok_or_else(|| VMError::InvalidInstruction("env.future.await requires 1 arg".into()))?;
+            // Accept both BoxRef(FutureBox) and VMValue::Future for compatibility
+            #[cfg(feature = "legacy-boxes")]
+            {
+                // VMValue::Future path
+                if let VMValue::Future(fut) = first {
+                    return match fut.wait_and_get() {
+                        Ok(v) => Ok(VMValue::from_nyash_box(v)),
+                        Err(e) => Err(VMError::InvalidInstruction(format!("future.await error: {}", e))),
+                    };
+                }
+            }
             if let Some(fut) = value_as_future(first) {
                 // block until ready and return value
                 match fut.wait_and_get() {
@@ -38,7 +54,8 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
                     Err(e) => Err(VMError::InvalidInstruction(format!("future.await error: {}", e))),
                 }
             } else {
-                Err(VMError::TypeError("env.future.await expects Future".into()))
+                // Pass-through (compat): awaiting a non-future yields the value unchanged
+                Ok(first.clone())
             }
         });
         // env.future.spawn_instance(callable, argvArray) -> Future

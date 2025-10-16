@@ -152,6 +152,15 @@
 5. スモーク追加（static/instance 等価、extern 経路）
 6. Docs 反映（ガイド/リファレンス/ENV 記載）
 
+### Known issues（2025‑10‑16 plugins 再走後の把握）
+- MapBox.remove/values が plugin 経路のままで、戻り値（remove）や受領者素材化（values）が未整備。
+  - 対応: `MapBox.(size|len|length)` → `Extern("nyrt.map.size")(recv)` は 2025‑10‑16 に完了。remove/values 向けに extern adapter（plugin bridge）を拡張予定。
+  - EmitGuard の適用経路を一本化（Call 発行は guard 経由のみ）。
+- me 注入の誤適用により plugin ModuleFunction へ影響する懸念。
+  - 対処: `method_index.static_signature()` に該当する静的シグネチャのみ `me` 合成を許可（Builder/VM 双方でガード）。
+- FileBox 系の `use of undefined value` は引数素材化の漏れが原因。
+  - 対処: mir_call 作成前後の LocalSSA を全発行経路に適用済みかスイープし、欠落箇所を補強（EmitGuard で統一）。
+
 ---
 
 ## 付録（インターフェース最小定義）
@@ -189,6 +198,17 @@
   - Runtime: MethodRouter が Void 受領者を即時 InvalidInstruction とし、legacy fallback も receiver 前提に統一。
   - Trampoline: `handlers/calls/trampolines.rs` を追加し、Array/Map/String/Console の ModuleFunction → Method 変換を表駆動化。
 
+### Phase A‑1d — LegacyCallBridgeBox 導入（完了）
+- 目的: `emit_instruction(MirInstruction::Call)` の直叩きを Builder から排除し、ガード済みの入口に集約する。
+- 実装:
+  - `src/mir/builder/calls/legacy_bridge/` に LegacyCallBridgeBox を新設し、旧 `emit_legacy_call` の本体を移設。
+  - すべてのレガシー Call 発行を `emit_call_with_guard`（EmitGuard）経由に統一するヘルパ `emit_call()` を追加。
+  - BoxCall/PluginCall も `emit_boxcall()` でローカルSSA素材化→`emit_box_or_plugin_call` へ流すようガード化。
+  - `src/mir/builder/builder_calls/emit.rs` の `emit_legacy_call` は Box への委譲のみとし、モジュール境界でレガシー経路を閉じ込めた。
+- 効果:
+  - Guard を通さない Call が発生しなくなり、Extern/Method/Global いずれも素材化漏れを検出可能に。
+  - レガシー経路が単一ファイルに箱化されたことで、段階的削除（将来的なフェーズB/C）や差分追跡が容易に。
+
 ### Phase A‑2 — singleton 実体（lazy 初期化）導入（完了）
 - 目的: `emit_static_me_placeholder()` が生成する Void const を実体 BoxRef に置き換える。
 - 実装:
@@ -198,14 +218,32 @@
   - MIR 側は Box 型として `me` を扱い、VM 実行時に実体 Arc<NyashBox> が注入される。後続のマクロ/Verifier 強化に備えて受領者が具体化された。
 
 ### 残タスク（Phase A 継続）
+### Phase A‑1e — Map.size 正規化 & Extern 安定化（完了）
+- 目的: `MapBox.(size|len|length)` を `Extern("nyrt.map.size")` に統一し、Method 形の残存で起きる受領者素材化漏れを排除。
+- 実装:
+  - `src/mir/builder/normalize/map_length.rs` 新設。`normalize::apply_all` に組み込み。
+  - Optimizer 側で `nyrt.map.size` の Method への巻き戻しを抑止。
+  - Lowering で `MapBox.size/0` → `nyrt.map.size(recv)` の直下ろしを追加。
+- 効果: plugins プロファイルの `parity_map_size_has_vm` / `strict_plugin_map_size_vm` が PASS。
+
+### Phase A‑1f — Map.keys/values と remove の整備（進行中）
+- 目的: `Map.values()` の結果を ArrayBox として安定化し、直後の `.size()` などで型不一致や未定義値を起こさない。
+- 実装:
+  - Extern adapter で `nyrt.map.{keys,values}` を HostSlot 経由（テーブル駆動）＋ Plugin 経由の橋渡しに対応。
+  - Builder で `Extern("nyrt.map.{values,keys}")` の結果に ArrayBox 注釈を付与（後段の利用で型ヒント）。
+  - Map プラグインで `remove()` が削除した値を返すよう修正（i64/文字列/配列ハンドルを TLV で返却）。
+- 残: `values()` 直後に `.size()` を呼ぶケースで、ArrayBox 注釈は付くものの、`.size()` 側の素材化順序が先行して未定義値参照になるパターンが残存。EmitGuard 後のローカル化を強制する追加ルールで詰める。
+
+### Known issues（2025‑10‑16 plugins 再走後の把握）
+- MapBox.values の直後に `.size()` を呼ぶケースで、ArrayBox 注釈は付くものの、`.size()` 側の受け素材化が先行して未定義値参照になるパターンが残存。
+  - 対応: Builder 側の fast-path を拡張（ArrayBox 由来の `.size()` は `nyrt.array.size` に直下ろしし、EmitGuard 直後にローカル化）。Normalizer/Optimizer は Extern を保持。
+- me 注入の誤適用により plugin ModuleFunction へ影響する懸念。
+  - 対処: `method_index.static_signature()` に該当する静的シグネチャのみ `me` 合成を許可（Builder/VM 双方でガード）。
+- FileBox 系の `use of undefined value` は引数素材化の漏れが原因。
+  - 対処: mir_call 作成前後の LocalSSA を全発行経路に適用済みかスイープし、欠落箇所を補強（EmitGuard で統一）。
 - Plugin ABI: 既存 C ABI 互換のトランポリンを registry に登録し、外部呼び出し経路を段階移行。
 - Docs/Tests: Phase-31 変更点のドキュメント整備とスモーク追加（singleton/Verifier 回り）。
 
 ### 現在の既知問題（dev）
-- Extern 経路（`nyrt.string.length`）で、受領者の素材化が Builder の finalize 前に抜けるパスがあり、φ 合流で未定義→Void 伝播→Extern TypeError となるケースがある。
-  - 露呈のきっかけ: Static→singleton 正規化により Extern 経路が prominent になった（Router 表は問題の中心ではない）。
-  - 対策方針（短期）:
-    1) Builder finalize/repair で Extern 呼び出しの受領者を in‑block Copy で素材化（Method と同等に）
-    2) VM の Copy 寛容ガード（未定義→Void 初期化）は既定 OFF（Fail‑Fast）へ戻す
-    3) φ 合流を含む最小スモーク（Extern length）を quick-selfhost に追加
-  - 参考 ENV: `NYASH_DEBUG_STRING_LEN=1`（Extern handler での引数デバッグ出力）
+- quick→plugins→full でのカテゴリ 2/3（出力差・モジュール解決）の再確認が未実施。LegacyCallBridgeBox 導入後、差分の再スキャンが P0‑5 で残っている。
+- Plugin ABI トランポリンの網羅化・自動生成は継続作業。現状は代表ケースのみ箱化されており、残りは TODO に記載のとおり。

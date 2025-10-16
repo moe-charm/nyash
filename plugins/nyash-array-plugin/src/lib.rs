@@ -229,17 +229,27 @@ extern "C" fn array_invoke_id(
                 if idx < 0 {
                     return NYB_E_INVALID_ARGS;
                 }
-
-                match with_instance!(instance_id, |inst: &ArrayInstance| {
+                let ret = match with_instance!(instance_id, |inst: &ArrayInstance| {
                     let i = idx as usize;
                     if i >= inst.data.len() {
                         return NYB_E_INVALID_ARGS;
                     }
-                    write_tlv_value(&inst.data[i], result, result_len)
+                    let code = write_tlv_value(&inst.data[i], result, result_len);
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        let kind = match &inst.data[i] {
+                            ArrayValue::I64(_) => "I64",
+                            ArrayValue::Str(_) => "Str",
+                            ArrayValue::Handle(_, _) => "Handle",
+                            ArrayValue::Host(_) => "Host",
+                        };
+                        eprintln!("[array-plugin] GET idx={} kind={} code={} len={}", i, kind, code, inst.data.len());
+                    }
+                    code
                 }) {
                     Ok(r) => r,
                     Err(e) => e,
-                }
+                };
+                ret
             }
             METHOD_SET => {
                 let idx = match read_arg_i64(args, args_len, 0) {

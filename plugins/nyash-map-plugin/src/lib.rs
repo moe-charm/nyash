@@ -498,12 +498,8 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
+                        let rc = write_mapval_tlv(&value, result, result_len);
+                        return if rc == NYB_SUCCESS { NYB_SUCCESS } else { rc };
                     }
                     unsafe {
                         if !result_len.is_null() {
@@ -521,12 +517,8 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
+                        let rc = write_mapval_tlv(&value, result, result_len);
+                        return if rc == NYB_SUCCESS { NYB_SUCCESS } else { rc };
                     }
                     unsafe {
                         if !result_len.is_null() {
