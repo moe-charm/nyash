@@ -2,6 +2,7 @@
 use super::super::{MirBuilder, MirFunction, MirInstruction, MirType, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::builder::calls::function_lowering;
+use crate::mir::value_id::ValueIdGenerator;
 
 impl MirBuilder {
     // Lower a box method into a standalone MIR function (with `me` parameter)
@@ -28,11 +29,12 @@ impl MirBuilder {
         // value_types / value_origin_newbox は関数単位で分離する（交差汚染防止）。
         let saved_types = std::mem::take(&mut self.value_types);
         let saved_origin = self.origin_snapshot();
-        let saved_value_gen = self.value_gen.clone();
+        let parent_value_gen_watermark = self.value_gen.peek_next();
+        let saved_value_gen =
+            std::mem::replace(&mut self.value_gen, ValueIdGenerator::new());
         let saved_singletons = std::mem::take(&mut self.current_fn_singletons);
 
         let result = (|| -> Result<(), String> {
-            self.value_gen.reset();
             self.current_function = Some(function);
             self.current_block = Some(entry);
             self.ensure_block_exists(entry)?;
@@ -101,7 +103,21 @@ impl MirBuilder {
         // Drop per-function metadata and restore outer scope
         self.value_types = saved_types;
         self.origin_restore(saved_origin);
-        self.value_gen = saved_value_gen;
+        let fn_generator = std::mem::replace(&mut self.value_gen, saved_value_gen);
+        if std::env::var("NYASH_VERIFY_VALUE_GEN_MONOTONIC")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let restored_next = self.value_gen.peek_next();
+            debug_assert!(
+                restored_next.as_u32() >= parent_value_gen_watermark.as_u32(),
+                "value_gen watermark regressed (parent {} -> current {})",
+                parent_value_gen_watermark.as_u32(),
+                restored_next.as_u32()
+            );
+        }
+        drop(fn_generator);
         self.current_fn_singletons = saved_singletons;
         result
     }
@@ -148,11 +164,12 @@ impl MirBuilder {
         let saved_var_map = std::mem::take(&mut self.variable_map);
         let saved_types = std::mem::take(&mut self.value_types);
         let saved_origin = self.origin_snapshot();
-        let saved_value_gen = self.value_gen.clone();
+        let parent_value_gen_watermark = self.value_gen.peek_next();
+        let saved_value_gen =
+            std::mem::replace(&mut self.value_gen, ValueIdGenerator::new());
         let saved_singletons = std::mem::take(&mut self.current_fn_singletons);
 
         let result = (|| -> Result<(), String> {
-            self.value_gen.reset();
             self.current_function = Some(function);
             self.current_block = Some(entry);
             self.ensure_block_exists(entry)?;
@@ -223,7 +240,21 @@ impl MirBuilder {
         self.variable_map = saved_var_map;
         self.value_types = saved_types;
         self.origin_restore(saved_origin);
-        self.value_gen = saved_value_gen;
+        let fn_generator = std::mem::replace(&mut self.value_gen, saved_value_gen);
+        if std::env::var("NYASH_VERIFY_VALUE_GEN_MONOTONIC")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
+            let restored_next = self.value_gen.peek_next();
+            debug_assert!(
+                restored_next.as_u32() >= parent_value_gen_watermark.as_u32(),
+                "value_gen watermark regressed (parent {} -> current {})",
+                parent_value_gen_watermark.as_u32(),
+                restored_next.as_u32()
+            );
+        }
+        drop(fn_generator);
         self.current_fn_singletons = saved_singletons;
         self.current_static_box = saved_static_ctx;
         result
