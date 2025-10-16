@@ -3,7 +3,38 @@
 このページは「いま何をしていて、次に何をするか」を 1 画面で把握できるようにするダッシュボードだよ。最新の作業に合わせて随時更新していくにゃ。
 
 ## Snapshot
-Updates (today)
+Updates (today - 2025-10-16 continued)
+- **P0修正完了**: MirIoBox export追加 → selfhost基盤復旧 ✅
+  - 問題: `selfhost/shared/hako_module.toml` に `mir.io = "mir/mir_io_box.hako"` export欠落
+  - 影響: ALL selfhostテストが "Unknown module function: MirIoBox.validate/1" で失敗
+  - 修正: export追加 → 基盤復旧確認（mir_builder_binop_add/compare_eq/binop_mul PASS）
+  - Commit: `36d0cf4e` - "fix(selfhost): Add MirIoBox export - P0 hotfix for ALL selfhost tests"
+
+- **ChatGPT5レポート検証完了**: Task Agent 4並列調査 → 3/4が誤診断！真因発見 🔥
+  - Task 1: "Array.size正規化未実装" → ❌ **誤診断** - Phase 15.5で完全実装済み
+  - Task 2: "ALWAYS_ON_TOGGLE問題" → ❌ **誤診断** - 真因はMirIoBox export欠落（P0で修正済み）
+  - Task 3: "auto_birth実装問題" → ❌ **誤診断** - 完全実装済み、lifecycle verification微調整のみ
+  - Task 4: **真の根本原因発見** → ✅ **MIR Builder パラメータレジスタバグ**
+    - 問題: `loop(i < path.size())` が MIR で `loop(i < this.size())` になる
+    - 原因: パラメータv%0-v%N（me/json_text/path）がループ内で上書きされる
+    - 証拠: MIR JSON で `"box": 0` (v%0=me) が `path.size()` に使われている
+    - 影響: `json_query_vm` などパラメータ参照を含むループで破壊
+
+- **MIR Builder バグ修正 Phase 1完了** (2025-10-16 continued)
+  - ✅ Task先生4人並列調査完了 - 真因3箇所特定:
+    1. prepare_loop_variables: パラメータフィルタなし（ALL変数がPHI対象）
+    2. VarMapGuard: `value == me_vid` 条件が誤作動（コンテキスト判別不足）
+    3. Copy命令: パラメータレジスタv%0-v%Nを直接上書き
+  - ✅ Phase 1修正実装完了: パラメータフィルタ追加
+    - ファイル: `src/mir/loop_builder/phi.rs:21-28`
+    - 内容: `prepare_loop_variables` に関数パラメータのフィルタリングロジック追加
+    - 効果: パラメータレジスタの上書きを部分的に抑制（v%0の上書きは解消）
+    - ビルド: ✅ 成功（警告のみ）
+    - テスト: ✅ selfhost基盤テスト PASS (mir_builder_binop_add/compare_eq/binop_mul)
+  - 🔥 Phase 2修正必要: VarMapGuard誤作動修正（v%1-v%Nの上書きがまだ残存）
+    - ファイル: `src/mir/loop_builder/mod.rs:155-173`
+    - 問題: PHIノードがv%1を持つとき、VarMapGuardが不要なCopy命令を発行
+
 - Phase‑31（static → singleton 正規化）進捗
   - A‑1b 完了: 「関数スコープのシングルトン・キャッシュ」を導入して、同一関数内の `me` プレースホルダ重複生成を解消。
     - 実装: `MirBuilder.current_fn_singletons` を追加し、`maybe_prepend_static_me()` から `current_fn_singleton()` を使用。
@@ -29,6 +60,11 @@ Updates (today)
   - `hostbridge.extern_invoke` の引数をプリミティブ化する正規化ヘルパを導入。Plugin ArrayBox でも正しく文字列を渡せるようになったよ。
   - `JsonCanonicalBox.canonicalize` を純 String→String 経路に統一して `json_canonical_box_vm` / `mirio_canonicalize_vm` スモークが PASS したにゃ。
   - `host_handles::release()` を追加してホストアンカー経由の一時ハンドルを解放。
+- Map.values stage2 の根治（2025‑10‑17）
+  - PluginHost 再入ガードを深さカウンタ（MAX=8）化し、Void フォールバックを撤廃。
+  - HostHandleRouter が ArrayBox (PluginBoxV2) の slot 100/101/102 を扱えるようになり、Stage‑2 keys/values が常に ArrayBox を返す構造に。
+  - `EnvToggle::enabled` を拡張して空キー＝既定ONと扱い、Array host routes をテーブル側で常時有効化。
+  - `map_values_array_element_vm` を再実行して PASS（`nyrt.array.size expects ArrayBox` を解消）。
 - P0 Hotfix (Phase‑31): ModuleFunction 呼び出しの `me` 不足を構造＋VMで補正
   - Builder（unified/legacy 両方）: ModuleFunction 発行時に、現在モジュール上の関数定義を参照し、`args.len()+1 == params.len()` なら per‑function singleton を先頭に付与。
     - 変更: `src/mir/builder/builder_calls/emit.rs` / `src/mir/builder/calls/legacy_bridge/mod.rs`
@@ -55,21 +91,29 @@ Updates (today)
     - 理由: ASTNode::BoxDeclaration の `body` フィールド撤退との不整合。P0-4 ドキュメント更新時に復活させるメモを残す。
 
 Open issues / blockers
+- **🔥 P0-CRITICAL**: MIR Builder パラメータレジスタバグ根治（Phase 1完了、Phase 2進行中）
+  - Phase 1 ✅: パラメータフィルタ実装完了（v%0の上書き解消）
+  - Phase 2 🔥: VarMapGuard誤作動修正（v%1-v%Nの上書きまだ残存）
+    - 問題: PHIノードがたまたまv%1を持つとき、VarMapGuardが発動してCopy命令生成
+    - 解決策: VarMapGuardの条件を改善（パラメータVIDの場合はコンテキスト判別）
+  - Phase 3 予定: MIR Verifier にパラメータ上書き検出追加
 - Phase‑31 残: Plugin 既存 ABI へのトランポリン実配線（registry へ新エントリ登録）と quick→plugins→full スモークの差分スキャン。
 - Frozen guide への Windows 例追記など、P0 で止まっているドキュメント系タスクを再開する必要があるにゃ。
-- `json_query_vm` の後続失敗（ArrayBox.substring 未実装）: text slicing 一貫性を保つ方針で修正する（Array のスライスは String で返す／もしくは substring を Fail‑Fast のままとし app 側で回避）。最小スモークを追加して固定。
 
 ## Prioritized TODOs
 - **P0 — 直近解消したいもの**
-  1. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
-  2. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
-  3. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
-  4. `json_query_vm` 後続エラーの切り分けと修正（ArrayBox.substring）。
-  5. Map/Set/FileBox 回りの正規化と素材化（今回の回帰の最短修正）
-     - Map.size: Builder 正規化（`MapBox.(size|len|length)` → `Extern("nyrt.map.size")`）は 2025‑10‑16 に実装済。Map.remove は戻り値を返すよう修正済。`values` は Extern/Bridge 渡し＋ArrayBox 注釈を入れたが、後続 `.size()` までの素材化順序を追加で整える（EmitGuard 後のローカル化を強制）。
-     - EmitGuard: `finalize_call_operands` の適用が必ず走る経路に限定（直叩きはレガシーブリッジのみに）。
-     - me 注入: `method_index.static_signature()` によるガードを徹底し、plugin の ModuleFunction に誤適用しない。
-     - FileBox: 引数素材化の未適用箇所をスイープ（mir_call 作成前/後の LocalSSA を全経路で統一）。
+  1. ✅ **DONE**: MirIoBox export追加（selfhost基盤復旧完了）
+  2. ✅ **DONE**: Task先生4人並列調査（真因3箇所特定）
+  3. ✅ **DONE**: Phase 1 - パラメータフィルタ実装（v%0上書き解消）
+  4. 🔥 **IN PROGRESS**: Phase 2 - VarMapGuard誤作動修正（v%1-v%N上書き解消）
+  5. **TODO**: Phase 3 - MIR Verifier パラメータ上書き検出追加
+  6. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
+  7. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
+  8. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
+  9. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
+     - SetBox: `add/has/size` のローカル素材化を再確認（EmitGuard 経路の統一）。
+     - FileBox: read/write 経路の undefined ValueId を解消（Call 発行を guard 経由に統一）。
+     - Array slice: レガシー extern 依存を段階撤退し、必要なら専用 Bridge を追加。
 - **P1 — quality of life**
   - Doctor: structured error messages（missing clang/llvmlite/allowlist/lib paths）
   - Harness: tighter logs for `--target windows` & optional IR dump hint
