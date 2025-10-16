@@ -35,7 +35,7 @@ mod lifecycle; // prepare/lower_root/finalize split
 mod plugin_sigs; // plugin signature loader
 mod stmts;
 mod utils;
-mod vars; // variables/scope helpers // small loop helpers (header/exit context)
+// mod vars; // DELETED: 149-line dead code (collect_free_vars), logic duplicated in exprs_lambda.rs
 mod origin; // P0: origin inference（me/Known）と PHI 伝播（軽量）
 mod observe; // P0: dev-only observability helpers（ssa/resolve）
 mod rewrite; // P1: Known rewrite & special consolidation

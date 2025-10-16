@@ -1,6 +1,6 @@
 # Phase‑31 — Box Normalization（Static→Singleton 正規化）
 
-最終更新: 2025‑10‑16（A‑1b 反映）
+最終更新: 2025‑10‑17（Map.values stage2 fix 反映）
 
 ## サマリ
 - ねらい: すべてのメソッド呼び出し形を「me + args」に統一し、static box を型ごとのシングルトンインスタンス（`Type.singleton`）に正規化する。
@@ -152,10 +152,9 @@
 5. スモーク追加（static/instance 等価、extern 経路）
 6. Docs 反映（ガイド/リファレンス/ENV 記載）
 
-### Known issues（2025‑10‑16 plugins 再走後の把握）
-- MapBox.remove/values が plugin 経路のままで、戻り値（remove）や受領者素材化（values）が未整備。
-  - 対応: `MapBox.(size|len|length)` → `Extern("nyrt.map.size")(recv)` は 2025‑10‑16 に完了。remove/values 向けに extern adapter（plugin bridge）を拡張予定。
-  - EmitGuard の適用経路を一本化（Call 発行は guard 経由のみ）。
+### Known issues（2025‑10‑17 時点）
+- MapBox.remove が戻り値 `Some(value)` を返さないケースが残っている（Stage‑2 values は復旧済み）。
+  - 対応方針: extern adapter で remove の戻り値を HostHandle 化し、EmitGuard 経路の素材化を統一。
 - me 注入の誤適用により plugin ModuleFunction へ影響する懸念。
   - 対処: `method_index.static_signature()` に該当する静的シグネチャのみ `me` 合成を許可（Builder/VM 双方でガード）。
 - FileBox 系の `use of undefined value` は引数素材化の漏れが原因。

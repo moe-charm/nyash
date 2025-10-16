@@ -35,6 +35,30 @@ Updates (today - 2025-10-16 continued)
     - ファイル: `src/mir/loop_builder/mod.rs:155-173`
     - 問題: PHIノードがv%1を持つとき、VarMapGuardが不要なCopy命令を発行
 
+- **レガシーコード削除調査完了** (2025-10-16 continued)
+  - ✅ Task先生4人並列調査 → 191行即時削除可能 + 箱化候補181行発見
+  - **Task 1: collect_free_vars** (149行削除OK)
+    - ファイル: `src/mir/builder/vars.rs` (全149行)
+    - 状態: `#[allow(dead_code)]` マーカー付き、呼び出し元0件
+    - 重複: `exprs_lambda.rs::collect_vars` に同一ロジック存在
+    - 推奨: ✅ **即時削除**（Phase 2で箱化検討 → VarCollectorBox）
+  - **Task 2: record_kpi** (34行削除OK)
+    - ファイル: `src/mir/builder/observe/resolve.rs` (関数14行 + 静的変数7行 + ヘルパー12行 + 呼び出し1行)
+    - 状態: 実使用0件（tools/apps で未使用）、Phase 15.7のデバッグ機能
+    - 代替: DebugHub経由で同等データ取得可能
+    - 推奨: ✅ **即時削除**（将来必要なら KpiRecorderBox で復活）
+  - **Task 3: utils.rs dead functions** (8行削除OK)
+    - ファイル: `src/mir/builder/utils.rs`
+    - 発見: 完全DEADな関数0個、誤った `#[allow(dead_code)]` マーカー8個
+    - 全17関数すべて使用中（15-36回呼び出し）
+    - 推奨: ✅ **マーカー削除のみ**（関数は削除不可）
+  - **Task 4: 箱化候補発掘** (BuilderObserverBox 181行)
+    - Everything is Box 実現状況: ⭐⭐⭐⭐⭐ Builder内の責務は既に高度に箱化済み
+    - 成功事例10個確認: LegacyCallBridgeBox, OriginTrackerBox, WeakFieldRegistryBox 等
+    - 箱化候補: `observe/` module (181行) → `BuilderObserverBox` (Medium優先度)
+    - 推奨: 削除191行実施後、箱化は長期計画で検討
+  - **合計即時削除**: 149 + 34 + 8 = **191行削減可能**
+
 - Phase‑31（static → singleton 正規化）進捗
   - A‑1b 完了: 「関数スコープのシングルトン・キャッシュ」を導入して、同一関数内の `me` プレースホルダ重複生成を解消。
     - 実装: `MirBuilder.current_fn_singletons` を追加し、`maybe_prepend_static_me()` から `current_fn_singleton()` を使用。
@@ -105,12 +129,17 @@ Open issues / blockers
   1. ✅ **DONE**: MirIoBox export追加（selfhost基盤復旧完了）
   2. ✅ **DONE**: Task先生4人並列調査（真因3箇所特定）
   3. ✅ **DONE**: Phase 1 - パラメータフィルタ実装（v%0上書き解消）
-  4. 🔥 **IN PROGRESS**: Phase 2 - VarMapGuard誤作動修正（v%1-v%N上書き解消）
-  5. **TODO**: Phase 3 - MIR Verifier パラメータ上書き検出追加
-  6. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
-  7. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
-  8. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
-  9. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
+  4. ✅ **DONE**: Task先生4人レガシー削除調査（191行削除可能）
+  5. 🔥 **IN PROGRESS**: レガシーコード削除実行（191行削減）
+     - vars.rs 削除（149行）
+     - record_kpi 削除（34行）
+     - utils.rs マーカー削除（8行）
+  6. **TODO**: Phase 2 - VarMapGuard誤作動修正（v%1-v%N上書き解消）
+  7. **TODO**: Phase 3 - MIR Verifier パラメータ上書き検出追加
+  8. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
+  9. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
+  10. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
+  11. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
      - SetBox: `add/has/size` のローカル素材化を再確認（EmitGuard 経路の統一）。
      - FileBox: read/write 経路の undefined ValueId を解消（Call 発行を guard 経由に統一）。
      - Array slice: レガシー extern 依存を段階撤退し、必要なら専用 Bridge を追加。

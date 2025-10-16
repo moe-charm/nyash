@@ -69,16 +69,13 @@ impl super::MirBuilder {
         (recv, inferred_cls.to_string())
     }
     // ---- LocalSSA convenience (readability helpers) ----
-    #[allow(dead_code)]
+    // MARKER REMOVED: Functions are actively used (4-2 calls each)
     #[inline]
     pub(crate) fn local_recv(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::recv(self, v) }
-    #[allow(dead_code)]
     #[inline]
     pub(crate) fn local_arg(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::arg(self, v) }
-    #[allow(dead_code)]
     #[inline]
     pub(crate) fn local_field_base(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::field_base(self, v) }
-    #[allow(dead_code)]
     #[inline]
     pub(crate) fn local_cond(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::cond(self, v) }
     /// Ensure a basic block exists in the current function
@@ -261,7 +258,7 @@ impl super::MirBuilder {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    // MARKER REMOVED: WeakRef/Barrier helpers used in fields.rs (1 call each)
     pub(super) fn emit_weak_new(
         &mut self,
         box_val: super::ValueId,
@@ -276,7 +273,6 @@ impl super::MirBuilder {
         Ok(dst)
     }
 
-    #[allow(dead_code)]
     pub(super) fn emit_weak_load(
         &mut self,
         weak_ref: super::ValueId,
@@ -291,7 +287,6 @@ impl super::MirBuilder {
         Ok(dst)
     }
 
-    #[allow(dead_code)]
     pub(super) fn emit_barrier_read(&mut self, ptr: super::ValueId) -> Result<(), String> {
         self.emit_instruction(super::MirInstruction::Barrier {
             op: BarrierOp::Read,
@@ -299,7 +294,6 @@ impl super::MirBuilder {
         })
     }
 
-    #[allow(dead_code)]
     pub(super) fn emit_barrier_write(&mut self, ptr: super::ValueId) -> Result<(), String> {
         self.emit_instruction(super::MirInstruction::Barrier {
             op: BarrierOp::Write,
