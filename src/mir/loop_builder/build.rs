@@ -3,9 +3,10 @@
  */
 
 use super::LoopBuilder;
+use super::carrier_analyzer::LoopCarrierAnalyzerBox;
 use crate::ast::ASTNode;
 use crate::mir::{BasicBlockId, ConstValue, ValueId};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 // Import control flow utilities
 use crate::mir::utils::{
@@ -63,10 +64,8 @@ impl<'a> LoopBuilder<'a> {
         // 4. ループ変数のPhi nodeを準備
         // 🔥 ROOT CAUSE FIX: Only create PHIs for true loop-carried variables
         // True loop-carried = (variables in preheader) ∩ (variables assigned in body)
-        let loop_carried_vars: std::collections::HashSet<String> = assigned_vars
-            .into_iter()
-            .filter(|v| preheader_vars.contains_key(v))
-            .collect();
+        // 🧹 CLEAN-CLEAN: Use LoopCarrierAnalyzerBox for single-responsibility analysis
+        let loop_carried_vars = LoopCarrierAnalyzerBox::analyze(&preheader_vars, &body);
         if trace {
             eprintln!(
                 "[loop] loop-carried vars: {:?}",
