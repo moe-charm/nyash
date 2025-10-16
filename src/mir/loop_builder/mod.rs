@@ -154,16 +154,15 @@ impl<'a> LoopBuilder<'a> {
 
     pub(super) fn update_variable(&mut self, name: String, value: ValueId) {
         // VarMapGuard (loop): すべての関数で関数パラメータ（v%0-v%N）の ValueId を他名にそのまま束縛しない。
-        // 片側が単一入力のPHIであっても、パラメータ直結だと後続の BinOp/Compare/Branch が破壊される可能性があるため、
+        // 片側が単一入力のPHIであっても、パラメータ直結だと後続の BinOp/Compare/Branch が不正な値参照を引き起こす可能性があるため、
         // Copy を噛ませて識別性を保つ（仕様不変）。
-        // Phase 2.1: ParserBox.* 限定を解除 - 全関数で適用
         let mut guarded = false;
         let bind_val = if let Some(fun) = self.parent_builder.current_function.as_ref() {
             // Check if value is ANY function parameter (v%0, v%1, ..., v%N) regardless of function name
             if fun.params.contains(&value) {
                 // This value is a parameter register (v%0, v%1, ..., v%N)
-                // Insert Copy to preserve parameter integrity
                 let loc = self.parent_builder.value_gen.next();
+                // Copy を現在ブロックに挿入（PHI後でも可）。型/起源は伝播。
                 let _ = self.parent_builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: value });
                 guarded = true;
                 loc

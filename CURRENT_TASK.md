@@ -188,14 +188,29 @@ Updates (today - 2025-10-16 continued)
     - 理由: ASTNode::BoxDeclaration の `body` フィールド撤退との不整合。P0-4 ドキュメント更新時に復活させるメモを残す。
 
 Open issues / blockers
-- **✅ Phase 1-3完了**: MIR Builder パラメータレジスタバグ根治完了！
+- **🔄 Phase 2.1/2.2 復元後の新エラー調査中** (2025-10-16 continued)
   - Phase 1 ✅: パラメータフィルタ実装完了（v%0の上書き解消）
-  - Phase 2.1 ✅: VarMapGuard全関数適用（ParserBox.* 限定解除）
-  - Phase 2.2 ✅: local_ssa パラメータレジスタ回避（Copy命令生成時）
-  - Phase 2.3 ✅: me引数追加修正（try_handle_me_direct_call）
-    - ❌ Claude誤診: current_fn_singleton 第一パラメータ返却（無限ループ原因）
-    - ✅ ChatGPT5修正: emit_static_me_placeholder でvoidシングルトン生成
-  - ✅ json_query_vm 無限ループ解消（Phase 2.3 修正2の間違いが原因だった）
+  - Phase 2.1 ✅ **復元完了**: VarMapGuard全関数適用（ParserBox.* 限定解除）
+    - ファイル: `src/mir/loop_builder/mod.rs:155-171`
+    - 変更: `fun.params.contains(&value)` でALL関数パラメータをガード
+  - Phase 2.2 ✅ **復元完了**: local_ssa パラメータレジスタ回避（Copy命令生成時）
+    - ファイル: `src/mir/builder/ssa/local.rs:40-46`
+    - 変更: `while fun.params.contains(&loc)` でパラメータレジスタを絶対回避
+  - Phase 2.3 ✅ **維持（正しい）**: me引数追加修正（try_handle_me_direct_call）
+    - ファイル: `src/mir/builder/builder_calls/special.rs:123-127`
+    - ChatGPT5確認: special.rs の me prepend は正しい、維持すべき
+    - current_fn_singleton は emit_static_me_placeholder でvoidシングルトン生成（既に修正済み）
+  - **🆕 新エラー発生**: json_query で `undefined value ValueId(185)` エラー
+    - 旧エラー（Phase 2.3 revert時）: "Method router missing receiver for size(0 args)"
+    - 旧エラー（Phase 2.1/2.2 revert前）: 無限ループ（VM instruction limit exceeded）
+    - 現エラー（Phase 2.1/2.2 復元後）: **"use of undefined value ValueId(185)"**
+    - 症状: ValueId(185) が複数回定義されている（MIR内で重複定義）
+    - 推測: Phase 2.2 の parameter register avoidance が ValueId 生成に副作用？
+  - **✅ emit_call_with_guard 経路確認完了**:
+    - `src/mir/builder.rs:616-632` を確認
+    - Line 624: `finalize_call_operands(self, &mut callee, &mut args)` を確実に呼んでいる
+    - ChatGPT5 の指摘通り、経路は正しく動作している
+  - 次の調査: ValueId(185) undefined の根本原因特定（Phase 2.2 との関連性）
   - Phase 4 予定: MIR Verifier にパラメータ上書き検出追加（保険）
 - Phase‑31 残: Plugin 既存 ABI へのトランポリン実配線（registry へ新エントリ登録）と quick→plugins→full スモークの差分スキャン。
 - Frozen guide への Windows 例追記など、P0 で止まっているドキュメント系タスクを再開する必要があるにゃ。
