@@ -15,6 +15,7 @@ impl<'a> LoopBuilder<'a> {
         &mut self,
         header_id: BasicBlockId,
         preheader_id: BasicBlockId,
+        loop_carried_vars: &std::collections::HashSet<String>,
     ) -> Result<(), String> {
         let current_vars = self.get_current_variable_map();
 
@@ -26,6 +27,10 @@ impl<'a> LoopBuilder<'a> {
                 loop_vars.retain(|_name, &mut vid| vid != *param_id);
             }
         }
+
+        // 🔥 ROOT CAUSE FIX: Only create PHIs for true loop-carried variables
+        // (variables defined in preheader AND assigned inside loop body)
+        loop_vars.retain(|name, _| loop_carried_vars.contains(name));
 
         // Use filtered vars for PHI generation
         crate::mir::phi_core::loop_phi::save_block_snapshot(

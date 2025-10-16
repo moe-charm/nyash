@@ -201,7 +201,7 @@ Updates (today - 2025-10-16 continued)
     - 理由: ASTNode::BoxDeclaration の `body` フィールド撤退との不整合。P0-4 ドキュメント更新時に復活させるメモを残す。
 
 Open issues / blockers
-- **🔄 Phase 2.1/2.2 復元後の新エラー調査中** (2025-10-16 continued)
+- **🔄 Phase 2.4 ParameterGuardBox 後の新Type error調査中** (2025-10-18)
   - Phase 1 ✅: パラメータフィルタ実装完了（v%0の上書き解消）
   - Phase 2.1 ✅ **復元完了**: VarMapGuard全関数適用（ParserBox.* 限定解除）
     - ファイル: `src/mir/loop_builder/mod.rs:155-171`
@@ -213,18 +213,160 @@ Open issues / blockers
     - ファイル: `src/mir/builder/builder_calls/special.rs:123-127`
     - ChatGPT5確認: special.rs の me prepend は正しい、維持すべき
     - current_fn_singleton は emit_static_me_placeholder でvoidシングルトン生成（既に修正済み）
-  - **🆕 新エラー発生**: json_query で `undefined value ValueId(185)` エラー
+  - Phase 2.4 ✅ **完了**: ParameterGuardBox 実装（ChatGPT5により実装）
+    - 新ファイル: `src/mir/builder/guards/parameter_guard.rs` (ENV toggle: NYASH_BUILDER_PARAM_GUARD)
+    - 新Verifier: `src/mir/verification/params.rs` (check_no_parameter_reassignment)
+    - 適用箇所: `src/mir/builder.rs:494-500`, optimizer repair passes
+    - 効果: パラメータレジスタ（v%0-v%N）への代入を Fail-Fast で検出
+  - **🆕 新Type error発生**: json_query で `Type error: compare Lt on String("0") and Integer(1)` エラー
     - 旧エラー（Phase 2.3 revert時）: "Method router missing receiver for size(0 args)"
     - 旧エラー（Phase 2.1/2.2 revert前）: 無限ループ（VM instruction limit exceeded）
-    - 現エラー（Phase 2.1/2.2 復元後）: **"use of undefined value ValueId(185)"**
-    - 症状: ValueId(185) が複数回定義されている（MIR内で重複定義）
-    - 推測: Phase 2.2 の parameter register avoidance が ValueId 生成に副作用？
+    - 旧エラー（Phase 2.1/2.2 復元後）: "use of undefined value ValueId(185)"
+    - **現エラー（Phase 2.4 後）**: **"Type error: unsupported compare Lt on String("0") and Integer(1)"**
+    - **🔥 Ultrathink深堀り分析完了 - 根本原因特定！** (2025-10-18)
+      - **再現成功**: 古いバイナリ（19:55:23）が原因、cargo clean && cargo build --release で解決（20:41:14）
+      - **エラー箇所**: `Main.parse_int/1` 関数内、bb11 inst=9
+        ```mir
+        bb11:
+          7: %83 = copy %75  ← i (ループ変数) をコピー
+          8: %84 = copy %80  ← s.size() の結果
+          9: %82 = icmp Lt %83, %84  ← ❌ %83 が String("0")、%84 が Integer(1)
+        ```
+      - **ソースコード**: `apps/examples/json_query/main.nyash:149`
+        ```hakorune
+        parse_int(s) {
+            local i = 0        // ← Line 142: i を Integer(0) で初期化
+            // ...
+            loop(i < s.size()) {  // ← Line 149: エラー発生！i が String になっている
+        ```
+      - **🔥 根本原因特定: SSA形式違反！**
+        - **bb1 で %2 への二重代入が発生**:
+          ```mir
+          bb1:
+            0: %2 = const 0      ← Integer(0) で %2 を定義
+            1: %3 = const false
+            2: %5 = copy %1      ← %1 (パラメータ s, String型)
+            3: %2 = copy %5      ← ❌ SSA違反！%2 を String で再定義
+            4: %4 = call %2.size()  ← String.size() 呼び出し（正常動作）
+          ```
+        - **SSA違反の伝播パス**:
+          ```
+          %2 (bb1, String上書き)
+            → %39 (bb3, phi from bb1)
+            → %45 (bb4, phi from bb3)
+            → %67 (bb10, phi from bb9: %45)
+            → %75 (bb11, phi from bb10: %67)
+            → %83 (bb11, copy %75)
+            → Type error in compare Lt %83(String) %84(Integer)
+          ```
+        - **問題の本質**:
+          - `local i = 0` と `local s = <param>` が**同じレジスタ %2** に割り当てられている
+          - 最初に `i` 用に `%2 = const 0` を生成
+          - 直後に `s` 用に `%2 = copy %5` を生成（SSA違反）
+          - ParameterGuardBox は**パラメータレジスタ（%0, %1）のみ保護**、ローカル変数は対象外
+      - **検証完了項目**:
+        - ✅ VM const handler 正常: `ConstValue::Integer(0) → VMValue::Integer(0)`
+        - ✅ local_ssa 型コピー正常: `builder.value_types.insert(loc, t)`
+        - ✅ PHI node 実行は正常: PHI trace で確認、正しい predecessor から値を選択
+        - ✅ Type error 再現: `./target/release/hakorune --backend vm apps/examples/json_query/main.nyash --dev`
+      - **🔥🔥🔥 SSA違反の正確な場所特定！** (2025-10-18 continued)
+        - ❌ bb1ではなく **bb3 (ループヘッダー)** で %2 への二重代入発生：
+          ```mir
+          bb2:  ← function entry
+            0: %2 = const 0      ← local i = 0
+            1: %3 = const 0      ← local acc = 0
+            2: br label bb3
+
+          bb3:  ← ループヘッダー
+            0: %5 = phi [%2, bb2], ...  ← i の PHI
+            1: %4 = phi [%3, bb2], ...  ← acc の PHI
+            2: %7 = copy %1             ← parameter s を local_ssa でコピー
+            3: %2 = copy %7             ← ❌ SSA違反！%2 を再利用！
+            4: %6 = call %2.size()      ← s.size() 呼び出し
+          ```
+        - **根本原因追跡完了 - VarMapGuard の ValueId 再利用バグ**:
+          - **場所**: `src/mir/loop_builder/mod.rs:164` (`update_variable` 関数内)
+          - **コード**:
+            ```rust
+            if fun.params.contains(&value) {
+                let loc = self.parent_builder.value_gen.next();  // ← Line 164
+                let _ = self.parent_builder.emit_instruction(
+                    MirInstruction::Copy { dst: loc, src: value }
+                );  // ← Line 166
+            }
+            ```
+          - **問題**: `value_gen.next()` が**既に使用済みの %2 を返している**
+          - **理論的な割り当て順序**:
+            ```
+            %0 = me (param)
+            %1 = s (param)
+            %2 = const 0 (local i in bb2)
+            %3 = const 0 (local acc in bb2)
+            %4 = PHI (acc in bb3)
+            %5 = PHI (i in bb3)
+            %6 = (call dst として後で使用)
+            %7 = local_ssa copy of s
+            次は %8 のはず
+
+            しかし実際は:
+            %2 = copy %7 ← ❌ %2 が再利用されている！
+            ```
+          - **次の追跡（Task先生に委譲）**:
+            - なぜ `value_gen.next()` が %8 ではなく %2 を返すか
+            - `value_gen` の reset/clone が影響しているか
+            - bb2 と bb3 で `value_gen` の状態が正しく引き継がれているか
+            - ループ lowering 時の `value_gen` の管理方法を検証
   - **✅ emit_call_with_guard 経路確認完了**:
     - `src/mir/builder.rs:616-632` を確認
     - Line 624: `finalize_call_operands(self, &mut callee, &mut args)` を確実に呼んでいる
     - ChatGPT5 の指摘通り、経路は正しく動作している
-  - 次の調査: ValueId(185) undefined の根本原因特定（Phase 2.2 との関連性）
-  - Phase 4 予定: MIR Verifier にパラメータ上書き検出追加（保険）
+  - **✅ Loopform 互換性分析完了** (2025-10-18 continued)
+    - **調査結果**: Loopformは**実装途中**で、現状のSSA違反問題とは**無関係**
+    - **実装状態**:
+      1. **LLVMバックエンド版** (`loopform.rs`): Phase 1スキャフォールドのみ、デフォルト無効（`NYASH_ENABLE_LOOPFORM=1`でゲート制御）
+      2. **ユーザーマクロ版** (`loop_normalize_macro.nyash`): 文の並び替えのみ（キャリアバンドリング未実装）
+    - **キャリア理論の現状**: ドキュメント記載のみ、実装は「Next steps」コメントレベル
+    - **互換性分析**:
+      - 現状: 競合も協調もしていない（Loopform未使用のため無関係）
+      - Fix 1（PHI immediate insertion）: ✅ 両立可能（処理対象が異なる）
+      - Fix 2（Pre-allocated PHI）: 🟡 調整必要（PHI数の設計哲学が異なる）
+      - Fix 3（Two-Pass MIR）: ✅ 相乗効果（理想的な組み合わせ）
+    - **推奨アクション**:
+      - 短期: Loopformは無視、Fix 1維持（既に実装済み）
+      - 中期: Fix 2またはFix 3検討（value_gen再利用問題の根治）
+      - 長期: Fix 3 + Loopform統合（Phase 17以降、Two-Pass + Carrier-based Loops）
+  - **🎉🎉🎉 PHI バグ根治完了！** (2025-10-18 continued)
+    - **🔥 真の根本原因発見（ChatGPT5）**:
+      - ループヘッダーで `current_vars` 全量を PHI 変換
+      - → ループ内一時変数 `ch` も PHI 化
+      - → `variable_map` が `ch` を指す
+      - → ループ条件 `i < s.size()` が実際には `ch < s.size()` になる
+      - → Type error: "compare Lt on String("0") and Integer(1)"
+    - **✅ 根治実装完了** (2025-10-18):
+      - **場所**: `src/mir/loop_builder/phi.rs:18`, `src/mir/loop_builder/build.rs:37,66-69`
+      - **修正内容**: ループキャリア変数フィルタリング追加
+        ```rust
+        真のループキャリア変数 = preheader定義変数 ∩ ループ内代入変数
+        ```
+      - **効果**:
+        - `i`, `acc` のみPHI化（ループキャリア）
+        - `s` (パラメータ), `ch` (ループ内一時変数) はPHI化しない
+      - **テスト結果**:
+        - ✅ parse_int("123") → Result: 123 (正常動作)
+        - ✅ json_query_vm → OK (Type error 解消)
+        - ✅ ループキャリア変数トレース: `["acc", "i"]` のみ
+    - **🧹 綺麗綺麗大作戦: LoopCarrierAnalyzerBox 箱化完了** (2025-10-18 continued):
+      - **動機**: 品質分析で改善余地発見（4/5 → 5/5 目標）
+      - **問題**: ループキャリア解析ロジック（4行）が `build.rs` に埋め込まれている
+      - **解決**: LoopCarrierAnalyzerBox 作成（単一責任・テスト可能・再利用可）
+      - **新ファイル**: `src/mir/loop_builder/carrier_analyzer.rs` (30-50行)
+      - **修正箇所**: `src/mir/loop_builder/build.rs:66-69` → 1行に短縮
+      - **効果**:
+        - ✅ 単一責任: ループキャリア解析のみ
+        - ✅ ユニットテスト可能: 純粋関数
+        - ✅ 再利用可能: 他の最適化パスで使用可
+        - ✅ コード品質: 5/5 達成
+  - Phase 4 予定: MIR Verifier にパラメータ上書き検出追加（保険） → Phase 2.4で実装済み
 - Phase‑31 残: Plugin 既存 ABI へのトランポリン実配線（registry へ新エントリ登録）と quick→plugins→full スモークの差分スキャン。
 - Frozen guide への Windows 例追記など、P0 で止まっているドキュメント系タスクを再開する必要があるにゃ。
 

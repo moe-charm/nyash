@@ -5,7 +5,7 @@
 use super::LoopBuilder;
 use crate::ast::ASTNode;
 use crate::mir::{BasicBlockId, ConstValue, ValueId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // Import control flow utilities
 use crate::mir::utils::{
@@ -33,6 +33,8 @@ impl<'a> LoopBuilder<'a> {
 
         // 1. ブロックの準備
         let preheader_id = self.current_block()?;
+        // 🔥 ROOT CAUSE FIX: Capture preheader variable map BEFORE jumping to header
+        let preheader_vars = self.get_current_variable_map();
         let trace = std::env::var("NYASH_LOOP_TRACE").ok().as_deref() == Some("1");
         let (header_id, body_id, after_loop_id) =
             crate::mir::builder::loops::create_loop_blocks(self.parent_builder);
@@ -59,9 +61,19 @@ impl<'a> LoopBuilder<'a> {
         let _ = self.mark_block_unsealed(header_id);
 
         // 4. ループ変数のPhi nodeを準備
-        // ここでは、ループ内で変更される可能性のある変数を事前に検出するか、
-        // または変数アクセス時に遅延生成する
-        self.prepare_loop_variables(header_id, preheader_id)?;
+        // 🔥 ROOT CAUSE FIX: Only create PHIs for true loop-carried variables
+        // True loop-carried = (variables in preheader) ∩ (variables assigned in body)
+        let loop_carried_vars: std::collections::HashSet<String> = assigned_vars
+            .into_iter()
+            .filter(|v| preheader_vars.contains_key(v))
+            .collect();
+        if trace {
+            eprintln!(
+                "[loop] loop-carried vars: {:?}",
+                loop_carried_vars.iter().collect::<Vec<_>>()
+            );
+        }
+        self.prepare_loop_variables(header_id, preheader_id, &loop_carried_vars)?;
 
         // 5. 条件評価（Phi nodeの結果を使用）
         // Heuristic pre-pin: if condition is a comparison, evaluate its operands and pin them

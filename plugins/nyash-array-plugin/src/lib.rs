@@ -242,7 +242,13 @@ extern "C" fn array_invoke_id(
                             ArrayValue::Handle(_, _) => "Handle",
                             ArrayValue::Host(_) => "Host",
                         };
-                        eprintln!("[array-plugin] GET idx={} kind={} code={} len={}", i, kind, code, inst.data.len());
+                        eprintln!(
+                            "[array-plugin] GET idx={} kind={} code={} len={}",
+                            i,
+                            kind,
+                            code,
+                            inst.data.len()
+                        );
                     }
                     code
                 }) {

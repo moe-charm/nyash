@@ -110,6 +110,15 @@ pub fn try_result_mode() -> bool {
     env_bool_default_true("NYASH_TRY_RESULT_MODE")
 }
 
+/// Builder parameter guard toggle (default ON)
+/// Prevents overwriting function parameter registers during MIR emission.
+pub fn builder_param_guard_enabled() -> bool {
+    // Accept both NYASH_ and HAKO_ prefixes (alias)
+    if env_bool_default_true("NYASH_BUILDER_PARAM_GUARD") { return true; }
+    if env_bool_default_true("HAKO_BUILDER_PARAM_GUARD") { return true; }
+    false
+}
+
 pub fn method_catch() -> bool {
     env_bool("NYASH_METHOD_CATCH")
 }

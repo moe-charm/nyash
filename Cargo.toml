@@ -32,6 +32,8 @@ wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
 host-anchors = []
+## Optional dev-only binary switches (keep OFF by default to avoid confusion)
+hako-bin = []
 ## Legacy built-in Boxes (src/boxes) — kept for transition; disable to test plugin-only builds
 legacy-boxes = []
 ## Static plugin linkage (optional): when enabled, runtime registers
@@ -86,6 +88,7 @@ path = "src/main.rs"
 [[bin]]
 name = "hako"
 path = "src/bin/hako.rs"
+required-features = ["hako-bin"]
 
 
 # Brand aliases for CLI (same main entry)
