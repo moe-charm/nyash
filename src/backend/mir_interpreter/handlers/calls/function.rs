@@ -187,10 +187,26 @@ impl MirInterpreter {
             }
         }
 
+        // Try extern_adapter first (works in all builds, including plugin-only)
+        {
+            let mut loaded: Vec<VMValue> = Vec::with_capacity(args.len());
+            for a in args {
+                loaded.push(self.reg_load(*a)?);
+            }
+            if let Some((iface, method)) = extern_name.rsplit_once('.') {
+                if let Some(r) = crate::backend::mir_interpreter::extern_adapter::try_call(
+                    iface, method, &loaded
+                ) {
+                    return r;
+                }
+            }
+        }
+
+        // Legacy-only fallback
         #[cfg(feature = "legacy-boxes")]
         { self.execute_extern_function(extern_name, args) }
         #[cfg(not(feature = "legacy-boxes"))]
-        { Err(VMError::InvalidInstruction(crate::backend::mir_interpreter::diagnostics::DIAG_EXTERN_DISABLED.into())) }
+        { Err(VMError::InvalidInstruction(format!("Unknown extern: {}", extern_name))) }
     }
 
     /// Dynamic FFI path (ffi/ffi.dynamic) — 0/1/2 args (const char*) -> i64

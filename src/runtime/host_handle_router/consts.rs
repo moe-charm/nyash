@@ -11,6 +11,8 @@ pub const MAP_SIZE: u64 = 200;
 pub const MAP_HAS: u64 = 202;
 pub const MAP_GET: u64 = 203;
 pub const MAP_SET: u64 = 204;
+pub const MAP_KEYS: u64 = 205;
+pub const MAP_VALUES: u64 = 206;
 
 // String slots
 pub const STRING_LEN: u64 = 300;

@@ -110,6 +110,10 @@ const MAP_GET_TOGGLE: EnvToggle =
     EnvToggle::new(&["HAKO_MAP_GET_FORCE_HOST", "NYASH_MAP_GET_FORCE_HOST"]);
 const MAP_SET_TOGGLE: EnvToggle =
     EnvToggle::new(&["HAKO_MAP_SET_FORCE_HOST", "NYASH_MAP_SET_FORCE_HOST"]);
+const MAP_KEYS_TOGGLE: EnvToggle =
+    EnvToggle::new(&["HAKO_MAP_KEYS_FORCE_HOST", "NYASH_MAP_KEYS_FORCE_HOST"]);
+const MAP_VALUES_TOGGLE: EnvToggle =
+    EnvToggle::new(&["HAKO_MAP_VALUES_FORCE_HOST", "NYASH_MAP_VALUES_FORCE_HOST"]);
 
 const STRING_LEN_TOGGLE: EnvToggle =
     EnvToggle::new(&["HAKO_STRING_SIZE_FORCE_HOST", "NYASH_STRING_SIZE_FORCE_HOST"]);
@@ -136,6 +140,8 @@ pub const MAP_HOST_ROUTES: HostSlotRoutes = HostSlotRoutes::new(
         HostSlotRoute::new(&["has"], 1, slots::MAP_HAS, true, MAP_HAS_TOGGLE),
         HostSlotRoute::new(&["get"], 1, slots::MAP_GET, true, MAP_GET_TOGGLE),
         HostSlotRoute::new(&["set"], 2, slots::MAP_SET, false, MAP_SET_TOGGLE),
+        HostSlotRoute::new(&["keys"], 0, slots::MAP_KEYS, true, MAP_KEYS_TOGGLE),
+        HostSlotRoute::new(&["values"], 0, slots::MAP_VALUES, true, MAP_VALUES_TOGGLE),
     ],
     Some(MAP_FORCE_ALL),
 );

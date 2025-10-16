@@ -8,7 +8,8 @@ pub mod consts;
 
 use consts::{
     ARRAY_GET, ARRAY_SET, ARRAY_SIZE, ERR_BAD_ARGS, ERR_BAD_RETURN, ERR_PLUGIN_FAILURE,
-    ERR_UNSUPPORTED, ERR_UNKNOWN_HANDLE, MAP_GET, MAP_HAS, MAP_SET, MAP_SIZE, STRING_LEN,
+    ERR_UNSUPPORTED, ERR_UNKNOWN_HANDLE, MAP_GET, MAP_HAS, MAP_KEYS, MAP_SET, MAP_SIZE,
+    MAP_VALUES, STRING_LEN,
 };
 
 // Phase‑in plan:
@@ -269,6 +270,56 @@ pub fn route_slot(
                     }
                 }
                 return ERR_BAD_ARGS;
+            }
+        }
+        return ERR_UNSUPPORTED;
+    }
+
+    if selector == MAP_KEYS {
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
+        if arc.type_name() == "MapBox" {
+            // Plugin path
+            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                match crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "keys", pb.inner.instance_id, &[]) {
+                    Ok(Some(ret)) => {
+                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
+                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+                    }
+                    _ => return ERR_BAD_RETURN,
+                }
+            }
+            #[cfg(feature = "legacy-boxes")]
+            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                let keys_box = m.keys();
+                let vmv_out = crate::backend::vm::VMValue::from_nyash_box(keys_box);
+                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+            }
+        }
+        return ERR_UNSUPPORTED;
+    }
+
+    if selector == MAP_VALUES {
+        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
+        if arc.type_name() == "MapBox" {
+            // Plugin path
+            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                match crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "values", pb.inner.instance_id, &[]) {
+                    Ok(Some(ret)) => {
+                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
+                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+                    }
+                    _ => return ERR_BAD_RETURN,
+                }
+            }
+            #[cfg(feature = "legacy-boxes")]
+            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                let values_box = m.values();
+                let vmv_out = crate::backend::vm::VMValue::from_nyash_box(values_box);
+                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
             }
         }
         return ERR_UNSUPPORTED;

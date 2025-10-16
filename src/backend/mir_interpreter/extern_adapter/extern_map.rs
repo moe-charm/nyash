@@ -93,7 +93,7 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
                 if let Some(mapb) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
                     return Ok(VMValue::from_nyash_box(mapb.keys()));
                 }
-                Ok(VMValue::Void)
+                Err(VMError::InvalidInstruction("Map.keys plugin returned None".into()))
             }
             _ => Err(VMError::TypeError("nyrt.map.keys expects MapBox".into())),
         }
@@ -138,7 +138,7 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
                 if let Some(mapb) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
                     return Ok(VMValue::from_nyash_box(mapb.values()));
                 }
-                Ok(VMValue::Void)
+                Err(VMError::InvalidInstruction("Map.values plugin returned None".into()))
             }
             _ => Err(VMError::TypeError("nyrt.map.values expects MapBox".into())),
         }
