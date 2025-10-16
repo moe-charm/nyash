@@ -37,7 +37,13 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
         if let Some(&loc) = builder.local_ssa_map.get(&key) {
             return loc;
         }
-        let loc = builder.value_gen.next();
+        // Phase 2.2: Avoid function parameters (v%0-v%N) - never reuse parameter registers
+        let mut loc = builder.value_gen.next();
+        if let Some(ref fun) = builder.current_function {
+            while fun.params.contains(&loc) {
+                loc = builder.value_gen.next();
+            }
+        }
         // Best-effort: errors are propagated by caller; we log but ignore to keep helper infallible
         TraceBox::local_ssa(|| {
             let fn_name = builder.current_function.as_ref().map(|f| f.signature.name.as_str()).unwrap_or("<none>");

@@ -615,8 +615,8 @@ impl MirBuilder {
             return res;
         }
 
-        // 3. Handle me.method() calls
-        if let ASTNode::Me { .. } = object {
+        // 3. Handle me.method() and this.method() calls (both are static box self-references)
+        if let ASTNode::Me { .. } | ASTNode::This { .. } = object {
             // 3-a) Static box fast path (already handled)
             if let Some(res) = self.handle_me_method_call(&method, &arguments)? {
                 return Ok(res);

@@ -153,21 +153,20 @@ impl<'a> LoopBuilder<'a> {
     }
 
     pub(super) fn update_variable(&mut self, name: String, value: ValueId) {
-        // VarMapGuard (loop): ParserBox.* 内では `me` の ValueId を他名にそのまま束縛しない。
-        // 片側が単一入力のPHIであっても、me直結だと後続の BinOp/Compare/Branch が BoxRef を踏む可能性があるため、
+        // VarMapGuard (loop): すべての関数で関数パラメータ（v%0-v%N）の ValueId を他名にそのまま束縛しない。
+        // 片側が単一入力のPHIであっても、パラメータ直結だと後続の BinOp/Compare/Branch が破壊される可能性があるため、
         // Copy を噛ませて識別性を保つ（仕様不変）。
+        // Phase 2.1: ParserBox.* 限定を解除 - 全関数で適用
         let mut guarded = false;
         let bind_val = if let Some(fun) = self.parent_builder.current_function.as_ref() {
-            if fun.signature.name.starts_with("ParserBox.") && name != "me" {
-                if let Some(&me_vid) = self.parent_builder.variable_map.get("me") {
-                    if value == me_vid {
-                        let loc = self.parent_builder.value_gen.next();
-                        // Copy を現在ブロックに挿入（PHI後でも可）。型/起源は伝播。
-                        let _ = self.parent_builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: value });
-                        guarded = true;
-                        loc
-                    } else { value }
-                } else { value }
+            // Check if value is ANY function parameter (v%0, v%1, ..., v%N) regardless of function name
+            if fun.params.contains(&value) {
+                // This value is a parameter register (v%0, v%1, ..., v%N)
+                // Insert Copy to preserve parameter integrity
+                let loc = self.parent_builder.value_gen.next();
+                let _ = self.parent_builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: value });
+                guarded = true;
+                loc
             } else { value }
         } else { value };
         self.parent_builder.variable_map.insert(name.clone(), bind_val);

@@ -20,7 +20,7 @@ Updates (today - 2025-10-16 continued)
     - 証拠: MIR JSON で `"box": 0` (v%0=me) が `path.size()` に使われている
     - 影響: `json_query_vm` などパラメータ参照を含むループで破壊
 
-- **MIR Builder バグ修正 Phase 1完了** (2025-10-16 continued)
+- **MIR Builder バグ修正 Phase 1-3完了！** (2025-10-16 continued) ✅
   - ✅ Task先生4人並列調査完了 - 真因3箇所特定:
     1. prepare_loop_variables: パラメータフィルタなし（ALL変数がPHI対象）
     2. VarMapGuard: `value == me_vid` 条件が誤作動（コンテキスト判別不足）
@@ -31,9 +31,34 @@ Updates (today - 2025-10-16 continued)
     - 効果: パラメータレジスタの上書きを部分的に抑制（v%0の上書きは解消）
     - ビルド: ✅ 成功（警告のみ）
     - テスト: ✅ selfhost基盤テスト PASS (mir_builder_binop_add/compare_eq/binop_mul)
-  - 🔥 Phase 2修正必要: VarMapGuard誤作動修正（v%1-v%Nの上書きがまだ残存）
-    - ファイル: `src/mir/loop_builder/mod.rs:155-173`
-    - 問題: PHIノードがv%1を持つとき、VarMapGuardが不要なCopy命令を発行
+  - ✅ Phase 2.1修正完了: VarMapGuard を ParserBox.* 限定から**全関数**に拡大
+    - ファイル: `src/mir/loop_builder/mod.rs:155-171`
+    - 変更: `if fun.signature.name.starts_with("ParserBox.")` 条件を削除
+    - 効果: Main.eval_path_text 等でもVarMapGuard適用
+  - ✅ Phase 2.2修正完了: local_ssa ensure で**関数パラメータ（v%0-v%N）を絶対に避ける**
+    - ファイル: `src/mir/builder/ssa/local.rs:40-46`
+    - 変更: `while fun.params.contains(&loc)` ループ追加
+    - 効果: Copy命令生成時にパラメータレジスタを回避
+  - ✅ Phase 2.3修正完了: **current_fn_singleton 根本原因修正！**
+    - 🔥 真の原因: `try_handle_me_direct_call` がme引数を追加していない
+    - 症状: `this.test_loop(arg1, arg2)` → `call_module_fn Main.test_loop/2(arg1, arg2)` ← **me引数なし！**
+    - 影響: パラメータマッピングずれ → %0=arg1, %1=arg2, %2=null （正: %0=me, %1=arg1, %2=arg2）
+    - SSA違反: ループ条件 `path.size()` 評価時に `%0 = copy %13` (path→me) が生成される
+    - エラー: "Method router missing receiver for size(0 args)" - nullに対してsize()呼び出し
+    - 最小再現: `/tmp/test_param_overwrite.hako`, `/tmp/test_param_overwrite2.hako` 作成済み
+    - ✅ 修正1（正しい）: `src/mir/builder/builder_calls/special.rs:123-127`
+      - `try_handle_me_direct_call` で me引数を prepend
+      - `let me_id = self.current_fn_singleton(&canon_cls);`
+      - `args_with_me.insert(0, me_id);`
+    - ❌ 修正2（間違い・ChatGPT5により修正済み）: `src/mir/builder.rs:456-474`
+      - Claude誤診: `current_fn_singleton` を関数パラメータ %0 を返すように修正
+      - 問題: static box methodには me パラメータが存在しない
+      - 結果: 呼び出し順が壊れる → 無限ループ・不定動作
+      - **ChatGPT5修正**: `emit_static_me_placeholder` でvoidシングルトン生成・キャッシュに戻した
+      - VM側で void プレースホルダ → `static_singleton::get()` で実体化
+    - 結果: ✅ MIR正常生成 `call_module_fn Main.test_loop/2(%5_void, %6, %7)` (3引数正しい)
+    - テスト: ✅ 最小再現ケース実行成功（エラーなし）
+    - 状況: ✅ json_query_vm 無限ループ解消（修正2の間違いが原因だった）
 
 - **レガシーコード削除調査完了** (2025-10-16 continued)
   - ✅ Task先生4人並列調査 → 191行即時削除可能 + 箱化候補181行発見
@@ -58,6 +83,54 @@ Updates (today - 2025-10-16 continued)
     - 箱化候補: `observe/` module (181行) → `BuilderObserverBox` (Medium優先度)
     - 推奨: 削除191行実施後、箱化は長期計画で検討
   - **合計即時削除**: 149 + 34 + 8 = **191行削減可能**
+
+- **非決定要素（async/GC）揺れ要因調査完了** (2025-10-16 continued) ✅
+  - Task先生調査 → **決定的失敗（非決定的ではない）**
+  - **async_await / gc_mode_off テスト失敗原因**:
+    - 5回実行すべてで同一エラー: "Extern future disabled (legacy-only)"
+    - 根本原因: `legacy-boxes` feature がデフォルトで無効
+    - 影響: `env.future.*` extern がビルド時に静的無効化
+    - 非決定性: ❌ なし（タイミング・GC問題ではない）
+  - **環境変数一覧作成完了**:
+    - Async/Await: `HAKO_AWAIT_MAX_MS` (5000ms), `NYASH_REWRITE_FUTURE=1`
+    - GC: `NYASH_GC_MODE` (counting/off), `NYASH_GC_TRACE=1`, 閾値系変数
+    - デバッグ: `HAKO_VM_TRACE`, `NYASH_CLI_VERBOSE=1`, `SMOKES_DEV_LOG=1`
+  - **修正提案3案**:
+    1. Feature Flag 有効化 (最小変更): `default = [..., "legacy-boxes"]`
+    2. テストを SKIP 化 (推奨): Phase 15.77 で削除予定のため
+    3. Phase 20.5 で Hakorune VM Future 実装 (長期)
+  - **ドキュメント作成**:
+    - 決定性調査レポート: `docs/development/analysis/async-gc-determinism-report.md`
+    - 安定化ガイド: `docs/development/analysis/quick-profile-stabilization-guide.md`
+  - **推奨アクション**: テストを SKIP 化（非決定的ではないため優先度低）
+
+- **using系11件失敗パターン分類完了** (2025-10-16 continued) ✅
+  - Task先生調査 → **legacy-boxes除外は完全に無関係**（全11件がusing/module resolution問題）
+  - **4パターン分類**:
+    - **パターンA (5件, P2)**: Parser Error - module.hako をTOMLとしてパース試行
+    - **パターンB (3件, P0)**: Type Error - using解決失敗 → UnknownBox/Void連鎖
+    - **パターンC (1件, P0)**: Static Singleton未具現化 - MIR Builder の singleton 作成漏れ
+    - **パターンD (3件, P1/P2)**: Expected Failure誤検出 - 循環依存検出失敗 + ログ漏出
+  - **P0修正必要**: 4件（パターンB: workspace module resolution、パターンC: static box singleton）
+  - **P1修正推奨**: 1件（パターンD-1: 循環依存検出実装）
+  - **P2修正**: 6件（パターンA: ログ抑制、パターンD-2: デバッグログ防止）
+  - **ドキュメント作成** (5件、44KB):
+    - INDEX: `docs/development/analysis/using_failures_INDEX.md`
+    - Quick Summary: `docs/development/analysis/using_failures_quick_summary.md` ⭐最初に読む
+    - 分類レポート: `docs/development/analysis/using_failures_classification_report.md`
+    - フローチャート: `docs/development/analysis/using_failures_flowchart.md`
+    - 再現ガイド: `docs/development/analysis/using_failures_reproduction_guide.md`
+  - **無実証明**: kernel-embedded boxes (String/Integer/Array等) は正常動作、すべてusing/module層の問題
+
+- **plugin_on_strict_quick_array_semantics失敗原因調査完了** (2025-10-16 continued) ✅
+  - Task先生調査 → **ArrayBox birth が3回呼ばれる問題**
+  - **根本原因**:
+    - `new ArrayBox()` 実行時に3つのインスタンス生成（id=1,2,3）
+    - `set(0, 10)` が instance_id=2 に書き込み
+    - `size()` が instance_id=3 (空) を読み取り → 0 を返す（期待値: 1）
+  - **エラーログ**: `contracts_born_nobirth` - birth method未呼び出しでのオブジェクト生成
+  - **修正箇所**: `src/backend/mir_interpreter/handlers/newbox.rs` - birth重複呼び出しの抑制
+  - **影響**: プラグインArrayBox のインスタンス管理が破綻
 
 - Phase‑31（static → singleton 正規化）進捗
   - A‑1b 完了: 「関数スコープのシングルトン・キャッシュ」を導入して、同一関数内の `me` プレースホルダ重複生成を解消。
@@ -115,12 +188,15 @@ Updates (today - 2025-10-16 continued)
     - 理由: ASTNode::BoxDeclaration の `body` フィールド撤退との不整合。P0-4 ドキュメント更新時に復活させるメモを残す。
 
 Open issues / blockers
-- **🔥 P0-CRITICAL**: MIR Builder パラメータレジスタバグ根治（Phase 1完了、Phase 2進行中）
+- **✅ Phase 1-3完了**: MIR Builder パラメータレジスタバグ根治完了！
   - Phase 1 ✅: パラメータフィルタ実装完了（v%0の上書き解消）
-  - Phase 2 🔥: VarMapGuard誤作動修正（v%1-v%Nの上書きまだ残存）
-    - 問題: PHIノードがたまたまv%1を持つとき、VarMapGuardが発動してCopy命令生成
-    - 解決策: VarMapGuardの条件を改善（パラメータVIDの場合はコンテキスト判別）
-  - Phase 3 予定: MIR Verifier にパラメータ上書き検出追加
+  - Phase 2.1 ✅: VarMapGuard全関数適用（ParserBox.* 限定解除）
+  - Phase 2.2 ✅: local_ssa パラメータレジスタ回避（Copy命令生成時）
+  - Phase 2.3 ✅: me引数追加修正（try_handle_me_direct_call）
+    - ❌ Claude誤診: current_fn_singleton 第一パラメータ返却（無限ループ原因）
+    - ✅ ChatGPT5修正: emit_static_me_placeholder でvoidシングルトン生成
+  - ✅ json_query_vm 無限ループ解消（Phase 2.3 修正2の間違いが原因だった）
+  - Phase 4 予定: MIR Verifier にパラメータ上書き検出追加（保険）
 - Phase‑31 残: Plugin 既存 ABI へのトランポリン実配線（registry へ新エントリ登録）と quick→plugins→full スモークの差分スキャン。
 - Frozen guide への Windows 例追記など、P0 で止まっているドキュメント系タスクを再開する必要があるにゃ。
 
@@ -129,21 +205,24 @@ Open issues / blockers
   1. ✅ **DONE**: MirIoBox export追加（selfhost基盤復旧完了）
   2. ✅ **DONE**: Task先生4人並列調査（真因3箇所特定）
   3. ✅ **DONE**: Phase 1 - パラメータフィルタ実装（v%0上書き解消）
-  4. ✅ **DONE**: Task先生4人レガシー削除調査（191行削除可能）
-  5. 🔥 **IN PROGRESS**: レガシーコード削除実行（191行削減）
+  4. ✅ **DONE**: Phase 2.1/2.2 - VarMapGuard + local_ssa修正完了
+  5. ✅ **DONE**: Phase 2.3 - me引数追加修正（ChatGPT5により修正完了）
+  6. ✅ **DONE**: Task先生4人レガシー削除調査（191行削除可能）
+  7. ✅ **DONE**: 非決定要素（async/GC）揺れ要因調査（決定的失敗を確認）
+  8. ✅ **DONE**: json_query_vm 無限ループ解消（Phase 2.3 修正2の間違いが原因）
+  9. **TODO**: レガシーコード削除実行（191行削減）
      - vars.rs 削除（149行）
      - record_kpi 削除（34行）
      - utils.rs マーカー削除（8行）
-  6. **TODO**: Phase 2 - VarMapGuard誤作動修正（v%1-v%N上書き解消）
-  7. **TODO**: Phase 3 - MIR Verifier パラメータ上書き検出追加
-  8. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
-  9. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
-  10. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
-  11. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
+  9. **TODO**: Phase 4 - MIR Verifier パラメータ上書き検出追加（保険）
+  9. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
+  10. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
+  11. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
+  12. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
      - SetBox: `add/has/size` のローカル素材化を再確認（EmitGuard 経路の統一）。
      - FileBox: read/write 経路の undefined ValueId を解消（Call 発行を guard 経由に統一）。
      - Array slice: レガシー extern 依存を段階撤退し、必要なら専用 Bridge を追加。
-  12. Legacy 排他運用の明文化と適用
+  13. Legacy 排他運用の明文化と適用
       - AGENTS.md に「Legacy Boxes と Plugins — 排他運用」を追記（済）。
       - `docs/guides/build-modes.md` を追加（モード・コマンド・ルータ方針）（済）。
       - Cargo default から `legacy-boxes` を外す検討（plugin‑only を既定に）と CI への plugin‑only ライン追加。

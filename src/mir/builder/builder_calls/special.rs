@@ -120,13 +120,17 @@ impl MirBuilder {
             Ok(n) => n,
             Err(e) => return Some(Err(e)),
         };
+        // Phase 2.3: Prepend me argument for static box methods
+        let me_id = self.current_fn_singleton(&canon_cls);
+        let mut args_with_me = Vec::with_capacity(1 + arg_values.len());
+        args_with_me.push(me_id);
+        args_with_me.extend(arg_values.into_iter());
         // Prefer unified ModuleFunction callee to avoid legacy recursion
-        let args_local = arg_values.clone();
         if let Err(e) = self.emit_call_with_guard(
             Some(result_id),
             super::super::ValueId::new(0),
             crate::mir::Callee::ModuleFunction(fun_name.clone()),
-            args_local,
+            args_with_me,
             EffectMask::READ.add(Effect::ReadHeap),
         ) {
             return Some(Err(e));

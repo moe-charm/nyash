@@ -457,6 +457,8 @@ impl MirBuilder {
         if let Some(&cached) = self.current_fn_singletons.get(box_name) {
             return cached;
         }
+        // Static boxes synthesize their receiver locally. Always emit a new placeholder
+        // and cache it for the duration of the current function.
         let me = self.emit_static_me_placeholder(box_name);
         self.current_fn_singletons
             .insert(box_name.to_string(), me);

@@ -235,19 +235,39 @@ cargo build --release
 cargo build --release --features llvm
 ```
 
-### ⚡ 基本実行（hakoコマンド推奨）
+### 🎯 **使用すべきバイナリ（重要！）**
+
+**⚠️ Hakoruneには2つのバイナリがあります：**
+
+| バイナリ | 用途 | 使用推奨 |
+|---------|------|---------|
+| **`hakorune`** | **メインバイナリ** | ✅ **こちらを使う** |
+| `hako` | テスト用・互換性確認用 | ⚠️ 通常は使わない |
+
+**実装の違い**:
+- `hakorune`: `src/main.rs` - 完全機能
+- `hako`: `src/bin/hako.rs` - テスト用エントリーポイント
+
+**💡 迷ったら `hakorune` を使ってください！**
+
+---
+
+### ⚡ 基本実行（hakoruneコマンド）
 ```bash
-# 基本実行
-./target/release/hako program.nyash
+# 基本実行（.hakoファイル）
+./target/release/hakorune program.hako
+
+# レガシー（.nyash拡張子）も動作するが非推奨
+./target/release/hakorune program.nyash
 
 # VM実行（明示的）
-./target/release/hako --backend vm program.nyash
+./target/release/hakorune --backend vm program.hako
 
 # LLVM実行（最適化）
-./target/release/hako --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hako
 
 # クリーンな出力（デバッグメッセージ抑制）
-NYASH_QUIET=1 ./target/release/hako program.nyash
+NYASH_QUIET=1 ./target/release/hakorune program.hako
 ```
 
 ### 🌐 WASM実行（Phase 15.8）
@@ -271,8 +291,8 @@ Hakoruneには**4つの実行モード**があります：
 
 | モード | 用途 | コマンド例 |
 |--------|------|-----------|
-| **VM** | 開発・デバッグ | `./hako program.nyash` |
-| **LLVM CLI** | 本番・最適化 | `NYASH_LLVM_USE_HARNESS=1 ./hako --backend llvm program.nyash` |
+| **VM** | 開発・デバッグ | `./hakorune program.hako` |
+| **LLVM CLI** | 本番・最適化 | `NYASH_LLVM_USE_HARNESS=1 ./hakorune --backend llvm program.hako` |
 | **LLVM AOT** | スタンドアロンEXE | `./program.exe` (事前ビルド必要) |
 | **WASM** | Web実行 | `node wasm_runner.js program.wasm` |
 
@@ -295,11 +315,11 @@ Hakoruneには**4つの実行モード**があります：
 **🔧 デバッグ用**:
 ```bash
 # MIR出力（重要！）
-NYASH_DUMP_MIR=1 ./target/release/hako program.nyash
-./target/release/hako --dump-mir program.nyash  # フラグ版
+NYASH_DUMP_MIR=1 ./target/release/hakorune program.nyash
+./target/release/hakorune --dump-mir program.nyash  # フラグ版
 
 # JSON IR出力
-./target/release/hako --emit-mir-json output.json program.nyash
+./target/release/hakorune --emit-mir-json output.json program.nyash
 ```
 
 📖 **完全ガイド**: [環境変数完全ガイド](docs/reference/environment-variables.md)
@@ -391,17 +411,17 @@ Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを�
 ### 🎯 **2本柱実行方式** (推奨!)
 ```bash
 # 🔧 開発・デバッグ・検証用 (Rust VM)
-./target/release/hako program.nyash
-./target/release/hako --backend vm program.nyash
+./target/release/hakorune program.hako
+./target/release/hakorune --backend vm program.hako
 
 # ⚡ 本番・最適化・配布用 (LLVM)
-./target/release/hako --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hako
 
 # 🛡️ プラグインエラー対策
-NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
+NYASH_DISABLE_PLUGINS=1 ./target/release/hakorune program.hako
 
 # 🔍 詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/hako program.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/hakorune program.hako
 ```
 
 ### 🌐 **WASMライン**（Phase 15.8実験的）
@@ -419,12 +439,12 @@ node tools/wasm_runner.js /tmp/test.wasm
 ## 🧪 テストスクリプト参考集
 ```bash
 # 基本的なテスト
-./target/release/hako local_tests/hello.nyash              # Hello World
-./target/release/hako local_tests/test_array_simple.nyash  # ArrayBox
-./target/release/hako apps/tests/string_ops_basic.nyash    # StringBox
+./target/release/hakorune local_tests/hello.nyash              # Hello World
+./target/release/hakorune local_tests/test_array_simple.nyash  # ArrayBox
+./target/release/hakorune apps/tests/string_ops_basic.nyash    # StringBox
 
 # MIR確認用テスト
-./target/release/hako --dump-mir apps/tests/loop_min_while.nyash
+./target/release/hakorune --dump-mir apps/tests/loop_min_while.nyash
 ```
 
 ---
@@ -434,14 +454,14 @@ node tools/wasm_runner.js /tmp/test.wasm
 ### 🎯 基本実行方法
 ```bash
 # VMバックエンド（デフォルト、高速）
-./target/release/hako program.nyash
-./target/release/hako --backend vm program.nyash
+./target/release/hakorune program.nyash
+./target/release/hakorune --backend vm program.nyash
 
 # LLVMバックエンド（最適化済み）
-./target/release/hako --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.nyash
 
 # プラグイン無効（デバッグ用）
-NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
+NYASH_DISABLE_PLUGINS=1 ./target/release/hakorune program.nyash
 ```
 
 ### 🔧 テスト・スモークテスト
@@ -488,23 +508,23 @@ bash tools/bench_unified.sh --backend wasm --warmup 10 --repeat 50
 ### 🐛 デバッグ用環境変数
 ```bash
 # 詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/hako program.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/hakorune program.nyash
 
 # JSON IR出力
-NYASH_DUMP_JSON_IR=1 ./target/release/hako program.nyash
+NYASH_DUMP_JSON_IR=1 ./target/release/hakorune program.nyash
 
 # MIR出力（重要！）
-NYASH_DUMP_MIR=1 ./target/release/hako program.nyash
-./target/release/hako --dump-mir program.nyash  # フラグ版
+NYASH_DUMP_MIR=1 ./target/release/hakorune program.nyash
+./target/release/hakorune --dump-mir program.nyash  # フラグ版
 
 # パーサー無限ループ対策
-./target/release/hako --debug-fuel 1000 program.nyash
+./target/release/hakorune --debug-fuel 1000 program.nyash
 
 # プラグインなし実行
-NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
+NYASH_DISABLE_PLUGINS=1 ./target/release/hakorune program.nyash
 
 # Python/llvmliteハーネス使用
-NYASH_LLVM_USE_HARNESS=1 ./target/release/hako --backend llvm program.nyash
+NYASH_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm program.nyash
 ```
 
 ---
@@ -613,7 +633,7 @@ SMOKES_DEV_LOG=1 tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m2_*.sh
 
 ```bash
 # 実行して確認
-NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/examples/debug/mini_vm_trace_example.hako
+NYASH_DISABLE_PLUGINS=1 ./target/release/hakorune apps/examples/debug/mini_vm_trace_example.hako
 ```
 
 ### 📊 **2つのトレースレイヤー比較**
@@ -633,30 +653,30 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/examples/debug/mini_vm_trace_
 
 ```bash
 # 1️⃣ 最も確実: CLIフラグ使用
-./target/release/hako --dump-mir program.nyash
-./target/release/hako --dump-mir --mir-verbose program.nyash  # 詳細版
+./target/release/hakorune --dump-mir program.nyash
+./target/release/hakorune --dump-mir --mir-verbose program.nyash  # 詳細版
 
 # 2️⃣ VM実行時のMIR出力
-NYASH_VM_DUMP_MIR=1 ./target/release/hako program.nyash
+NYASH_VM_DUMP_MIR=1 ./target/release/hakorune program.nyash
 
 # 3️⃣ JSON形式でファイル出力
-./target/release/hako --emit-mir-json debug.json program.nyash
+./target/release/hakorune --emit-mir-json debug.json program.nyash
 cat debug.json | jq .  # 整形表示
 ```
 
 ### 💡 **実用的デバッグフロー**
 ```bash
 # Step 1: 基本MIR確認
-./target/release/hako --dump-mir test_case.nyash
+./target/release/hakorune --dump-mir test_case.nyash
 
 # Step 2: 詳細MIR + エフェクト情報
-./target/release/hako --dump-mir --mir-verbose --mir-verbose-effects test_case.nyash
+./target/release/hakorune --dump-mir --mir-verbose --mir-verbose-effects test_case.nyash
 
 # Step 3: VM実行時の挙動確認
-NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/hako test_case.nyash
+NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/hakorune test_case.nyash
 
 # Step 4: JSON形式で詳細解析
-./target/release/hako --emit-mir-json mir.json test_case.nyash
+./target/release/hakorune --emit-mir-json mir.json test_case.nyash
 jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ```
 
