@@ -20,6 +20,7 @@ json.utils.json_utils = "json/json_utils.hako"
 # MIR helpers (exported as stable module names)
 mir.schema = "mir/mir_schema_box.hako"
 mir.builder = "mir/block_builder_box.hako"
+mir.io = "mir/mir_io_box.hako"
 
 [private]
 # Internal builders kept private for now

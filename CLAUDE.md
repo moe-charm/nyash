@@ -163,6 +163,47 @@ selfhost/hakorune-vm/ (3,413 lines, 44 files)
 
 ---
 
+### 🐛 **MIR Builder パラメータレジスタバグ発見・修正** (2025-10-16)
+**ChatGPT5レポート検証 → 4つの誤診断発見 → 真の根本原因を特定！**
+
+#### 💡 **Critical Discovery by Task Agent 4**
+**ChatGPT5診断**: "Array.size正規化未実装" / "ALWAYS_ON_TOGGLE問題" / "auto_birth実装問題"
+**Task調査結果**: **すべて誤診断！真の原因は別にあった**
+
+#### 🎯 **Task Agent並列調査の成果** (4タスク同時実行)
+1. **Task 1 - Array.size正規化**: ✅ **完全実装済み** (Phase 15.5) - ChatGPT5の誤診断
+2. **Task 2 - MirIoBox export欠落**: 🔥 **P0問題発見！** - selfhost基盤が全停止
+3. **Task 3 - auto_birth実装**: ✅ **完全実装済み** - ChatGPT5の誤診断
+4. **Task 4 - MIR Builder バグ**: 🔥 **根本原因発見！** - パラメータレジスタv%0-v%Nの上書き
+
+#### ✅ **P0修正完了** (2025-10-16)
+**問題**: `selfhost/shared/hako_module.toml` に `mir.io = "mir/mir_io_box.hako"` export欠落
+**影響**: ALL selfhostテストが "Unknown module function: MirIoBox.validate/1" で失敗
+**修正**: export追加 → selfhost基盤復旧✅
+
+#### 🔥 **P1 - 次の優先対応** (進行中)
+**MIR Builder パラメータレジスタバグ根治**
+
+**問題**: `loop(i < path.size())` が MIR で `loop(i < this.size())` になる
+**原因**: VarTracker がパラメータレジスタ v%0-v%N をローカル変数で再利用
+**影響**: `json_query_vm` 等でパラメータ参照が破壊される
+
+**根治修正**:
+1. `src/mir/builder/var_tracker.rs` - パラメータ空間保護
+2. `src/mir/verifier/` - パラメータ上書き検出追加
+3. レガシー経路の調査・削除（綺麗綺麗計画）
+
+**テストケース**: `apps/examples/json_query/main.nyash` Line 78
+
+#### 📊 **AI協調デバッグの成果**
+- **ChatGPT5**: 問題報告（誤診断含む）
+- **Claude + 4 Task Agents**: 並列調査で真因特定
+- **結果**: 75%の診断が誤り → 正しい根本原因を発見
+
+**学び**: 複数AI・並列検証の重要性！単一診断を盲信しない
+
+---
+
 ### 📝 **最近の完了Phase**
 
 **詳細**: [claude_archive_2025_10.md](docs/archive/claude_archive_2025_10.md)
