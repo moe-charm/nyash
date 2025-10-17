@@ -21,6 +21,18 @@ impl<'a> LoopBuilder<'a> {
         condition: ASTNode,
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Check if LoopFormBox should be used (ENV toggle)
+        let use_loopform = crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_USE_LOOPFORM_BOX",
+            "NYASH_USE_LOOPFORM_BOX",
+        ]);
+
+        if use_loopform {
+            // Use LoopFormBox path
+            return self.build_loop_with_loopform(condition, body);
+        }
+
+        // Fallback to legacy path (existing implementation)
         // Reserve a deterministic loop id for debug region labeling
         let loop_id = self.parent_builder.debug_next_loop_id();
         // Pre-scan body for simple carrier pattern (up to 2 assigned variables, no break/continue)
@@ -399,5 +411,59 @@ impl<'a> LoopBuilder<'a> {
         // Pop merge debug region
         self.parent_builder.debug_pop_region();
         Ok(void_id)
+    }
+
+    /// Build loop using LoopFormBox (new PHI-safe path)
+    fn build_loop_with_loopform(
+        &mut self,
+        condition: ASTNode,
+        body: Vec<ASTNode>,
+    ) -> Result<ValueId, String> {
+        // Trace output
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            eprintln!("[loopform] 🚀 build_loop_with_loopform: Using LoopFormBox path");
+        }
+
+        // Get preheader vars (current variable_map)
+        let preheader_vars = self.get_current_variable_map();
+
+        // Get preheader block ID
+        let preheader_bb = self.current_block()?;
+
+        // Create LoopFormBox
+        let mut loopform = super::loopform_box::LoopFormBox::new(preheader_bb);
+
+        // Build loop structure
+        let loop_structure = loopform.build_loop(
+            self.parent_builder,
+            &condition,
+            &preheader_vars,
+            &body,
+        )?;
+
+        // Trace output
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            eprintln!(
+                "[loopform] ✅ Loop structure built: header={:?} body={:?} latch={:?} exit={:?}",
+                loop_structure.header_bb,
+                loop_structure.body_bb,
+                loop_structure.latch_bb,
+                loop_structure.exit_bb
+            );
+        }
+
+        // Set exit block as current
+        self.set_current_block(loop_structure.exit_bb)?;
+
+        // Return void value
+        let void_dst = self.new_value();
+        self.emit_const(void_dst, ConstValue::Void)?;
+        Ok(void_dst)
     }
 }
