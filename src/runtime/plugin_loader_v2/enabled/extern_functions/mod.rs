@@ -11,7 +11,7 @@ use crate::box_trait::{NyashBox, StringBox, VoidBox};
 #[cfg(feature = "legacy-boxes")]
 use crate::boxes::result::NyashResultBox;
 #[cfg(feature = "legacy-boxes")]
-use crate::boxes::future::FutureBox;
+use crate::runtime::meta::future::future_box::FutureBox;
 #[cfg(feature = "legacy-boxes")]
 use crate::boxes::token_box::TokenBox;
 use crate::runtime::modules_registry;
@@ -149,9 +149,26 @@ fn handle_result(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
 }
 
 #[cfg(not(feature = "legacy-boxes"))]
-fn handle_result(_method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
-    // Minimal shim: pass-through first arg (Ok path). No wrapping type.
-    Ok(args.get(0).map(|b| b.clone_box()))
+fn handle_result(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    // Non-legacy: keep a simple, deterministic contract
+    // - result.ok(x)  -> Some(x) (or Some(Void) if missing)
+    // - result.err(x) -> Some(x) (or Some(String("Error")) if missing)
+    match method_name {
+        "ok" => {
+            let v = args.get(0).map(|b| b.clone_box()).unwrap_or_else(|| Box::new(VoidBox::new()));
+            Ok(Some(v))
+        }
+        "err" => {
+            let e = args
+                .get(0)
+                .map(|b| b.clone_box())
+                .unwrap_or_else(|| Box::new(StringBox::new("Error")));
+            Ok(Some(e))
+        }
+        "release" => release_helpers::handle_release_single(args),
+        "release_many" => release_helpers::handle_release_many(args),
+        _ => Err(BidError::PluginError),
+    }
 }
 
 /// Handle env.modules.* methods
@@ -300,7 +317,7 @@ fn handle_future_await(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn N
     if let Some(arg) = args.get(0) {
         if let Some(fut) = arg
             .as_any()
-            .downcast_ref::<crate::boxes::future::FutureBox>()
+            .downcast_ref::<FutureBox>()
         {
             let max_ms: u64 = crate::config::env::await_max_ms();
             let start = std::time::Instant::now();
@@ -350,7 +367,7 @@ fn handle_callable(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<O
             let recv = args[0].clone_box();
             let method = args[1].to_string_box().value;
             let arity = args.get(2).map(|b| b.to_string_box().value.parse::<usize>().unwrap_or(0)).unwrap_or(0);
-            let cb = crate::boxes::callable::CallableBox::new(Some(recv), method, arity);
+            let cb = crate::runtime::meta::callable::callable_box::CallableBox::new(Some(recv), method, arity);
             Ok(Some(Box::new(cb)))
         }
         _ => Err(BidError::PluginError),

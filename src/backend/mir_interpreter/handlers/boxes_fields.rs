@@ -18,7 +18,6 @@ pub(super) fn try_handle_object_fields(
             VV::Bool(b) => NV::Bool(*b),
             VV::String(s) => NV::String(s.clone()),
             VV::Void => NV::Void,
-            #[cfg(feature = "legacy-boxes")]
             VV::Future(_) => NV::Void,
             VV::BoxRef(_) => NV::Void,
         }
@@ -49,7 +48,6 @@ pub(super) fn try_handle_object_fields(
                     Ok(VMValue::Bool(_)) => "Bool".to_string(),
                     Ok(VMValue::String(_)) => "String".to_string(),
                     Ok(VMValue::Void) => "Void".to_string(),
-                    #[cfg(feature = "legacy-boxes")]
                     Ok(VMValue::Future(_)) => "Future".to_string(),
                     Err(_) => "<err>".to_string(),
                 };
@@ -136,7 +134,6 @@ pub(super) fn try_handle_object_fields(
                             VMValue::String(_) => "String",
                             VMValue::BoxRef(b) => b.type_name(),
                             VMValue::Void => "Void",
-                            #[cfg(feature = "legacy-boxes")]
                             VMValue::Future(_) => "Future",
                         };
                         eprintln!("[vm-setfield] class={} name={} kind={}", inst.class_name, fname, vkind);
@@ -160,7 +157,6 @@ pub(super) fn try_handle_object_fields(
                     VMValue::String(_) => "String",
                     VMValue::BoxRef(b) => b.type_name(),
                     VMValue::Void => "Void",
-                    #[cfg(feature = "legacy-boxes")]
                     VMValue::Future(_) => "Future",
                 };
                 let cls = match interp.reg_load(box_val).unwrap_or(VMValue::Void) {

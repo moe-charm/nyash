@@ -22,7 +22,7 @@ use method_ref::MethodRefBox;
 #[inline]
 fn maybe_arity_guard(type_name: &str, method: &str, arity: usize) -> Result<(), crate::backend::vm_types::VMError> {
     if method == "birth" { return Ok(()); }
-    if crate::runtime::type_registry::resolve_typebox_by_name(type_name).is_some() {
+    if crate::types::ids::by_name(type_name).is_some() {
         if crate::runtime::type_registry::resolve_slot_by_name(type_name, method, arity).is_none() {
             if let Some(known) = crate::runtime::type_registry::known_arities_for(type_name, method) {
                 if !known.is_empty() {

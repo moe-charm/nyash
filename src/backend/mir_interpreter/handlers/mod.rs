@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::runtime::meta::future::future_box::FutureBox;
+
 mod arithmetic;
 mod boxes;
 mod boxes_fields;
@@ -17,31 +19,24 @@ impl MirInterpreter {
             MirInstruction::FutureNew { dst, value } => {
                 // Evaluate the value, create a Future and resolve it immediately
                 let v = self.reg_load(*value)?;
-                #[cfg(feature = "legacy-boxes")]
-                {
-                    let fut = crate::boxes::future::FutureBox::new();
-                    fut.set_result(v.to_nyash_box());
-                    self.regs.insert(*dst, super::VMValue::Future(fut));
-                }
+                let fut = FutureBox::new();
+                fut.set_result(v.to_nyash_box());
+                self.regs.insert(*dst, super::VMValue::Future(fut));
             }
             MirInstruction::FutureSet { future, value } => {
                 // Set the given future's result (if a Future), otherwise no-op
                 let fv = self.reg_load(*future)?;
                 let vv = self.reg_load(*value)?;
                 match fv {
-                    #[cfg(feature = "legacy-boxes")]
                     super::VMValue::Future(f) => {
                         f.set_result(vv.to_nyash_box());
                     }
                     super::VMValue::BoxRef(arc) => {
-                        #[cfg(feature = "legacy-boxes")]
+                        if let Some(fb) = arc
+                            .as_any()
+                            .downcast_ref::<FutureBox>()
                         {
-                            if let Some(fb) = arc
-                                .as_any()
-                                .downcast_ref::<crate::boxes::future::FutureBox>()
-                            {
-                                fb.set_result(vv.to_nyash_box());
-                            }
+                            fb.set_result(vv.to_nyash_box());
                         }
                     }
                     _ => {}
@@ -51,7 +46,6 @@ impl MirInterpreter {
                 // Load future candidate
                 let fv = self.reg_load(*future)?;
                 match fv {
-                    #[cfg(feature = "legacy-boxes")]
                     super::VMValue::Future(fut) => {
                         // Block until ready (cooperative scheduling may progress elsewhere)
                         let boxed = fut.get();

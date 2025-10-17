@@ -133,6 +133,7 @@ impl MethodIndexBox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mir::{BasicBlockId, FunctionSignature, MirFunction, MirType, EffectMask};
 
     #[test]
     fn test_method_index_static_registration() {
@@ -162,14 +163,13 @@ mod tests {
         let mut functions = HashMap::new();
 
         // Add mock functions
-        functions.insert(
-            "Person.getName/0".to_string(),
-            MirFunction::new("Person.getName/0".to_string(), vec![], None),
-        );
-        functions.insert(
-            "Animal.getName/0".to_string(),
-            MirFunction::new("Animal.getName/0".to_string(), vec![], None),
-        );
+        let sig1 = FunctionSignature { name: "Person.getName/0".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
+        let mut f1 = MirFunction::new(sig1, BasicBlockId::new(0));
+        functions.insert("Person.getName/0".to_string(), f1);
+
+        let sig2 = FunctionSignature { name: "Animal.getName/0".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
+        let mut f2 = MirFunction::new(sig2, BasicBlockId::new(0));
+        functions.insert("Animal.getName/0".to_string(), f2);
 
         let candidates = index.find_candidates(&functions, "getName", 0);
         assert_eq!(candidates.len(), 2);

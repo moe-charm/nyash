@@ -263,10 +263,47 @@ pub fn rename_with_collision_guard(
     }
 }
 
+/// Rewrite references in the main AST to point at alias-prefixed symbols.
+/// Applies the same transformation used for prelude internals, but driven by
+/// the collected alias → top-level name mapping.
+pub fn rewrite_main_alias_refs(
+    ast: &ASTNode,
+    alias_map: &std::collections::HashMap<String, Vec<String>>,
+) -> ASTNode {
+    let mut out = ast.clone();
+    for (alias, tops) in alias_map.iter() {
+        if tops.is_empty() {
+            continue;
+        }
+        out = rewrite_internal_refs_after_top_rename(&out, alias, tops);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
+
+    fn make_static_box(name: &str) -> ASTNode {
+        ASTNode::BoxDeclaration {
+            name: name.to_string(),
+            fields: vec![],
+            public_fields: vec![],
+            private_fields: vec![],
+            methods: HashMap::new(),
+            constructors: HashMap::new(),
+            init_fields: vec![],
+            weak_fields: vec![],
+            is_interface: false,
+            extends: vec![],
+            implements: vec![],
+            type_parameters: vec![],
+            is_static: true,
+            static_init: None,
+            span: Span::unknown(),
+        }
+    }
 
     fn hs(list: &[&str]) -> HashSet<String> {
         list.iter().map(|s| s.to_string()).collect()
@@ -328,12 +365,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "AST fixture still uses legacy BoxDeclaration { body }; restore after Phase-31 doc update"]
     fn internal_ref_variable_is_rewritten() {
         // Program: static box X {}; local y = X;  → after alias A: y = A_X
         let ast = ASTNode::Program {
             statements: vec![
-                ASTNode::BoxDeclaration { name: "X".into(), is_static: true, body: vec![], span: Span::unknown() },
+                make_static_box("X"),
                 ASTNode::Assignment {
                     target: Box::new(ASTNode::Variable { name: "y".into(), span: Span::unknown() }),
                     value: Box::new(ASTNode::Variable { name: "X".into(), span: Span::unknown() }),
@@ -349,7 +385,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "AST fixture still uses legacy BoxDeclaration { body }; restore after Phase-31 doc update"]
     fn internal_ref_function_qualified_is_rewritten() {
         // Program: fn call: Helper.run() → after alias P: P_Helper.run()
         let ast = ASTNode::Program {
@@ -368,12 +403,7 @@ mod tests {
     #[test]
     fn alias_collision_is_guarded() {
         // Pre-existing prefixed name collides with upcoming alias rename
-        let ast = ASTNode::Program {
-            statements: vec![
-                ASTNode::BoxDeclaration { name: "X".into(), is_static: true, body: vec![], span: Span::unknown() },
-            ],
-            span: Span::unknown(),
-        };
+        let ast = ASTNode::Program { statements: vec![make_static_box("X")], span: Span::unknown() };
         let mut used = std::collections::HashSet::new();
         // Simulate that A_X is already taken
         used.insert("A_X".to_string());

@@ -88,6 +88,15 @@ impl ValueIdGenerator {
     pub fn reset(&mut self) {
         self.next_id = 0;
     }
+
+    /// Set the starting offset for ValueId allocation
+    /// Used to reserve parameter registers (v%0-v%N) at function start
+    /// Phase 2.P0 fix: Prevent parameter register overwrite
+    pub fn set_start_offset(&mut self, offset: u32) {
+        if offset > self.next_id {
+            self.next_id = offset;
+        }
+    }
 }
 
 impl Default for ValueIdGenerator {

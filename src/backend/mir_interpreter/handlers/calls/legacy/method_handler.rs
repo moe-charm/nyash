@@ -35,7 +35,7 @@ impl MirInterpreter {
                         }
                         if let Some(tn) = type_name {
                             if method != "birth" {
-                                if crate::runtime::type_registry::resolve_typebox_by_name(&tn).is_some() {
+                                if crate::types::ids::by_name(&tn).is_some() {
                                     if crate::runtime::type_registry::resolve_slot_by_name(&tn, method, arity).is_none() {
                                         // Prefer runtime registry; if absent, use core_box_methods fallback for a helpful message
                                         let known_rt = crate::runtime::type_registry::known_arities_for(&tn, method);

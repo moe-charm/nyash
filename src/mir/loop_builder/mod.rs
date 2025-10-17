@@ -43,6 +43,79 @@ pub struct LoopBuilder<'a> {
     // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mir::{
+        BasicBlock, BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction,
+        MirInstruction, MirModule, MirType, ValueId,
+    };
+
+    #[test]
+    fn phi_is_inserted_at_block_start_and_updated_in_place() {
+        let mut builder = crate::mir::builder::MirBuilder::new();
+        let entry_block = builder.block_gen.next();
+        let header_block = builder.block_gen.next();
+
+        let signature = FunctionSignature {
+            name: "test_loop".to_string(),
+            params: vec![],
+            return_type: MirType::Void,
+            effects: EffectMask::PURE,
+        };
+
+        let mut function = MirFunction::new(signature, entry_block);
+        {
+            let mut header = BasicBlock::new(header_block);
+            header.add_instruction(MirInstruction::Const {
+                dst: ValueId::new(1),
+                value: ConstValue::Integer(42),
+            });
+            function.blocks.insert(header_block, header);
+        }
+
+        builder.current_module = Some(MirModule::new("test".to_string()));
+        builder.current_block = Some(header_block);
+        builder.current_function = Some(function);
+
+        let expected_inputs = vec![(entry_block, ValueId::new(3))];
+        let phi_dst = ValueId::new(0);
+
+        {
+            let mut loop_builder = LoopBuilder::new(&mut builder);
+            loop_builder
+                .emit_phi_at_block_start(header_block, phi_dst, expected_inputs.clone())
+                .expect("phi insertion should succeed");
+            loop_builder
+                .update_phi_inputs_at_block_start(header_block, phi_dst, expected_inputs.clone())
+                .expect("phi update should succeed");
+        }
+
+        let function = builder
+            .current_function
+            .as_ref()
+            .expect("function should remain attached");
+        let block = function
+            .get_block(header_block)
+            .expect("header block should exist");
+
+        if let Some(MirInstruction::Phi { dst, inputs }) = block.instructions.first() {
+            assert_eq!(*dst, phi_dst);
+            assert_eq!(inputs, &expected_inputs);
+        } else {
+            panic!("expected phi as first instruction, got {:?}", block.instructions.first());
+        }
+
+        match block.instructions.get(1) {
+            Some(MirInstruction::Const { dst, value }) => {
+                assert_eq!(*dst, ValueId::new(1));
+                assert_eq!(*value, ConstValue::Integer(42));
+            }
+            other => panic!("expected const after phi, got {:?}", other),
+        }
+    }
+}
+
 
 impl<'a> LoopBuilder<'a> {
     /// 新しいループビルダーを作成

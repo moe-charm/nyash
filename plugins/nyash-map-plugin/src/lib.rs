@@ -85,6 +85,15 @@ struct MapInstance {
 
 define_instance_storage!(MapInstance);
 
+// Debug helper (unifies NYASH_DEBUG_PLUGIN / HAKO_DEBUG_PLUGIN checks)
+fn debug_plugin() -> bool {
+    std::env::var("NYASH_DEBUG_PLUGIN")
+        .or_else(|_| std::env::var("HAKO_DEBUG_PLUGIN"))
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
 // ---- Nyash TypeBox (FFI minimal PoC) ----
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
@@ -132,6 +141,7 @@ fn map_keys_values_stage2(
     result_len: *mut usize,
 ) -> i32 {
     unsafe {
+        let debug = debug_plugin();
         extern "C" {
             fn nyash_array_new_h() -> i64;
             fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64;
@@ -147,6 +157,9 @@ fn map_keys_values_stage2(
             ) -> i32;
         }
         let arr_h = nyash_array_new_h();
+        if debug {
+            eprintln!("[map-plugin] nyash_array_new_h -> {}", arr_h);
+        }
         if arr_h <= 0 {
             return NYB_E_PLUGIN_ERROR;
         }
@@ -189,23 +202,49 @@ fn map_keys_values_stage2(
                 Err(_) => return NYB_E_INVALID_HANDLE,
             }; // ← Lock released here!
 
+        if debug {
+            eprintln!("[map-plugin] stage2 entries={}", data_to_insert.len());
+        }
         // Now populate ArrayBox WITHOUT holding INSTANCES lock
-        for (i, val) in data_to_insert.into_iter() {
-            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+        for (i, val_raw) in data_to_insert.into_iter() {
+            let val = match val_raw {
+                MapVal::Handle(t, inst_id) => {
+                    let host = unsafe { nyash_host_from_plugin_handle(t, inst_id) };
+                    if host != 0 {
+                        if debug {
+                            eprintln!(
+                                "[map-plugin] stage2 handle→host idx={} type_id={} inst_id={} host={}",
+                                i, t, inst_id, host
+                            );
+                        }
+                        MapVal::Host(host)
+                    } else {
+                        if debug {
+                            eprintln!(
+                                "[map-plugin] stage2 handle→host FAILED idx={} type_id={} inst_id={}",
+                                i, t, inst_id
+                            );
+                        }
+                        MapVal::Handle(t, inst_id)
+                    }
+                }
+                other => other,
+            };
+            if debug {
                 eprintln!(
                     "[map-plugin] stage2 insert idx={} variant={}",
                     i,
                     tlv_codec::v_to_string(&val)
                 );
             }
-            let tlv = match val {
-                MapVal::I64(n) => build_tlv_i64_i64(i, n),
-                MapVal::Str(s) => build_tlv_i64_string(i, &s),
+            let tlv = match &val {
+                MapVal::I64(n) => build_tlv_i64_i64(i, *n),
+                MapVal::Str(s) => build_tlv_i64_string(i, s),
                 MapVal::Handle(t, inst_id) => {
                     // Prefer PluginHandle (tag=8). HostHandle conversion remains available elsewhere if needed.
-                    build_tlv_i64_handle(i, t, inst_id)
+                    build_tlv_i64_handle(i, *t, *inst_id)
                 }
-                MapVal::Host(h) => build_tlv_i64_host_handle(i, h),
+                MapVal::Host(h) => build_tlv_i64_host_handle(i, *h),
             };
             let mut cap: usize = 64;
             let mut out: Vec<u8> = vec![0u8; cap];
@@ -220,10 +259,16 @@ fn map_keys_values_stage2(
                     &mut out_len,
                 );
                 if rc == 0 {
+                    if debug {
+                        eprintln!(
+                            "[map-plugin] host_call_slot(Array.set) ok idx={} len={} rc={}",
+                            i, out_len, rc
+                        );
+                    }
                     break rc;
                 }
                 if rc == -3 {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    if debug {
                         eprintln!(
                             "[map-plugin] SHORT_BUFFER on Array.set: cap={} need?>={} rc={}",
                             cap, out_len, rc
@@ -236,7 +281,7 @@ fn map_keys_values_stage2(
                     out.resize(cap, 0);
                     continue;
                 }
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug {
                     eprintln!(
                         "[map-plugin] host_call_slot(Array.set) failed rc={} (len={})",
                         rc, out_len
@@ -263,7 +308,7 @@ extern "C" fn mapbox_invoke_id(
     match method_id {
         // Stage-2: keys()/values() return HostHandle(ArrayBox) — default ON
         METHOD_KEYS | METHOD_VALUES => {
-            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+            if debug_plugin() {
                 eprintln!("[map-plugin] METHOD_KEYS/VALUES stage2 enable=true (default)");
             }
             return map_keys_values_stage2(
@@ -290,7 +335,7 @@ extern "C" fn mapbox_invoke_id(
                 data_str: std::collections::HashMap::new(),
             };
             if store_instance(id, inst).is_err() {
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!("[map-plugin] METHOD_BIRTH: mutex lock failed");
                 }
                 return NYB_E_PLUGIN_ERROR;
@@ -309,7 +354,7 @@ extern "C" fn mapbox_invoke_id(
                 }
                 NYB_SUCCESS
             };
-            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+            if debug_plugin() {
                 let need = 4 + 4 + 8;
                 let out_cap = unsafe { *result_len };
                 eprintln!(
@@ -487,7 +532,7 @@ extern "C" fn mapbox_invoke_id(
             }
         }
         METHOD_REMOVE => {
-            let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+            let debug = debug_plugin();
             match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
                 if let Some(ik) = read_arg_i64(args, args_len, 0) {
                     if let Some(value) = inst.data_i64.remove(&ik) {
@@ -537,7 +582,7 @@ extern "C" fn mapbox_invoke_id(
             match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
                 inst.data_i64.clear();
                 inst.data_str.clear();
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!("[map-plugin] clear instance {}", instance_id);
                 }
                 unsafe {

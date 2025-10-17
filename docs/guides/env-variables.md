@@ -22,6 +22,13 @@ Key variables (current)
   compat: `NYASH_PLUGIN_CONFIG`
 - `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage‑2: 1 で keys/values HostHandle 経路を有効化。0 で Stage‑1(keysS/valuesS) シム（plugins プロファイルは既定ON）。
 - `NYASH_MAP_FORCE_HOST` — Dev/Test: Map.size/has/get/set を HostHandleRouter の slot(200/202/203/204) へ強制。既定OFF（plugins プロファイルはON）。
+  - 個別トグル（より細粒度の制御）:
+    - `HAKO_MAP_SIZE_FORCE_HOST` / `NYASH_MAP_SIZE_FORCE_HOST` — size()/len() を slot 200/201 に固定
+    - `HAKO_MAP_HAS_FORCE_HOST` / `NYASH_MAP_HAS_FORCE_HOST` — has(key) を slot 202 に固定
+    - `HAKO_MAP_GET_FORCE_HOST` / `NYASH_MAP_GET_FORCE_HOST` — get(key) を slot 203 に固定
+    - `HAKO_MAP_SET_FORCE_HOST` / `NYASH_MAP_SET_FORCE_HOST` — set(key,val) を slot 204 に固定
+    - `HAKO_MAP_KEYS_FORCE_HOST` / `NYASH_MAP_KEYS_FORCE_HOST` — keys() を slot 206 に固定
+    - `HAKO_MAP_VALUES_FORCE_HOST` / `NYASH_MAP_VALUES_FORCE_HOST` — values() を slot 207 に固定
 - `NYASH_ARRAY_FORCE_HOST` — Dev/Test: Array.size/get/set を HostHandleRouter の slot(102/100/101) へ強制。既定OFF（plugins プロファイルはON）。
 - `NYASH_ARRAY_SIZE_FORCE_HOST` — Dev/Test: Array.size を HostHandleRouter の slot(102) へ強制（互換）。
 - `NYASH_STRING_SIZE_FORCE_HOST` — Dev/Test: String.size/len を HostHandleRouter の slot(300) へ強制。既定OFF（plugins プロファイルはON）。
@@ -148,9 +155,29 @@ All values are normalized via `env_gate_box` helpers so aliases stay in sync. Pr
 
 ### Debug toggles (dev only)
 
-- `NYASH_DEBUG_HOST_SLOT=1`
+- `HAKO_DEBUG_HOST_SLOT=1` / `NYASH_DEBUG_HOST_SLOT=1`
   - HostHandle 経路（テーブル駆動）での呼び出しを stderr にデバッグ出力します（plugin/builtin いずれも）。
-  - 形式: `[debug:host_slot] route=<name> slot=<id> -> <VMValue>` / `[debug:plugin host] Box.method -> <VMValue>` / `[debug:builtin host] Box.method -> <VMValue>`
+  - 形式（例）: 
+    - `[router:host-slot] candidate/selected ...`（tables pick）
+    - `[debug:host_slot] route=<name> slot=<id> -> <VMValue>`（共通ハブ）
+    - `[debug:plugin host] Box.method -> <VMValue>`（plugin 直経路）
+    - `[debug:builtin host] Box.method slot=<id> -> <VMValue>`（builtin 直経路）
+    - `[extern_map] host keys handle id=<h>` / `...[extern_map] host values -> <VMValue>`（extern adapter 側の補助ログ）
+- `HAKO_DEBUG_MAP_ROUTES=1` / `NYASH_DEBUG_MAP_ROUTES=1`
+  - ルータ表（MAP_FORCE_ALL と個別 gate）適用状況を dev-only で観測します。候補と選択結果を出力。
 - `NYASH_DEBUG_STRING_LEN=1`
   - `nyrt.string.length(recv)` の Extern ハンドラで受領引数の種類をデバッグ出力します（Unexpected の場合に `unexpected arg=...`）。
   - Extern 経路の受領者素材化（materialization）確認や未定義伝播の切り分けに使用します。
+- `NYASH_DEBUG_PLUGIN=1` / `HAKO_DEBUG_PLUGIN=1`
+  - プラグインホスト／個別プラグインのデバッグ出力を有効化します（呼び出し先/戻り／TLV サイズ／instance_id など）。
+  - `MapBox.values/keys` の Stage‑2 経路や `ArrayBox.set/length` のトレースに有効。
+
+Note: host slot 再入は自動（フラグ無し）
+- `nyrt_host_call_slot` 実行中は thread‑local で in‑slot コンテキストが立ちます。プラグインローダはこの間のみ再入を許可します（ドキュメント上のメモであり、ENV スイッチはありません）。
+
+### Test hooks (short‑lived; default OFF)
+
+- `HAKO_HOSTHANDLE_TEST_RET_MISMATCH` (alias `NYASH_HOSTHANDLE_TEST_RET_MISMATCH`)
+  - Scope: VM (HostSlot/Extern) test‑only path.
+  - Effect: String.len 経路でエラーコード -14（ERR_BAD_RETURN）を強制。stdout に `hosthandle-test rc=-14` を出力。
+  - Usage: used by `tools/smokes/v2/profiles/plugins/hosthandle_boundary_suite_vm.sh` to verify the boundary handling.

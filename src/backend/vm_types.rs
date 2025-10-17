@@ -7,6 +7,7 @@
 
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 use crate::mir::ConstValue;
+use crate::runtime::meta::future::future_box::FutureBox;
 use std::sync::Arc;
 
 /// VM execution error
@@ -44,8 +45,7 @@ pub enum VMValue {
     Float(f64),
     Bool(bool),
     String(String),
-    #[cfg(feature = "legacy-boxes")]
-    Future(crate::boxes::future::FutureBox),
+    Future(FutureBox),
     Void,
     BoxRef(Arc<dyn NyashBox>),
 }
@@ -59,7 +59,6 @@ impl PartialEq for VMValue {
             (VMValue::Bool(a), VMValue::Bool(b)) => a == b,
             (VMValue::String(a), VMValue::String(b)) => a == b,
             (VMValue::Void, VMValue::Void) => true,
-            #[cfg(feature = "legacy-boxes")]
             (VMValue::Future(_), VMValue::Future(_)) => false,
             (VMValue::BoxRef(_), VMValue::BoxRef(_)) => false,
             _ => false,
@@ -80,7 +79,6 @@ impl VMValue {
             }
             VMValue::Bool(b) => Box::new(BoolBox::new(*b)),
             VMValue::String(s) => Box::new(StringBox::new(s)),
-            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(f) => Box::new(f.clone()),
             VMValue::Void => Box::new(VoidBox::new()),
             VMValue::BoxRef(arc_box) => arc_box.share_box(),
@@ -94,7 +92,6 @@ impl VMValue {
             VMValue::Float(f) => f.to_string(),
             VMValue::Bool(b) => b.to_string(),
             VMValue::String(s) => s.clone(),
-            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(f) => f.to_string_box().value,
             VMValue::Void => "void".to_string(),
             VMValue::BoxRef(arc_box) => arc_box.to_string_box().value,
@@ -137,7 +134,6 @@ impl VMValue {
             VMValue::Void => Ok(false),
             VMValue::Float(f) => Ok(*f != 0.0),
             VMValue::String(s) => Ok(!s.is_empty()),
-            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(_) => Ok(true),
         }
     }
@@ -175,10 +171,9 @@ impl VMValue {
         if let Some(string_box) = nyash_box.as_any().downcast_ref::<StringBox>() {
             return VMValue::String(string_box.value.clone());
         }
-        #[cfg(feature = "legacy-boxes")]
         if let Some(future_box) = nyash_box
             .as_any()
-            .downcast_ref::<crate::boxes::future::FutureBox>()
+            .downcast_ref::<FutureBox>()
         {
             return VMValue::Future(future_box.clone());
         }

@@ -39,9 +39,9 @@ pub fn resolve_preludes_and_aliases(
     runner: &NyashRunner,
     code: &str,
     filename: &str,
-) -> Result<(String, Vec<ASTNode>, HashSet<String>)> {
+) -> Result<(String, Vec<ASTNode>, HashSet<String>, std::collections::HashMap<String, Vec<String>>)> {
     if !crate::config::env::enable_using() {
-        return Ok((code.to_string(), Vec::new(), HashSet::new()));
+        return Ok((code.to_string(), Vec::new(), HashSet::new(), std::collections::HashMap::new()));
     }
 
     let use_ast = crate::config::env::using_ast_enabled();
@@ -58,6 +58,7 @@ pub fn resolve_preludes_and_aliases(
     let mut prelude_asts: Vec<ASTNode> = Vec::new();
     let mut alias_names: HashSet<String> = HashSet::new();
     let mut alias_map: HashMap<String, String> = HashMap::new();
+    let mut alias_top_map: HashMap<String, Vec<String>> = HashMap::new();
 
     let (clean_code, paths, alias_pairs) =
         crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
@@ -108,11 +109,32 @@ pub fn resolve_preludes_and_aliases(
         }
     }
 
-    Ok((clean_code, prelude_asts, alias_names))
+    if !alias_names.is_empty() && !prelude_asts.is_empty() {
+        for ast in prelude_asts.iter() {
+            let tops = crate::runner::modes::common_util::resolve::alias_tools::collect_prelude_top_names(ast);
+            for alias in alias_names.iter() {
+                let prefix = format!("{}_", alias);
+                let entry = alias_top_map.entry(alias.clone()).or_default();
+                for name in tops.iter() {
+                    if let Some(rest) = name.strip_prefix(&prefix) {
+                        if !entry.iter().any(|s| s == rest) {
+                            entry.push(rest.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((clean_code, prelude_asts, alias_names, alias_top_map))
 }
 
 /// Stage 3: Parse the main source code and merge it with prelude ASTs.
-pub fn parse_and_merge_ast(code: &str, prelude_asts: Vec<ASTNode>) -> Result<ASTNode> {
+pub fn parse_and_merge_ast(
+    code: &str,
+    prelude_asts: Vec<ASTNode>,
+    alias_top_map: &std::collections::HashMap<String, Vec<String>>,
+) -> Result<ASTNode> {
     // Opt-in dev flag: prefer front::parser_layer facade for parsing
     let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
     let main_ast = if use_facade {
@@ -123,16 +145,22 @@ pub fn parse_and_merge_ast(code: &str, prelude_asts: Vec<ASTNode>) -> Result<AST
         NyashParser::parse_from_string(code).map_err(|e| PipelineError::Parse(e.to_string()))?
     };
 
-    if crate::config::env::using_ast_enabled() && !prelude_asts.is_empty() {
-        Ok(
-            crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(
-                prelude_asts,
-                &main_ast,
-            ),
+    let merged = if crate::config::env::using_ast_enabled() && !prelude_asts.is_empty() {
+        crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(
+            prelude_asts,
+            &main_ast,
         )
     } else {
-        Ok(main_ast)
-    }
+        main_ast
+    };
+
+    let merged = if !alias_top_map.is_empty() {
+        crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(&merged, alias_top_map)
+    } else {
+        merged
+    };
+
+    Ok(merged)
 }
 
 /// Stage 4: Apply alias desugaring and macro expansion to the AST.

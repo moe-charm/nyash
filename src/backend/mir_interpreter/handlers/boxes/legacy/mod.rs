@@ -121,7 +121,6 @@ impl MirInterpreter {
                 VMValue::Float(_) => "FloatBox".to_string(),
                 VMValue::Bool(_) => "BoolBox".to_string(),
                 VMValue::Void => "<Void>".to_string(),
-                #[cfg(feature = "legacy-boxes")]
                 VMValue::Future(_) => "<Future>".to_string(),
             };
             self.box_trace_emit_call(&cls, method, args.len());
@@ -136,7 +135,6 @@ impl MirInterpreter {
                 VMValue::Bool(_) => "Bool".to_string(),
                 VMValue::String(_) => "String".to_string(),
                 VMValue::Void => "Void".to_string(),
-                #[cfg(feature = "legacy-boxes")]
                 VMValue::Future(_) => "Future".to_string(),
             };
             eprintln!("[vm-trace] length dispatch recv_type={}", type_name);

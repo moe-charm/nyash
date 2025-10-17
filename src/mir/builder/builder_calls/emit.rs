@@ -355,6 +355,10 @@ impl MirBuilder {
                     );
                 }
                 match name.as_str() {
+                    "nyrt.array.size" | "nyrt.map.size" => {
+                        self.value_types
+                            .insert(dst_id, crate::mir::MirType::Integer);
+                    }
                     "nyrt.map.values" | "nyrt.map.keys" => {
                         self.value_types
                             .insert(dst_id, crate::mir::MirType::Box("ArrayBox".into()));

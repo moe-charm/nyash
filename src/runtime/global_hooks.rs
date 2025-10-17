@@ -5,16 +5,15 @@ use std::sync::{Arc, RwLock};
 
 use super::scheduler::CancellationToken;
 use super::{gc::BarrierKind, gc::GcHooks, scheduler::Scheduler};
+use crate::runtime::meta::future::future_box::{FutureBox, FutureWeak};
 
 // Unified global runtime hooks state (single lock for consistency)
 struct GlobalHooksState {
     gc: Option<Arc<dyn GcHooks>>,
     sched: Option<Arc<dyn Scheduler>>,
     cur_token: Option<CancellationToken>,
-    #[cfg(feature = "legacy-boxes")]
-    futures: Vec<crate::boxes::future::FutureWeak>,
-    #[cfg(feature = "legacy-boxes")]
-    strong: Vec<crate::boxes::future::FutureBox>,
+    futures: Vec<FutureWeak>,
+    strong: Vec<FutureBox>,
     scope_depth: usize,
     #[cfg(feature = "legacy-boxes")]
     group_stack: Vec<std::sync::Arc<crate::boxes::task_group_box::TaskGroupInner>>,
@@ -26,9 +25,7 @@ impl GlobalHooksState {
             gc: None,
             sched: None,
             cur_token: None,
-            #[cfg(feature = "legacy-boxes")]
             futures: Vec::new(),
-            #[cfg(feature = "legacy-boxes")]
             strong: Vec::new(),
             scope_depth: 0,
             #[cfg(feature = "legacy-boxes")]
@@ -50,7 +47,6 @@ pub fn set_from_runtime(rt: &crate::runtime::nyash_runtime::NyashRuntime) {
         if st.cur_token.is_none() {
             st.cur_token = Some(CancellationToken::new());
         }
-        #[cfg(feature = "legacy-boxes")]
         { st.futures.clear(); st.strong.clear(); }
         st.scope_depth = 0;
         #[cfg(feature = "legacy-boxes")]
@@ -86,14 +82,16 @@ pub fn current_group_token() -> CancellationToken {
 }
 
 /// Register a Future into the current group's registry (best-effort; clones share state)
-#[cfg(feature = "legacy-boxes")]
-pub fn register_future_to_current_group(fut: &crate::boxes::future::FutureBox) {
+pub fn register_future_to_current_group(fut: &FutureBox) {
     if let Ok(mut st) = state().write() {
         // Prefer explicit current TaskGroup at top of stack
-        if let Some(inner) = st.group_stack.last() {
-            if let Ok(mut v) = inner.strong.lock() {
-                v.push(fut.clone());
-                return;
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(inner) = st.group_stack.last() {
+                if let Ok(mut v) = inner.strong.lock() {
+                    v.push(fut.clone());
+                    return;
+                }
             }
         }
         // Fallback to implicit global group
@@ -102,11 +100,7 @@ pub fn register_future_to_current_group(fut: &crate::boxes::future::FutureBox) {
     }
 }
 
-#[cfg(not(feature = "legacy-boxes"))]
-pub fn register_future_to_current_group(_fut: &dyn crate::box_trait::NyashBox) { /* no-op in plugin-only */ }
-
 /// Join all currently registered futures with a coarse timeout guard.
-#[cfg(feature = "legacy-boxes")]
 pub fn join_all_registered_futures(timeout_ms: u64) {
     use std::time::{Duration, Instant};
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
@@ -140,9 +134,6 @@ pub fn join_all_registered_futures(timeout_ms: u64) {
         st.futures.retain(|fw| matches!(fw.is_ready(), Some(false)));
     }
 }
-
-#[cfg(not(feature = "legacy-boxes"))]
-pub fn join_all_registered_futures(_timeout_ms: u64) { /* no-op */ }
 
 /// Push a task scope (footing). On pop of the outermost scope, perform a best-effort join.
 pub fn push_task_scope() {

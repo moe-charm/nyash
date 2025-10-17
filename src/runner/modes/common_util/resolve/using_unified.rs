@@ -13,6 +13,8 @@ pub struct UsingResolveResult {
     pub prelude_asts: Vec<nyash_rust::ast::ASTNode>,
     /// Collected alias names from `using ... as Alias`
     pub alias_names: HashSet<String>,
+    /// Mapping alias -> original top-level names (before prefixing)
+    pub alias_top_names: HashMap<String, Vec<String>>,
 }
 
 /// Options for using resolution
@@ -43,6 +45,7 @@ pub fn resolve_using_with_preludes(
     let use_ast = crate::config::env::using_ast_enabled();
     let mut alias_names = HashSet::new();
     let mut prelude_asts = Vec::new();
+    let mut alias_top_names: HashMap<String, Vec<String>> = HashMap::new();
 
     // Step 1: Resolve using paths and strip using lines
     let (cleaned_code, paths, alias_pairs) =
@@ -78,7 +81,6 @@ pub fn resolve_using_with_preludes(
             alias_names.insert(alias.clone());
         }
     }
-
     // Step 4: Handle AST prelude merge if enabled
     if !paths.is_empty() {
         if !use_ast {
@@ -128,9 +130,27 @@ pub fn resolve_using_with_preludes(
         }
     }
 
+    if !alias_names.is_empty() && !prelude_asts.is_empty() {
+        for ast in prelude_asts.iter() {
+            let tops = super::alias_tools::collect_prelude_top_names(ast);
+            for alias in alias_names.iter() {
+                let prefix = format!("{}_", alias);
+                let entry = alias_top_names.entry(alias.clone()).or_default();
+                for name in tops.iter() {
+                    if let Some(rest) = name.strip_prefix(&prefix) {
+                        if !entry.iter().any(|s| s == rest) {
+                            entry.push(rest.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(UsingResolveResult {
         cleaned_code,
         prelude_asts,
         alias_names,
+        alias_top_names,
     })
 }

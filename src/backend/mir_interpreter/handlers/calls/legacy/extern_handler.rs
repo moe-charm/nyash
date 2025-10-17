@@ -2,6 +2,7 @@
 //! Extern function execution (exit, panic, etc.)
 
 use super::super::super::*;
+use crate::runtime::meta::future::future_box::FutureBox;
 
 impl MirInterpreter {
     fn normalize_extern_arg(&mut self, value: VMValue) -> VMValue {
@@ -162,7 +163,7 @@ impl MirInterpreter {
                 let call_args: Vec<VMValue> = loaded; // remaining are args
                 // Route synchronously via MethodRouter and resolve the result now
                 let result = crate::runtime::method_router_box::route(self, &receiver, &method_name, &call_args)?;
-                let fut = crate::boxes::future::FutureBox::new();
+                let fut = FutureBox::new();
                 fut.set_result(result.to_nyash_box());
                 return Ok(VMValue::Future(fut));
             }

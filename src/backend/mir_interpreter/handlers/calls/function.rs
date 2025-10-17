@@ -91,8 +91,7 @@ impl MirInterpreter {
                         VMValue::String(ref s) => format!("str:'{}'", s),
                         VMValue::Void => "void".into(),
                         VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
-                        #[cfg(feature = "legacy-boxes")]
-                        VMValue::Future(_) => "future".into(),
+                        VMValue::Future(ref fut) => format!("future:{}", fut.to_string_box().value),
                     });
                 }
                 Err(e) => {
@@ -603,8 +602,7 @@ impl MirInterpreter {
                         VMValue::Bool(b) => format!("Bool({})", b),
                         VMValue::Float(f) => format!("Float({})", f),
                         VMValue::Void => "Void".to_string(),
-                        #[cfg(feature = "legacy-boxes")]
-                        VMValue::Future(_) => "Future".to_string(),
+                        VMValue::Future(f) => format!("Future({})", f.to_string_box().value),
                     });
                 }
                 argv.push(vm_val);

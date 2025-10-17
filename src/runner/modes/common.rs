@@ -77,6 +77,7 @@ impl NyashRunner {
         let mut code_ref: &str = &code;
         let cleaned_code_owned;
         let prelude_asts: Vec<nyash_rust::ast::ASTNode>;
+        let alias_top_map: std::collections::HashMap<String, Vec<String>>;
 
         if crate::config::env::enable_using() {
             let options = crate::runner::modes::common_util::resolve::UsingResolveOptions {
@@ -91,6 +92,7 @@ impl NyashRunner {
                     cleaned_code_owned = result.cleaned_code;
                     code_ref = &cleaned_code_owned;
                     prelude_asts = result.prelude_asts;
+                    alias_top_map = result.alias_top_names;
                 }
                 Err(e) => {
                     eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
@@ -99,6 +101,7 @@ impl NyashRunner {
             }
         } else {
             prelude_asts = Vec::new();
+            alias_top_map = std::collections::HashMap::new();
         }
         // Optional dev sugar: @name[:T] = expr → local name[:T] = expr (line-head only)
         let preexpanded_owned;
@@ -129,6 +132,11 @@ impl NyashRunner {
         let ast = if !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
+        let ast = if !alias_top_map.is_empty() {
+            crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(&ast, &alias_top_map)
+        } else {
+            ast
+        };
 
         // Optional: dump AST statement kinds for quick diagnostics
         if std::env::var("NYASH_AST_DUMP").ok().as_deref() == Some("1") {

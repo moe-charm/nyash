@@ -112,8 +112,7 @@ impl MirInterpreter {
             VMValue::Bool(_) => ("Bool", "".to_string(), None),
             VMValue::String(_) => ("String", "".to_string(), None),
             VMValue::Void => ("Void", "".to_string(), None),
-            #[cfg(feature = "legacy-boxes")]
-            VMValue::Future(_) => ("Future", "".to_string(), None),
+            VMValue::Future(f) => ("Future", f.type_name().to_string(), None),
             VMValue::BoxRef(b) => {
                 // Prefer InstanceBox.class_name when available
                 if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {

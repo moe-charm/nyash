@@ -299,11 +299,11 @@ impl NyashRunner {
             let source = source_inline.to_string();
 
             // Stage 2: Resolve `using` and preludes based on pseudo filename context
-            let (source, preludes, aliases) =
+            let (source, preludes, aliases, alias_top_map) =
                 vm_pipeline::resolve_preludes_and_aliases(self, &source, pseudo_filename)?;
 
             // Stage 3: Parse main source and merge with preludes
-            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes, &alias_top_map)?;
 
             // Stage 4: Apply macros and desugar aliases
             let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
@@ -330,11 +330,11 @@ impl NyashRunner {
             let source = vm_pipeline::load_and_preprocess_source(filename)?;
 
             // Stage 2: Resolve `using` and preludes
-            let (source, preludes, aliases) =
+            let (source, preludes, aliases, alias_top_map) =
                 vm_pipeline::resolve_preludes_and_aliases(self, &source, filename)?;
 
             // Stage 3: Parse main source and merge with preludes
-            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes, &alias_top_map)?;
 
             // Stage 4: Apply macros and desugar aliases
             let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
@@ -464,8 +464,8 @@ impl NyashRunner {
         use crate::runner::vm_pipeline;
         let (module_json, _ret_ty) = {
             let source = vm_pipeline::load_and_preprocess_source(filename).map_err(|e| e.to_string())?;
-            let (source, preludes, aliases) = vm_pipeline::resolve_preludes_and_aliases(self, &source, filename).map_err(|e| e.to_string())?;
-            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes).map_err(|e| e.to_string())?;
+            let (source, preludes, aliases, alias_top_map) = vm_pipeline::resolve_preludes_and_aliases(self, &source, filename).map_err(|e| e.to_string())?;
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes, &alias_top_map).map_err(|e| e.to_string())?;
             let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases).map_err(|e| e.to_string())?;
             let mut mirc = crate::mir::MirCompiler::with_options(!self.config.no_optimize);
             let cr = mirc.compile(ast).map_err(|e| format!("MIR compile error: {}", e))?;

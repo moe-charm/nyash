@@ -46,6 +46,15 @@ pub fn invoke(hh: HostHandle, route: HostSlotRoute, args: &[VMValue]) -> Option<
             }
         }
         if rc != 0 {
+            if route.returns_value
+                && crate::runtime::env_gate_box::bool_any(&[
+                    "HAKO_HOSTHANDLE_TEST_RET_MISMATCH",
+                    "NYASH_HOSTHANDLE_TEST_RET_MISMATCH",
+                ])
+            {
+                println!("hosthandle-test rc={}", rc);
+                return Some(VMValue::Integer(rc as i64));
+            }
             return None;
         }
         break;

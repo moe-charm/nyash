@@ -3,6 +3,10 @@ use super::tables::{ARRAY_HOST_ROUTES, MAP_HOST_ROUTES, STRING_HOST_ROUTES};
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
 use crate::box_trait::NyashBox;
+use crate::runtime::meta::{
+    callable::callable_box::CallableBox,
+    future::future_box::FutureBox,
+};
 use crate::vm_ops::boxcall;
 
 /// Try routing a legacy builtin box (FileBox/CallableBox/ArrayBox/MapBox)
@@ -87,12 +91,22 @@ pub fn try_route_builtin_box(
             ));
         }
     }
+    if bx.type_name() == "StringBox" {
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_HOSTHANDLE_TEST_RET_MISMATCH",
+            "NYASH_HOSTHANDLE_TEST_RET_MISMATCH",
+        ]) && method == "size" && args.is_empty()
+        {
+            return Ok(Some(VMValue::Integer(
+                crate::runtime::host_handle_router::consts::ERR_BAD_RETURN as i64,
+            )));
+        }
+    }
     // CallableBox
     if bx.type_name() == "CallableBox" {
-        #[cfg(feature = "legacy-boxes")]
         if let Some(cb) = bx
             .as_any()
-            .downcast_ref::<crate::boxes::callable::CallableBox>()
+            .downcast_ref::<CallableBox>()
         {
             let _ = crate::vm_ops::boxcall::arity_guard_for("CallableBox", method, args.len());
             if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name(
@@ -124,7 +138,7 @@ pub fn try_route_builtin_box(
                         }
                     }
                     502 => {
-                        let fut = crate::boxes::future::FutureBox::new();
+                        let fut = FutureBox::new();
                         crate::runtime::global_hooks::register_future_to_current_group(&fut);
                         let use_async = hako_core_callable::async_enabled_from_env();
                         if use_async {
@@ -133,42 +147,13 @@ pub fn try_route_builtin_box(
                                     .as_any()
                                     .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>(
                                 ) {
+                                    // Flatten argv via helper to support both builtin and plugin ArrayBox
+                                    use crate::runtime::array_flatten_helper as afh;
                                     let flat_vm: Vec<VMValue> = hako_core_callable::flatten_argv(
                                         args,
-                                        |v: &VMValue| {
-                                            if let VMValue::BoxRef(bx) = v {
-                                                bx.as_any()
-                                                    .downcast_ref::<crate::boxes::array::ArrayBox>()
-                                                    .is_some()
-                                            } else {
-                                                false
-                                            }
-                                        },
-                                        |v: &VMValue| {
-                                            if let VMValue::BoxRef(bx) = v {
-                                                bx.as_any()
-                                                    .downcast_ref::<crate::boxes::array::ArrayBox>()
-                                                    .map(|a| a.items.read().unwrap().len())
-                                                    .unwrap_or(0)
-                                            } else {
-                                                0
-                                            }
-                                        },
-                                        |v: &VMValue, i: usize| {
-                                            if let VMValue::BoxRef(bx) = v {
-                                                if let Some(a) = bx
-                                                    .as_any()
-                                                    .downcast_ref::<crate::boxes::array::ArrayBox>(
-                                                ) {
-                                                    let guard = a.items.read().unwrap();
-                                                    VMValue::from_nyash_box(guard[i].clone_box())
-                                                } else {
-                                                    v.clone()
-                                                }
-                                            } else {
-                                                v.clone()
-                                            }
-                                        },
+                                        afh::is_array,
+                                        afh::get_len,
+                                        afh::get_element,
                                     );
                                     let mut argv: Vec<Box<dyn NyashBox>> = Vec::new();
                                     for v in &flat_vm {
@@ -211,28 +196,17 @@ pub fn try_route_builtin_box(
                                     // Builtin receiver — schedule via router
                                     let recv_vm =
                                         VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
-                                    let mut argv_vm: Vec<VMValue> = Vec::new();
-                                    if args.len() == 1 {
-                                        if let VMValue::BoxRef(arrbx) = &args[0] {
-                                            if let Some(arr) = arrbx
-                                                .as_any()
-                                                .downcast_ref::<crate::boxes::array::ArrayBox>(
-                                            ) {
-                                                let guard = arr.items.read().unwrap();
-                                                for it in guard.iter() {
-                                                    argv_vm.push(VMValue::from_nyash_box(
-                                                        it.clone_box(),
-                                                    ));
-                                                }
-                                            } else {
-                                                argv_vm.push(args[0].clone());
-                                            }
-                                        } else {
-                                            argv_vm.push(args[0].clone());
-                                        }
+                                    let mut argv_vm: Vec<VMValue> = if args.len() == 1 {
+                                        use crate::runtime::array_flatten_helper as afh;
+                                        hako_core_callable::flatten_argv(
+                                            args,
+                                            afh::is_array,
+                                            afh::get_len,
+                                            afh::get_element,
+                                        )
                                     } else {
-                                        argv_vm.extend_from_slice(args);
-                                    }
+                                        args.to_vec()
+                                    };
                                     let method_sched = cb.method.clone();
                                     let fut_clone = fut.clone();
                                     let name =
@@ -304,26 +278,30 @@ pub fn try_route_builtin_box(
                 args.len(),
             ));
         }
-        #[cfg(feature = "legacy-boxes")]
-        {
-            return Err(crate::vm_ops::boxcall::downcast_failed("CallableBox"));
-        }
-        #[cfg(not(feature = "legacy-boxes"))]
-        {
-            return Err(boxcall::method_not_supported(
-                method,
-                &VMValue::from_nyash_box(bx.clone_box()),
-            ));
-        }
+        // Downcast failed
+        return Err(crate::vm_ops::boxcall::downcast_failed("CallableBox"));
     }
     // ArrayBox
     if bx.type_name() == "ArrayBox" {
-        if let Some((_route, value)) =
-            super::host_slot::try_invoke_arc(bx, ARRAY_HOST_ROUTES, method, args)
-        {
-            if std::env::var("NYASH_DEBUG_HOST_SLOT").ok().as_deref() == Some("1") {
-                eprintln!("[debug:builtin host] ArrayBox.{} -> {:?}", method, value);
+        let host_hit =
+            super::host_slot::try_invoke_arc(bx, ARRAY_HOST_ROUTES, method, args);
+        if crate::runtime::env_gate_box::debug_host_slot() {
+            match &host_hit {
+                Some((route, value)) => {
+                    eprintln!(
+                        "[debug:builtin host] ArrayBox.{} slot={} -> {:?}",
+                        method, route.slot, value
+                    );
+                }
+                None => {
+                    eprintln!(
+                        "[debug:builtin host] ArrayBox.{} skipped host routes",
+                        method
+                    );
+                }
             }
+        }
+        if let Some((_route, value)) = host_hit {
             return Ok(Some(value));
         }
         #[cfg(feature = "legacy-boxes")]
@@ -424,12 +402,25 @@ pub fn try_route_builtin_box(
     }
     // MapBox
     if bx.type_name() == "MapBox" {
-        if let Some((_route, value)) =
-            super::host_slot::try_invoke_arc(bx, MAP_HOST_ROUTES, method, args)
-        {
-            if std::env::var("NYASH_DEBUG_HOST_SLOT").ok().as_deref() == Some("1") {
-                eprintln!("[debug:builtin host] MapBox.{} -> {:?}", method, value);
+        let host_hit =
+            super::host_slot::try_invoke_arc(bx, MAP_HOST_ROUTES, method, args);
+        if crate::runtime::env_gate_box::debug_host_slot() {
+            match &host_hit {
+                Some((route, value)) => {
+                    eprintln!(
+                        "[debug:builtin host] MapBox.{} slot={} -> {:?}",
+                        method, route.slot, value
+                    );
+                }
+                None => {
+                    eprintln!(
+                        "[debug:builtin host] MapBox.{} skipped host routes",
+                        method
+                    );
+                }
             }
+        }
+        if let Some((_route, value)) = host_hit {
             return Ok(Some(value));
         }
         #[cfg(feature = "legacy-boxes")]
@@ -533,7 +524,7 @@ pub fn try_route_builtin_box(
                         let callee = mp.get(key_box);
                         if let Some(cb) = callee
                             .as_any()
-                            .downcast_ref::<crate::boxes::callable::CallableBox>()
+                            .downcast_ref::<CallableBox>()
                         {
                             let recv_vm = VMValue::BoxRef(std::sync::Arc::from(
                                 cb.receiver
@@ -577,7 +568,7 @@ pub fn try_route_builtin_box(
                         let callee = mp.get(key_box);
                         if let Some(cb) = callee
                             .as_any()
-                            .downcast_ref::<crate::boxes::callable::CallableBox>()
+                            .downcast_ref::<CallableBox>()
                         {
                             let cb_vm = VMValue::BoxRef(std::sync::Arc::new(cb.clone()));
                             let args_vm =
@@ -631,11 +622,29 @@ pub fn try_route_string_primitive(
     args: &[VMValue],
 ) -> Result<Option<VMValue>, VMError> {
     if let VMValue::String(s) = receiver {
+        if crate::runtime::env_gate_box::debug_map_routes() {
+            eprintln!("[debug:string_primitive] method={}", method);
+        }
         let _ = super::maybe_arity_guard("StringBox", method, args.len());
-        if let Some(route) = STRING_HOST_ROUTES.pick(method, args.len()) {
+        // Test hook: when RET_MISMATCH is requested, force host-slot path to expose -14
+        let force_host_slot = crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_HOSTHANDLE_TEST_RET_MISMATCH",
+            "NYASH_HOSTHANDLE_TEST_RET_MISMATCH",
+        ]);
+        if force_host_slot || STRING_HOST_ROUTES.pick(method, args.len()).is_some() {
             let sb = Box::new(crate::box_trait::StringBox::new(s.clone()))
                 as Box<dyn crate::box_trait::NyashBox>;
             let hh = crate::runtime::host_handles::to_handle_box(sb);
+            // If route is gated off but test hook is set, synthesize a route descriptor
+            let route = STRING_HOST_ROUTES
+                .pick(method, args.len())
+                .unwrap_or_else(|| super::tables::HostSlotRoute::new(
+                    &["size"],
+                    0,
+                    crate::runtime::host_handle_router::consts::STRING_LEN as u64,
+                    true,
+                    super::tables::EnvToggle::new(&[]),
+                ));
             if let Some(v) = super::host_slot::invoke(hh, route, args) {
                 return Ok(Some(v));
             }

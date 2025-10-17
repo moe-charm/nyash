@@ -39,8 +39,13 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
         }
         // Phase 2.2: Avoid function parameters (v%0-v%N) - never reuse parameter registers
         let mut loc = builder.value_gen.next();
+        // Ensure the freshly allocated ValueId never aliases the source or function parameters.
         if let Some(ref fun) = builder.current_function {
-            while fun.params.contains(&loc) {
+            while loc == v || fun.params.contains(&loc) {
+                loc = builder.value_gen.next();
+            }
+        } else {
+            while loc == v {
                 loc = builder.value_gen.next();
             }
         }

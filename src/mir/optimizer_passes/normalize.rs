@@ -322,7 +322,14 @@ pub fn normalize_legacy_instructions(
 
             // Pass A: Extern("nyrt.*") → Method for core boxes
             // Safe subset only: string (size/len + common string ops) / map (size/keys/values)
-            // NOTE: nyrt.array.size remains Extern to avoid fragile Method(receiver) materialization issues.
+            //
+            // Policy note:
+            //   - Builder already normalizes Array/Map length family to Extern calls so EmitGuard
+            //     can materialize the receiver (Copy) in-block. Reverting to Method here re-opens
+            //     the historical DCE bug where the receiver Copy gets pruned, leading to
+            //     use-before-def on chained `.values().size()` and `.keys().size()`.
+            //   - Keep `nyrt.array.size` and the map extern trio as Externs to preserve the
+            //     stronger SSA guarantees. Tests: `map_values_size_extern_vm` (quick profile).
             for inst in &mut block.instructions {
                 if let I::Call { dst, func: _, callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name)), args, effects } = inst {
                     let (box_name, method_opt) = match name.as_str() {

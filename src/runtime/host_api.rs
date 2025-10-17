@@ -8,6 +8,7 @@
  */
 
 use crate::box_trait::NyashBox;
+use std::cell::Cell;
 
 // ===== TLS: current VM pointer during plugin invoke =====
 // VM-legacy feature removed - provide stubs only
@@ -266,8 +267,18 @@ pub extern "C" fn nyrt_host_call_slot(
     out_ptr: *mut u8,
     out_len: *mut usize,
 ) -> i32 {
-    // Delegate exclusively to HostHandleRouter (all branches migrated)
-    crate::runtime::host_handle_router::route_slot(handle, selector_id, args_ptr, args_len, out_ptr, out_len)
+    // Mark re-entrant context for plugin loader (host slot → plugin invoke)
+    IN_HOST_SLOT.with(|f| f.set(true));
+    let rc = crate::runtime::host_handle_router::route_slot(handle, selector_id, args_ptr, args_len, out_ptr, out_len);
+    IN_HOST_SLOT.with(|f| f.set(false));
+    rc
 }
 
+// ---- Re-entrant call guard helpers (host slot context) ----
+thread_local! { static IN_HOST_SLOT: Cell<bool> = Cell::new(false); }
+
+#[inline]
+pub fn in_host_slot() -> bool {
+    IN_HOST_SLOT.with(|f| f.get())
+}
 

@@ -21,12 +21,6 @@ impl<'a> LoopBuilder<'a> {
 
         // Filter out function parameters (they don't need PHI nodes unless reassigned)
         let mut loop_vars = current_vars.clone();
-        if let Some(ref function) = self.parent_builder.current_function {
-            for param_id in &function.params {
-                // Remove any variable that still has its original parameter ValueId
-                loop_vars.retain(|_name, &mut vid| vid != *param_id);
-            }
-        }
 
         // 🔥 ROOT CAUSE FIX: Only create PHIs for true loop-carried variables
         // (variables defined in preheader AND assigned inside loop body)

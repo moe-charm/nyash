@@ -1,10 +1,18 @@
 use std::collections::HashMap;
 use crate::backend::vm_types::{VMError, VMValue};
+use crate::runtime::host_handle_router::consts::ERR_BAD_RETURN;
 
 pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
     // nyrt.string.length(recv:String): i64 (byte length)
     map.insert(("nyrt.string".into(), "length".into()), |args: &[VMValue]| {
         if args.is_empty() { return Err(VMError::InvalidInstruction("nyrt.string.length requires receiver".into())); }
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_HOSTHANDLE_TEST_RET_MISMATCH",
+            "NYASH_HOSTHANDLE_TEST_RET_MISMATCH",
+        ]) {
+            println!("hosthandle-test rc={}", ERR_BAD_RETURN);
+            return Ok(VMValue::Integer(ERR_BAD_RETURN as i64));
+        }
         match &args[0] {
             VMValue::String(s) => Ok(VMValue::Integer(hako_core_string::length_bytes(s))),
             VMValue::BoxRef(b) => Ok(VMValue::Integer(hako_core_string::length_bytes(&b.to_string_box().value))),

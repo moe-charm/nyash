@@ -93,7 +93,12 @@ impl<'a> LoopBuilder<'a> {
             }
         }
         }
+        // Snapshot variable bindings to prevent short-circuit lowering from mutating loop state.
+        // Logical conditions (e.g., `j < end && ...`) may introduce Phi-only copies that should not
+        // propagate outside the header. Restoring the snapshot keeps loop-carried variables stable.
+        let condition_varmap_snapshot = self.parent_builder.variable_map.clone();
         let condition_value = self.build_expression_with_phis(condition)?;
+        self.parent_builder.variable_map = condition_varmap_snapshot;
 
         // 6. 条件分岐
         let pre_branch_bb = self.current_block()?;

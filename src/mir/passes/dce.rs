@@ -317,4 +317,61 @@ mod tests {
             matches!(inst, MirInstruction::Copy { dst, src } if *dst == copy_val && *src == recv_src)
         }));
     }
+
+    #[test]
+    fn closure_capture_copy_survives_dce() {
+        let mut module = MirModule::new("closure".to_string());
+        let entry = crate::mir::basic_block::BasicBlockId(0);
+        let signature = FunctionSignature {
+            name: "c".into(),
+            params: Vec::new(),
+            return_type: MirType::Void,
+            effects: EffectMask::PURE,
+        };
+        let mut func = MirFunction::new(signature, entry);
+
+        let capture_src = func.next_value_id();
+        let copy_val = func.next_value_id();
+        let closure_val = func.next_value_id();
+        let call_dst = func.next_value_id();
+
+        {
+            let block = func.get_block_mut(entry).unwrap();
+            block.add_instruction(MirInstruction::Const {
+                dst: capture_src,
+                value: ConstValue::Integer(7),
+            });
+            block.add_instruction(MirInstruction::Copy { dst: copy_val, src: capture_src });
+            block.add_instruction(MirInstruction::NewClosure {
+                dst: closure_val,
+                params: vec!["x".to_string()],
+                body: Vec::<crate::ast::ASTNode>::new(),
+                captures: vec![("cap".to_string(), copy_val)],
+                me: Some(copy_val),
+            });
+            block.add_instruction(MirInstruction::Call {
+                dst: Some(call_dst),
+                func: closure_val,
+                callee: Some(Callee::Closure {
+                    params: vec!["x".to_string()],
+                    captures: vec![("cap".to_string(), copy_val)],
+                    me_capture: Some(copy_val),
+                }),
+                args: Vec::new(),
+                effects: EffectMask::READ,
+            });
+            block.add_instruction(MirInstruction::Return { value: Some(call_dst) });
+        }
+
+        func.update_cfg();
+        module.add_function(func);
+
+        let removed = eliminate_dead_code(&mut module);
+        assert_eq!(removed, 0);
+
+        let block = module.get_function("c").unwrap().get_block(entry).unwrap();
+        assert!(block.instructions.iter().any(|inst| {
+            matches!(inst, MirInstruction::Copy { dst, src } if *dst == copy_val && *src == capture_src)
+        }));
+    }
 }

@@ -100,3 +100,15 @@ pub fn bool_alias_or(primary: &str, alias: &str, default: bool) -> bool {
         default
     }
 }
+
+/// Debug gate for map router/table diagnostics (short-lived, default OFF).
+#[inline]
+pub fn debug_map_routes() -> bool {
+    bool_any(&["HAKO_DEBUG_MAP_ROUTES", "NYASH_DEBUG_MAP_ROUTES", "NYASH_DEBUG_MAP_VALUES"])
+}
+
+/// Debug gate for host slot routing logs (short-lived, default OFF).
+#[inline]
+pub fn debug_host_slot() -> bool {
+    bool_any(&["HAKO_DEBUG_HOST_SLOT", "NYASH_DEBUG_HOST_SLOT"])
+}

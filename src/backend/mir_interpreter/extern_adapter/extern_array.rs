@@ -1,5 +1,10 @@
 use std::collections::HashMap;
+
 use crate::backend::vm_types::{VMError, VMValue};
+use crate::runtime::plugin_host_box;
+use crate::runtime::plugin_loader_v2::PluginBoxV2;
+
+use super::collections::materialize_array_receiver;
 
 fn array_size(args: &[VMValue]) -> Result<VMValue, VMError> {
     if args.is_empty() {
@@ -9,12 +14,27 @@ fn array_size(args: &[VMValue]) -> Result<VMValue, VMError> {
     }
     match &args[0] {
         VMValue::BoxRef(b) => {
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                let n = arr.len();
-                return Ok(VMValue::Integer(n as i64));
+            let recv_arc = materialize_array_receiver(b)?;
+            if let Some(plugin_box) = recv_arc.as_any().downcast_ref::<PluginBoxV2>() {
+                if plugin_box.box_type == "ArrayBox" {
+                    let out = plugin_host_box::invoke_instance_method(
+                        "ArrayBox",
+                        "size",
+                        plugin_box.inner.instance_id,
+                        &[],
+                    );
+                    let result = match out {
+                        Ok(Some(ret)) => Ok(VMValue::from_nyash_box(ret)),
+                        Ok(None) => Ok(VMValue::Void),
+                        Err(e) => Err(VMError::InvalidInstruction(format!(
+                            "Plugin method ArrayBox.size failed: {:?}",
+                            e
+                        ))),
+                    };
+                    return result;
+                }
             }
-            let hh = crate::runtime::host_handles::to_handle_arc(b.clone());
+            let hh = crate::runtime::host_handles::to_handle_arc(recv_arc.clone());
             let mut out_buf = vec![0u8; 64];
             let mut out_len: usize = out_buf.len();
             let rc = crate::runtime::host_api::nyrt_host_call_slot(

@@ -297,9 +297,9 @@ mod tests {
         let mut compiler = MirCompiler::new();
         let result = compiler.compile(ast).expect("compile should succeed");
         let dump = MirPrinter::new().print_module(&result.module);
-        // Expect a BoxCall to push (printer formats as `call <box>.<method>(...)`)
+        // Expect a call to .push (printer may include method id decorations)
         assert!(
-            dump.contains(".push("),
+            dump.contains(".push"),
             "Expected BoxCall to .push(...). Got:\n{}",
             dump
         );

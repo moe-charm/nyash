@@ -18,6 +18,7 @@ pub mod plugin_boot_box; // unified plugin init (idempotent)
 pub mod static_plugins; // static metadata registration (features-driven)
 pub mod method_router_box; // single entry for method dispatch (façade)
 pub mod array_flatten_helper; // ArrayBox flatten helpers for CallableBox
+pub mod meta;
 pub mod provider_box;
 pub mod plugin_host_box;
 pub mod codec;

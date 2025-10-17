@@ -23,12 +23,16 @@ test_hosthandle_boundary_suite_vm() {
   fi
 
   # Run -14 check via String.size test hook (ENV-enabled)
-  local code=$'static box Main {\n  main() {\n    local s = "hello"\n    return s.size() == 5 ? 0 : 0\n  }\n}\n'
-  HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1 out=$(run_nyash_vm -c "$code" 2>&1)
-  echo "$out" | grep -q "-14" || { echo "$out"; test_fail "missing -14"; return 1; }
+  local code=$'static box Main {\n  main() {\n    local s = new StringBox("hello")\n    return s.size() == 5 ? 0 : 0\n  }\n}\n'
+  local tmp_out
+  tmp_out=$(mktemp)
+  HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1 run_nyash_vm -c "$code" >"$tmp_out" 2>&1
+  local out
+  out=$(cat "$tmp_out")
+  rm -f "$tmp_out"
+  echo "$out" | grep -q -- "-14" || { echo "$out"; test_fail "missing -14"; return 1; }
 
   test_pass hosthandle_boundary_suite_vm
 }
 
 run_test hosthandle_boundary_suite_vm test_hosthandle_boundary_suite_vm
-

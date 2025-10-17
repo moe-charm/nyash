@@ -84,10 +84,44 @@ impl HostSlotRoutes {
     #[inline]
     pub fn pick(self, method: &str, arity: usize) -> Option<HostSlotRoute> {
         let group_on = self.group_enabled();
-        self.routes
-            .iter()
-            .copied()
-            .find(|route| route.matches(method, arity) && route.enabled(group_on))
+        let debug = crate::runtime::env_gate_box::debug_map_routes();
+        if debug {
+            eprintln!(
+                "[router:host-slot] method={} arity={} group_on={}",
+                method, arity, group_on
+            );
+        }
+        let mut selected = None;
+        for route in self.routes.iter().copied() {
+            if !route.matches(method, arity) {
+                continue;
+            }
+            let enabled = route.enabled(group_on);
+            if debug {
+                let primary = route.names.first().copied().unwrap_or("<unknown>");
+                eprintln!(
+                    "[router:host-slot] candidate={} enabled={} slot={} arity={} gate_keys={:?}",
+                    primary, enabled, route.slot, route.arity, route.gate.keys
+                );
+            }
+            if enabled {
+                selected = Some(route);
+                break;
+            }
+        }
+        if debug {
+            match selected {
+                Some(route) => {
+                    let primary = route.names.first().copied().unwrap_or("<unknown>");
+                    eprintln!(
+                        "[router:host-slot] selected route={} slot={}",
+                        primary, route.slot
+                    );
+                }
+                None => eprintln!("[router:host-slot] no route selected"),
+            }
+        }
+        selected
     }
 }
 

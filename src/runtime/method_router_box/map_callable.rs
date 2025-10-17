@@ -5,6 +5,7 @@
 
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
+use crate::runtime::meta::callable::callable_box::CallableBox;
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 pub struct MapCallableBox;
@@ -74,18 +75,12 @@ impl MapCallableBox {
             }
         };
 
-        #[cfg(feature = "legacy-boxes")]
         let callable = callable_arc
             .as_ref()
             .as_any()
-            .downcast_ref::<crate::boxes::callable::CallableBox>()
+            .downcast_ref::<CallableBox>()
             .ok_or_else(|| VMError::InvalidInstruction("Map.call: value is not CallableBox".into()))?;
-        #[cfg(not(feature = "legacy-boxes"))]
-        {
-            return Err(VMError::InvalidInstruction("Map.call: value is not CallableBox (legacy only)".into()));
-        }
 
-        #[cfg(feature = "legacy-boxes")]
         {
             if callable.receiver.is_none() {
                 return Err(VMError::InvalidInstruction(

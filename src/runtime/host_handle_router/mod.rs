@@ -6,11 +6,120 @@
 // Public constants (slots / error codes)
 pub mod consts;
 
+use std::sync::Arc;
+
 use consts::{
-    ARRAY_GET, ARRAY_SET, ARRAY_SIZE, ERR_BAD_ARGS, ERR_BAD_RETURN, ERR_PLUGIN_FAILURE,
-    ERR_UNSUPPORTED, ERR_UNKNOWN_HANDLE, MAP_GET, MAP_HAS, MAP_KEYS, MAP_SET, MAP_SIZE,
-    MAP_VALUES, STRING_LEN,
+    ARRAY_GET, ARRAY_SET, ARRAY_SIZE, ERR_BAD_ARGS, ERR_BAD_RETURN, ERR_UNSUPPORTED,
+    ERR_UNKNOWN_HANDLE, MAP_GET, MAP_HAS, MAP_KEYS, MAP_SET, MAP_SIZE, MAP_VALUES,
+    STRING_LEN,
 };
+
+fn plugin_box_matches<'a>(
+    arc: &'a Arc<dyn crate::box_trait::NyashBox>,
+    expected: &str,
+) -> Option<&'a crate::runtime::plugin_loader_v2::PluginBoxV2> {
+    arc.as_any()
+        .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+        .filter(|pb| pb.box_type == expected)
+}
+
+// Unified helper: 0-argument method (size/len/keys/values)
+fn route_method_0args(
+    handle: u64,
+    box_type: &str,
+    method: &str,
+    _out_ptr: *mut u8,
+    _out_len: *mut usize,
+) -> i32 {
+    let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
+    if let Some(pb) = plugin_box_matches(&arc, box_type) {
+        match crate::runtime::plugin_host_box::invoke_instance_method(box_type, method, pb.inner.instance_id, &[]) {
+            Ok(Some(ret)) => {
+                let vmv = crate::backend::vm::VMValue::from_nyash_box(ret);
+                let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
+                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+            }
+            _ => return ERR_BAD_RETURN,
+        }
+    }
+    ERR_UNSUPPORTED
+}
+
+// Unified helper: 1-argument method (get/has)
+fn route_method_1arg(
+    handle: u64,
+    box_type: &str,
+    method: &str,
+    _args_ptr: *const u8,
+    _args_len: usize,
+    _out_ptr: *mut u8,
+    _out_len: *mut usize,
+) -> i32 {
+    let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
+    if let Some(pb) = plugin_box_matches(&arc, box_type) {
+        let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
+        if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
+            if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
+                let arg_box = vmv.to_nyash_box();
+                match crate::runtime::plugin_host_box::invoke_instance_method(box_type, method, pb.inner.instance_id, &[arg_box]) {
+                    Ok(Some(ret)) => {
+                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
+                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+                    }
+                    Ok(None) => {
+                        let vmv_out = crate::backend::vm::VMValue::Void;
+                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
+                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+                    }
+                    Err(_) => return ERR_BAD_RETURN,
+                }
+            }
+        }
+        return ERR_BAD_ARGS;
+    }
+    ERR_UNSUPPORTED
+}
+
+// Unified helper: 2-argument method (set)
+fn route_method_2args(
+    handle: u64,
+    box_type: &str,
+    method: &str,
+    _args_ptr: *const u8,
+    _args_len: usize,
+    _out_ptr: *mut u8,
+    _out_len: *mut usize,
+) -> i32 {
+    let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
+    if let Some(pb) = plugin_box_matches(&arc, box_type) {
+        let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
+        if let (Some((tag0, _sz0, payload0)), Some((tag1, _sz1, payload1))) = (
+            crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 0),
+            crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 1),
+        ) {
+            if let (Some(v0), Some(v1)) = (
+                crate::runtime::host_api::vmvalue_from_tlv(tag0, payload0),
+                crate::runtime::host_api::vmvalue_from_tlv(tag1, payload1),
+            ) {
+                let argv: Vec<Box<dyn crate::box_trait::NyashBox>> = vec![
+                    v0.to_nyash_box(),
+                    v1.to_nyash_box(),
+                ];
+                match crate::runtime::plugin_host_box::invoke_instance_method(box_type, method, pb.inner.instance_id, &argv) {
+                    Ok(_) => {
+                        let vmv = crate::backend::vm::VMValue::Void;
+                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
+                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
+                    }
+                    _ => return ERR_BAD_RETURN,
+                }
+            }
+        }
+        return ERR_BAD_ARGS;
+    }
+    ERR_UNSUPPORTED
+}
 
 // Phase‑in plan:
 // - Start by handling a single, harmless slot (Array.len = 102) to validate wiring.
@@ -35,294 +144,39 @@ pub fn route_slot(
     let selector = _selector_id;
 
     if selector == ARRAY_SIZE {
-        // Resolve HostHandle → Arc<dyn NyashBox>
-        let Some(arc) = crate::runtime::host_handles::get(handle) else {
-            return ERR_UNKNOWN_HANDLE; // unknown handle
-        };
-        // Downcast to ArrayBox by type name to avoid importing concrete type in signature
-        if arc.type_name() == "ArrayBox" {
-            // Safe: len() is pure and does not mutate; encode as TLV Integer
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                let n = arr.len() as i64;
-                let vmv = crate::backend::vm::VMValue::Integer(n);
-                let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-            }
-        }
-        // Known selector but unsupported receiver type
-        return ERR_UNSUPPORTED;
+        return route_method_0args(handle, "ArrayBox", "size", _out_ptr, _out_len);
     }
 
     if selector == ARRAY_GET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "ArrayBox" {
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
-                    if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
-                        let idx = vmv.as_integer().unwrap_or(0);
-                        let res = arr.get(Box::new(crate::box_trait::IntegerBox::new(idx)));
-                        let vmv = crate::backend::vm::VMValue::from_nyash_box(res);
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_1arg(handle, "ArrayBox", "get", _args_ptr, _args_len, _out_ptr, _out_len);
     }
 
     if selector == ARRAY_SET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "ArrayBox" {
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let (Some((tag0, _sz0, payload0)), Some((tag1, _sz1, payload1))) = (
-                    crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 0),
-                    crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 1),
-                ) {
-                    if let (Some(v0), Some(v1)) = (
-                        crate::runtime::host_api::vmvalue_from_tlv(tag0, payload0),
-                        crate::runtime::host_api::vmvalue_from_tlv(tag1, payload1),
-                    ) {
-                        let idx = v0.as_integer().unwrap_or(0);
-                        let _ = arr.set(Box::new(crate::box_trait::IntegerBox::new(idx)), v1.to_nyash_box());
-                        let vmv = crate::backend::vm::VMValue::Void;
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_2args(handle, "ArrayBox", "set", _args_ptr, _args_len, _out_ptr, _out_len);
     }
 
     if selector == MAP_SIZE {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else {
-            return ERR_UNKNOWN_HANDLE;
-        };
-        if arc.type_name() == "MapBox" {
-            // Plugin path (avoid legacy dependency when plugins are enabled)
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                if let Ok(Some(ret)) = crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "size", pb.inner.instance_id, &[]) {
-                    let vmv = crate::backend::vm::VMValue::from_nyash_box(ret);
-                    let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                    return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                }
-                return ERR_BAD_RETURN;
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                // MapBox.size() returns IntegerBox inside Box<dyn NyashBox>
-                let n_box = m.size();
-                if let Some(int) = n_box.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                    let vmv = crate::backend::vm::VMValue::Integer(int.value);
-                    let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                    return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                }
-                // Fallback: compute via keys().size() if downcast fails (defensive)
-                let ks = m.keys();
-                #[cfg(feature = "legacy-boxes")]
-                if let Some(arr) = ks.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                    let vmv = crate::backend::vm::VMValue::Integer(arr.len() as i64);
-                    let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                    return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                }
-                return ERR_PLUGIN_FAILURE;
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_0args(handle, "MapBox", "size", _out_ptr, _out_len);
     }
 
     if selector == MAP_HAS {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "MapBox" {
-            // Plugin path
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
-                    if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
-                        let key_box = vmv.to_nyash_box();
-                        if let Ok(Some(ret)) = crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "has", pb.inner.instance_id, &[key_box]) {
-                            if let Some(bb) = ret.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-                                let vmv = crate::backend::vm::VMValue::Bool(bb.value);
-                                let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                            }
-                            return ERR_BAD_RETURN;
-                        }
-                        return ERR_BAD_RETURN;
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                // Decode first TLV arg as VMValue, convert to Box for MapBox.has
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let Some((_tag, _sz, _payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
-                    if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(_tag, _payload) {
-                        let key_box = vmv.to_nyash_box();
-                        let res_box = m.has(key_box);
-                        if let Some(bb) = res_box.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-                            let vmv = crate::backend::vm::VMValue::Bool(bb.value);
-                            let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                            return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                        }
-                        return ERR_BAD_RETURN; // unexpected return type
-                    }
-                }
-                return ERR_BAD_ARGS; // arg decode failed
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_1arg(handle, "MapBox", "has", _args_ptr, _args_len, _out_ptr, _out_len);
     }
 
     if selector == MAP_GET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "MapBox" {
-            // Plugin path
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
-                    if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
-                        let key_box = vmv.to_nyash_box();
-                        match crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "get", pb.inner.instance_id, &[key_box]) {
-                            Ok(Some(ret)) => {
-                                let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
-                                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                            }
-                            Ok(None) => {
-                                // missing -> null (encode Void)
-                                let vmv_out = crate::backend::vm::VMValue::Void;
-                                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                            }
-                            Err(_) => return ERR_BAD_RETURN,
-                        }
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                // Decode first TLV arg as VMValue, convert to Box for MapBox.get
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(args) {
-                    if let Some(vmv) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
-                        let key_box = vmv.to_nyash_box();
-                        let res_box = m.get(key_box);
-                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(res_box);
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                }
-                return ERR_BAD_ARGS; // arg decode failed
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_1arg(handle, "MapBox", "get", _args_ptr, _args_len, _out_ptr, _out_len);
     }
 
     if selector == MAP_SET {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "MapBox" {
-            // Plugin path
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                if let (Some((tag0, _sz0, payload0)), Some((tag1, _sz1, payload1))) = (
-                    crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 0),
-                    crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 1),
-                ) {
-                    if let (Some(v0), Some(v1)) = (
-                        crate::runtime::host_api::vmvalue_from_tlv(tag0, payload0),
-                        crate::runtime::host_api::vmvalue_from_tlv(tag1, payload1),
-                    ) {
-                        let _ = crate::runtime::plugin_host_box::invoke_instance_method(
-                            "MapBox", "set", pb.inner.instance_id, &[v0.to_nyash_box(), v1.to_nyash_box()]);
-                        let vmv = crate::backend::vm::VMValue::Void;
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                let args = unsafe { crate::runtime::host_api::slice_from_raw(_args_ptr, _args_len) };
-                // Expect 2 args (key, value)
-                if let Some((tag0, _sz0, payload0)) = crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 0) {
-                    if let Some((tag1, _sz1, payload1)) = crate::runtime::plugin_ffi_common::decode::tlv_nth(args, 1) {
-                        if let (Some(v0), Some(v1)) = (
-                            crate::runtime::host_api::vmvalue_from_tlv(tag0, payload0),
-                            crate::runtime::host_api::vmvalue_from_tlv(tag1, payload1),
-                        ) {
-                            let res = m.set(v0.to_nyash_box(), v1.to_nyash_box());
-                            let vmv = crate::backend::vm::VMValue::from_nyash_box(res);
-                            let buf = crate::runtime::host_api::tlv_encode_one(&vmv);
-                            return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                        }
-                    }
-                }
-                return ERR_BAD_ARGS;
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_2args(handle, "MapBox", "set", _args_ptr, _args_len, _out_ptr, _out_len);
     }
 
     if selector == MAP_KEYS {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "MapBox" {
-            // Plugin path
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                match crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "keys", pb.inner.instance_id, &[]) {
-                    Ok(Some(ret)) => {
-                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                    _ => return ERR_BAD_RETURN,
-                }
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                let keys_box = m.keys();
-                let vmv_out = crate::backend::vm::VMValue::from_nyash_box(keys_box);
-                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_0args(handle, "MapBox", "keys", _out_ptr, _out_len);
     }
 
     if selector == MAP_VALUES {
-        let Some(arc) = crate::runtime::host_handles::get(handle) else { return ERR_UNKNOWN_HANDLE; };
-        if arc.type_name() == "MapBox" {
-            // Plugin path
-            if let Some(pb) = arc.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                match crate::runtime::plugin_host_box::invoke_instance_method("MapBox", "values", pb.inner.instance_id, &[]) {
-                    Ok(Some(ret)) => {
-                        let vmv_out = crate::backend::vm::VMValue::from_nyash_box(ret);
-                        let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                        return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-                    }
-                    _ => return ERR_BAD_RETURN,
-                }
-            }
-            #[cfg(feature = "legacy-boxes")]
-            if let Some(m) = arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                let values_box = m.values();
-                let vmv_out = crate::backend::vm::VMValue::from_nyash_box(values_box);
-                let buf = crate::runtime::host_api::tlv_encode_one(&vmv_out);
-                return crate::runtime::host_api::encode_out(_out_ptr, _out_len, &buf);
-            }
-        }
-        return ERR_UNSUPPORTED;
+        return route_method_0args(handle, "MapBox", "values", _out_ptr, _out_len);
     }
 
     if selector == STRING_LEN {

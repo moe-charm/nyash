@@ -1,3 +1,4 @@
+use nyash_rust::mir::definitions::call_unified::TypeCertainty;
 use nyash_rust::mir::{BinaryOp, ConstValue, Effect, EffectMask, MirInstruction, ValueId};
 
 #[test]
@@ -57,35 +58,47 @@ fn test_ref_new_instruction() {
 }
 
 #[test]
-fn test_ref_get_instruction() {
+fn test_call_method_callee_instruction() {
+    // RefGet は撤退済み。代わりに Call(callee=Method) 形での used/effects を確認する。
     let dst = ValueId::new(0);
-    let reference = ValueId::new(1);
-    let field = "name".to_string();
-    let inst = MirInstruction::RefGet {
-        dst,
-        reference,
-        field,
+    let arg = ValueId::new(2);
+    let inst = MirInstruction::Call {
+        dst: Some(dst),
+        func: ValueId::new(0),
+        callee: Some(nyash_rust::mir::Callee::Method {
+            box_name: "ArrayBox".into(),
+            method: "size".into(),
+            receiver: Some(ValueId::new(1)),
+            certainty: TypeCertainty::Known,
+        }),
+        args: vec![arg],
+        effects: EffectMask::PURE,
     };
     assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![reference]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst.effects().contains(Effect::ReadHeap));
+    let used = inst.used_values();
+    assert!(used.contains(&arg), "used should include arg");
+    assert!(
+        used.iter().any(|v| *v == ValueId::new(1)),
+        "used should include receiver"
+    );
+    assert!(inst.effects().is_pure());
 }
 
 #[test]
-fn test_ref_set_instruction() {
-    let reference = ValueId::new(0);
-    let field = "value".to_string();
-    let value = ValueId::new(1);
-    let inst = MirInstruction::RefSet {
-        reference,
-        field,
-        value,
+fn test_call_global_extern_like_instruction() {
+    // RefSet は撤退済み。Call(callee=Global) の used/effects を確認する。
+    let arg = ValueId::new(1);
+    let inst = MirInstruction::Call {
+        dst: None,
+        func: ValueId::new(0),
+        callee: Some(nyash_rust::mir::Callee::Global("ConsoleBox.log/1".into())),
+        args: vec![arg],
+        effects: EffectMask::IO,
     };
     assert_eq!(inst.dst_value(), None);
-    assert_eq!(inst.used_values(), vec![reference, value]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst.effects().contains(Effect::WriteHeap));
+    let used = inst.used_values();
+    assert!(used.contains(&arg), "used should include arg");
+    assert_eq!(inst.effects(), EffectMask::IO);
 }
 
 #[test]
@@ -126,28 +139,32 @@ fn test_barrier_instructions() {
 }
 
 #[test]
-fn test_extern_call_instruction() {
+fn test_extern_call_instruction_replaced_by_callee_extern() {
     let dst = ValueId::new(0);
     let arg1 = ValueId::new(1);
     let arg2 = ValueId::new(2);
-    let inst = MirInstruction::ExternCall {
+    let inst = MirInstruction::Call {
         dst: Some(dst),
-        iface_name: "env.console".to_string(),
-        method_name: "log".to_string(),
+        func: ValueId::new(0),
+        callee: Some(nyash_rust::mir::Callee::Extern("env.console.log".into())),
         args: vec![arg1, arg2],
         effects: EffectMask::IO,
     };
     assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![arg1, arg2]);
+    let used = inst.used_values();
+    assert!(used.iter().any(|v| *v == arg1) && used.iter().any(|v| *v == arg2));
     assert_eq!(inst.effects(), EffectMask::IO);
 
-    let void_inst = MirInstruction::ExternCall {
+    let void_inst = MirInstruction::Call {
         dst: None,
-        iface_name: "env.canvas".to_string(),
-        method_name: "fillRect".to_string(),
+        func: ValueId::new(0),
+        callee: Some(nyash_rust::mir::Callee::Extern(
+            "env.canvas.fillRect".into(),
+        )),
         args: vec![arg1],
         effects: EffectMask::IO,
     };
     assert_eq!(void_inst.dst_value(), None);
-    assert_eq!(void_inst.used_values(), vec![arg1]);
+    let used2 = void_inst.used_values();
+    assert!(used2.contains(&arg1));
 }

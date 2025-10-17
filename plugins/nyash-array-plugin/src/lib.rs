@@ -52,6 +52,15 @@ struct ArrayInstance {
 // Instance storage (replaces 3 lines of boilerplate)
 define_instance_storage!(ArrayInstance);
 
+// Debug helper (unifies NYASH_DEBUG_PLUGIN / HAKO_DEBUG_PLUGIN checks)
+fn debug_plugin() -> bool {
+    std::env::var("NYASH_DEBUG_PLUGIN")
+        .or_else(|_| std::env::var("HAKO_DEBUG_PLUGIN"))
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
 // legacy v1 entry points removed
 
 // ===== TypeBox FFI (resolve/invoke_id) =====
@@ -95,7 +104,7 @@ extern "C" fn array_invoke_id(
     unsafe {
         match method_id {
             METHOD_SLICE => {
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!(
                         "[array-plugin] SLICE enter instance_id={} args_len={}",
                         instance_id, args_len
@@ -124,7 +133,7 @@ extern "C" fn array_invoke_id(
                         i0 = i1;
                     }
 
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    if debug_plugin() {
                         eprintln!(
                             "[array-plugin] SLICE i0={} i1={} len={} (start={},end={})",
                             i0, i1, len, start, end
@@ -135,7 +144,7 @@ extern "C" fn array_invoke_id(
                 }) {
                     Ok(data) => data,
                     Err(e) => {
-                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        if debug_plugin() {
                             eprintln!("[array-plugin] SLICE with_instance failed: {}", e);
                         }
                         return e;
@@ -148,13 +157,13 @@ extern "C" fn array_invoke_id(
                     return e;
                 }
 
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!("[array-plugin] SLICE created plugin instance={}", new_id);
                 }
                 return write_tlv_handle(TYPE_ID_ARRAY, new_id, result, result_len);
             }
             METHOD_BIRTH => {
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!("[array-plugin] BIRTH enter");
                 }
                 // Create new ArrayBox instance and return TLV(handle: tag=8, payload=type_id(4)+instance_id(4))
@@ -164,13 +173,13 @@ extern "C" fn array_invoke_id(
 
                 let id = allocate_instance_id();
                 if let Err(e) = store_instance(id, ArrayInstance { data: Vec::new() }) {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    if debug_plugin() {
                         eprintln!("[array-plugin] BIRTH store_instance failed");
                     }
                     return e;
                 }
 
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                if debug_plugin() {
                     eprintln!(
                         "[array-plugin] BIRTH writing handle len ptr={:?} len_before={}",
                         result_len,
@@ -185,7 +194,7 @@ extern "C" fn array_invoke_id(
                 write_tlv_handle(TYPE_ID_ARRAY, id, result, result_len)
             }
             METHOD_LENGTH => {
-                let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+                let debug = debug_plugin();
                 if debug {
                     unsafe {
                         if !result_len.is_null() {
@@ -235,7 +244,7 @@ extern "C" fn array_invoke_id(
                         return NYB_E_INVALID_ARGS;
                     }
                     let code = write_tlv_value(&inst.data[i], result, result_len);
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    if debug_plugin() {
                         let kind = match &inst.data[i] {
                             ArrayValue::I64(_) => "I64",
                             ArrayValue::Str(_) => "Str",
@@ -268,10 +277,21 @@ extern "C" fn array_invoke_id(
                 };
 
                 match with_instance_mut!(instance_id, |inst: &mut ArrayInstance| {
+                    let debug = debug_plugin();
+                    if debug {
+                        eprintln!(
+                            "[array-plugin] SET idx={} len_before={}",
+                            idx,
+                            inst.data.len()
+                        );
+                    }
                     match hako_core_array::classify_set_index(inst.data.len(), idx) {
                         hako_core_array::SetIndex::Replace(i) => inst.data[i] = val,
                         hako_core_array::SetIndex::Append => inst.data.push(val),
                         hako_core_array::SetIndex::Oob => return NYB_E_INVALID_ARGS,
+                    }
+                    if debug {
+                        eprintln!("[array-plugin] SET len_after={}", inst.data.len());
                     }
                     write_tlv_i64(inst.data.len() as i64, result, result_len)
                 }) {
@@ -311,7 +331,7 @@ pub extern "C" fn nyash_plugin_invoke(
     if type_id != TYPE_ID_ARRAY {
         return NYB_E_INVALID_TYPE;
     }
-    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+    if debug_plugin() {
         eprintln!(
             "[array-plugin] nyash_plugin_invoke dispatch type={} method={} instance={}",
             type_id, method_id, instance_id

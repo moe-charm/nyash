@@ -11,8 +11,8 @@ preflight_plugins || exit 2
 TEST_main() {
   local program=$'using "Foo.Bar" as Baz\nstatic box Main { main(){ return 0 } }'
   local out
-  out=$(run_nyash_vm -c "$program" 2>&1 | filter_noise)
-  echo "$out" | grep -E "^❌ unresolved using 'Foo\\.Bar'|^❌ using:|^❌ Pipeline error: \`using\`|^\`using\` resolution error:" >/dev/null || { echo "$out"; return 1; }
+  out=$(SMOKES_STRICT_NOISE=0 run_nyash_vm -c "$program" 2>&1 | filter_noise)
+  echo "$out" | grep -E "^❌ unresolved using 'Foo\\.Bar'|^❌ using:|^❌ Pipeline error: \`using\`|^\`using\` resolution error:|^SMOKES_ERR: using_resolution" >/dev/null || { echo "$out"; return 1; }
   return 0
 }
 

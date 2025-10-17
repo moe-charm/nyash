@@ -1,4 +1,4 @@
-#[cfg(all(test, not(feature = "jit-direct-only")))]
+#[cfg(all(test, feature = "plugins", not(feature = "jit-direct-only")))]
 mod tests {
     use crate::box_trait::{IntegerBox, NyashBox, StringBox};
     #[cfg(feature = "legacy-boxes")]
@@ -286,13 +286,7 @@ mod tests {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
 
-        // Prepare bytes ["hi"] as Array<uint8>
-        let bytes_array = {
-            let arr = ArrayBox::new();
-            let _ = arr.push(Box::new(IntegerBox::new(104))); // 'h'
-            let _ = arr.push(Box::new(IntegerBox::new(105))); // 'i'
-            Box::new(arr) as Box<dyn NyashBox>
-        };
+        // Prepare bytes ["hi"] is not required for current checks (string path used).
 
         // TLV path
         let _g = EnvGuard::set("NYASH_DISABLE_TYPEBOX", "1");

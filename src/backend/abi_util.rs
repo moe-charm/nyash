@@ -55,7 +55,6 @@ pub fn to_bool_vm(v: &VMValue) -> Result<bool, String> {
             Ok(true)
         }
         VMValue::Float(f) => Ok(*f != 0.0),
-        #[cfg(feature = "legacy-boxes")]
         VMValue::Future(_) => Err("cannot coerce Future to bool".to_string()),
     }
 }
@@ -109,8 +108,7 @@ pub fn to_string_vm(v: &VMValue) -> String {
         VMValue::Bool(b) => b.to_string(),
         VMValue::Void => "null".to_string(),
         VMValue::BoxRef(bx) => bx.to_string_box().value,
-        #[cfg(feature = "legacy-boxes")]
-        VMValue::Future(_) => "<future>".to_string(),
+        VMValue::Future(f) => f.to_string_box().value,
     }
 }
 
@@ -121,7 +119,6 @@ pub fn tag_of_vm(v: &VMValue) -> &'static str {
         VMValue::Float(_) => "Float",
         VMValue::Bool(_) => "Bool",
         VMValue::String(_) => "String",
-        #[cfg(feature = "legacy-boxes")]
         VMValue::Future(_) => "Future",
         VMValue::Void => "Void",
         VMValue::BoxRef(_) => "BoxRef",

@@ -9,6 +9,8 @@ use std::sync::{Arc, RwLock};
 
 use crate::bid::{BidError, BidResult};
 use crate::config::nyash_toml_v2::NyashConfigV2;
+#[cfg(feature = "legacy-boxes")]
+use crate::runtime::meta::future::future_box::FutureBox;
 use crate::runtime::plugin_loader_v2::PluginLoaderV2;
 
 /// Opaque library handle (by name for now)
@@ -238,17 +240,54 @@ impl PluginHost {
     ) -> BidResult<Option<Box<dyn crate::box_trait::NyashBox>>> {
         thread_local! { static HOST_REENTRANT: Cell<bool> = Cell::new(false); }
         let recursed = HOST_REENTRANT.with(|f| f.get());
-        if recursed {
+        let in_slot = crate::runtime::host_api::in_host_slot();
+
+        // 🔥 Log 1: Function entry
+        let debug = crate::runtime::env_gate_box::debug_plugin();
+        if debug {
+            eprintln!(
+                "[plugin-unified] invoke_instance_method ENTER box_type={} method={} instance_id={} recursed={}",
+                box_type, method_name, instance_id, recursed
+            );
+        }
+
+        if recursed && !in_slot {
+            // 🔥 Log 2: Reentrant guard triggered
+            if debug {
+                eprintln!(
+                    "[plugin-unified] REENTRANT GUARD BLOCKED! box_type={} method={} instance_id={}",
+                    box_type, method_name, instance_id
+                );
+            }
             // Break potential host<->loader recursion: return None (void) to keep VM running
             return Ok(None);
         }
         let out = HOST_REENTRANT.with(|f| {
+            let prev = f.get();
             f.set(true);
             let res = {
+                // 🔥 Log 3: Delegating to loader
+                if debug {
+                    eprintln!(
+                        "[plugin-unified] delegating to loader box_type={} method={} instance_id={}",
+                        box_type, method_name, instance_id
+                    );
+                }
                 let l = self.loader.read().unwrap();
                 l.invoke_instance_method(box_type, method_name, instance_id, args)
             };
-            f.set(false);
+            f.set(prev);
+
+            // 🔥 Log 4: Result
+            if debug {
+                eprintln!(
+                    "[plugin-unified] result box_type={} method={} ok={} some={}",
+                    box_type, method_name,
+                    res.is_ok(),
+                    res.as_ref().ok().and_then(|o| o.as_ref()).is_some()
+                );
+            }
+
             res
         });
         out
@@ -273,7 +312,7 @@ impl PluginHost {
             if let Some(arg0) = args.get(0) {
                 if let Some(fut) = arg0
                     .as_any()
-                    .downcast_ref::<crate::boxes::future::FutureBox>()
+                    .downcast_ref::<FutureBox>()
                 {
                     let max_ms: u64 = crate::config::env::await_max_ms();
                     let start = std::time::Instant::now();

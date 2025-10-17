@@ -40,7 +40,8 @@ static box Main {
     cases.push("[3]")        // -> null (out of range)
 
     local i = 0
-    loop(i < cases.size()) {
+    loop(true) {
+      if ! (i < cases.size()) { break }
       local json_text = cases.get(i)
       local path = cases.get(i + 1)
       if DEBUG == 1 { print("[dbg] path=" + path) }
@@ -75,7 +76,8 @@ static box Main {
     if ! json_text.is("String") { json_text = "" + json_text }
     local cur_text = json_text
     local i = 0
-    loop(i < path.size()) {
+    loop(true) {
+      if ! (i < path.size()) { break }
       local ch = path.substring(i, i + 1)
       if DEBUG == 1 { print("[dbg] step ch=" + ch) }
       if ch == "." {
@@ -83,7 +85,8 @@ static box Main {
         i = i + 1
         if DEBUG == 1 { print("[dbg] after dot i=" + i + ", ch1=" + path.substring(i, i + 1)) }
         local start = i
-        loop(i < path.size()) {
+        loop(true) {
+          if ! (i < path.size()) { break }
           local c = path.substring(i, i + 1)
           if DEBUG == 1 { print("[dbg] c=" + c) }
           if this.is_alnum(c) || c == "_" { i = i + 1 } else { break }
@@ -102,7 +105,10 @@ static box Main {
           i = i + 1
           if DEBUG == 1 { print("[dbg] after [ i=" + i + ", ch1=" + path.substring(i, i + 1)) }
           local start = i
-          loop(i < path.size() && this.is_digit(path.substring(i, i + 1))) { i = i + 1 }
+          loop(true) {
+            if ! (i < path.size() && this.is_digit(path.substring(i, i + 1))) { break }
+            i = i + 1
+          }
           local idx_str = path.substring(start, i)
           if DEBUG == 1 { print("[dbg] idx_str=" + idx_str + ", next=" + path.substring(i, i + 1)) }
           if i >= path.size() || path.substring(i, i + 1) != "]" { return null }
@@ -129,7 +135,8 @@ static box Main {
     // membership without using indexOf (avoid VoidBox.* risks)
     local letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     local i = 0
-    loop(i < letters.size()) {
+    loop(true) {
+      if ! (i < letters.size()) { break }
       if letters.substring(i, i+1) == ch { return true }
       i = i + 1
     }
@@ -139,15 +146,16 @@ static box Main {
     return this.is_alpha(ch) || this.is_digit(ch)
   }
   parse_int(s) {
-    local i = 0
+    local text = s
     local neg = false
-    if s.size() > 0 && s.substring(0,1) == "-" {
+    if text.size() > 0 && text.substring(0,1) == "-" {
       neg = true
-      i = 1
+      text = text.substring(1, text.size())
     }
     local acc = 0
-    loop(i < s.size()) {
-      local ch = s.substring(i, i + 1)
+    loop(true) {
+      if text.size() == 0 { break }
+      local ch = text.substring(0, 1)
       if ! this.is_digit(ch) { break }
       // ch to digit
       // 0..9
@@ -161,39 +169,32 @@ static box Main {
       else { if ch == "7" { acc = acc * 10 + 7 }
       else { if ch == "8" { acc = acc * 10 + 8 }
       else { if ch == "9" { acc = acc * 10 + 9 } }}}}}}}}}
-      i = i + 1
+      text = text.substring(1, text.size())
     }
     if neg { return 0 - acc } else { return acc }
   }
   // --- Minimal JSON slicing helpers (object/array) ---
   // Span utilities: represent [i,j) as "i:j" string to avoid method calls
-  span_pack(i, j) { return this._int_to_str(i) + ":" + this._int_to_str(j) }
+  span_pack(i, j) {
+    local span = new ArrayBox()
+    span.push(i)
+    span.push(j)
+    return span
+  }
   span_unpack_i(sp) {
-    // find ':' without using indexOf
-    local i = 0
-    local n = sp.size()
-    loop(i < n) {
-      if sp.substring(i, i+1) == ":" { break }
-      i = i + 1
-    }
-    if i >= n { return 0 }
-    return this.parse_int(sp.substring(0, i))
+    if sp == null { return 0 }
+    return sp.get(0)
   }
   span_unpack_j(sp) {
-    local i = 0
-    local n = sp.size()
-    loop(i < n) {
-      if sp.substring(i, i+1) == ":" { break }
-      i = i + 1
-    }
-    if i >= n { return 0 }
-    return this.parse_int(sp.substring(i + 1, n))
+    if sp == null { return 0 }
+    return sp.get(1)
   }
   // Find a key's value span within an object JSON slice [start,end)
   object_get_span(s, start, end, key) {
     local i = start
     if i < end && s.substring(i, i+1) == "{" { i = i + 1 } else { return null }
-    loop(i < end) {
+    loop(true) {
+      if ! (i < end) { break }
       i = this.skip_ws(s, i, end)
       if i >= end { return null }
       if s.substring(i, i+1) == "}" { return null }
@@ -241,7 +242,8 @@ static box Main {
     }
     local cur = 0
     local DEBUG = 0
-    loop(i < end) {
+    loop(true) {
+      if ! (i < end) { break }
       i = this.skip_ws(s, i, end)
       if i >= end { return null }
       if s.substring(i, i+1) == "]" { return null }
@@ -292,7 +294,8 @@ static box Main {
     }
     // number/bool/null: read until comma or closing
     local j = i
-    loop(j < end) {
+    loop(true) {
+      if ! (j < end) { break }
       local c = s.substring(j, j+1)
       if c == "," || c == "}" || c == "]" || this.is_ws_char(c) { break }
       j = j + 1
@@ -303,7 +306,8 @@ static box Main {
   // Find end index (exclusive) of a JSON string literal starting at i ('"')
   read_string_end(s, i, end) {
     local j = i + 1
-    loop(j < end) {
+    loop(true) {
+      if ! (j < end) { break }
       local c = s.substring(j, j+1)
       if c == "\\" {
         j = j + 2
@@ -319,7 +323,8 @@ static box Main {
   matching_brace(s, i, end, open, close) {
     local depth = 0
     local j = i
-    loop(j < end) {
+    loop(true) {
+      if ! (j < end) { break }
       local c = s.substring(j, j+1)
       if c == "\"" {
         j = this.read_string_end(s, j, end)
@@ -342,7 +347,10 @@ static box Main {
   // Whitespace utilities
   skip_ws(s, i, end) {
     local j = i
-    loop(j < end && this.is_ws_char(s.substring(j, j+1))) { j = j + 1 }
+    loop(true) {
+      if ! (j < end && this.is_ws_char(s.substring(j, j+1))) { break }
+      j = j + 1
+    }
     return j
   }
   is_ws_char(ch) { return ch == " " || ch == "\t" || ch == "\n" || ch == "\r" }

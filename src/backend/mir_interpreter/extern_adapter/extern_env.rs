@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::backend::vm_types::{VMError, VMValue};
-use crate::box_trait::{IntegerBox, StringBox};
+use crate::box_trait::StringBox;
+#[cfg(feature = "legacy-boxes")]
+use crate::box_trait::IntegerBox;
 
 pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
     // env.local.get(key:String) -> String

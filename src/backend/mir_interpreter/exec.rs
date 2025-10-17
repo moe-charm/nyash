@@ -486,8 +486,7 @@ fn val_preview(v: &super::VMValue) -> String {
         super::VMValue::String(s) => format!("\"{}\"", s),
         super::VMValue::Void => "void".into(),
         super::VMValue::BoxRef(bx) => format!("{}", bx.type_name()),
-        #[cfg(feature = "legacy-boxes")]
-        super::VMValue::Future(_) => "<future>".into(),
+        super::VMValue::Future(f) => f.to_string_box().value,
     }
 }
 

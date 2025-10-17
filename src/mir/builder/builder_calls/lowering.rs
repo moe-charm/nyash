@@ -52,6 +52,10 @@ impl MirBuilder {
                     f.params.push(pid);
                     self.variable_map.insert(p.clone(), pid);
                 }
+                // Phase 2.P0 fix: Reserve parameter registers (v%0-v%N)
+                // Ensure local variables start from v%(N+1) to prevent parameter overwrite
+                let param_count = f.params.len() as u32;
+                self.value_gen.set_start_offset(param_count);
             }
             if let Some(me_id) = me_origin {
                 self.origin_register(me_id, box_name.clone());
@@ -184,6 +188,10 @@ impl MirBuilder {
                     f.params.push(pid);
                     self.variable_map.insert(p.clone(), pid);
                 }
+                // Phase 2.P0 fix: Reserve parameter registers (v%0-v%N)
+                // Ensure local variables start from v%(N+1) to prevent parameter overwrite
+                let param_count = f.params.len() as u32;
+                self.value_gen.set_start_offset(param_count);
             }
             if let (Some(me_id), Some(ref cls)) = (me_origin, static_box_name.as_ref()) {
                 self.origin_register(me_id, cls.to_string());

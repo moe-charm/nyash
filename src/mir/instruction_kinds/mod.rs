@@ -553,15 +553,15 @@ inst_meta! {
 // ---- Call-like (dst/used only; effects fallback in MirInstruction) ----
 #[derive(Debug, Clone)]
 pub enum CallLikeInst {
-    Call { dst: Option<ValueId>, func: ValueId, args: Vec<ValueId> },
+    Call { dst: Option<ValueId>, func: ValueId, args: Vec<ValueId>, callee: Option<crate::mir::definitions::call_unified::Callee> },
     BoxCall { dst: Option<ValueId>, box_val: ValueId, args: Vec<ValueId> },
 }
 
 impl CallLikeInst {
     pub fn from_mir(i: &MirInstruction) -> Option<Self> {
         match i {
-            MirInstruction::Call { dst, func, args, .. } =>
-                Some(CallLikeInst::Call { dst: *dst, func: *func, args: args.clone() }),
+            MirInstruction::Call { dst, func, args, callee, .. } =>
+                Some(CallLikeInst::Call { dst: *dst, func: *func, args: args.clone(), callee: callee.clone() }),
             MirInstruction::BoxCall { dst, box_val, args, .. } =>
                 Some(CallLikeInst::BoxCall { dst: *dst, box_val: *box_val, args: args.clone() }),
             _ => None,
@@ -577,8 +577,22 @@ impl CallLikeInst {
 
     pub fn used(&self) -> Vec<ValueId> {
         match self {
-            CallLikeInst::Call { func, args, .. } => {
-                let mut v = vec![*func]; v.extend(args.iter().copied()); v
+            CallLikeInst::Call { func, args, callee, .. } => {
+                let mut v = vec![*func]; v.extend(args.iter().copied());
+                if let Some(c) = callee {
+                    match c {
+                        crate::mir::definitions::call_unified::Callee::Method { receiver, .. } => {
+                            if let Some(r) = receiver { v.push(*r); }
+                        }
+                        crate::mir::definitions::call_unified::Callee::Closure { me_capture, captures, .. } => {
+                            if let Some(me) = me_capture { v.push(*me); }
+                            for (_n, id) in captures { v.push(*id); }
+                        }
+                        crate::mir::definitions::call_unified::Callee::Value(id) => v.push(*id),
+                        _ => {}
+                    }
+                }
+                v
             }
             CallLikeInst::BoxCall { box_val, args, .. } => {
                 let mut v = vec![*box_val]; v.extend(args.iter().copied()); v

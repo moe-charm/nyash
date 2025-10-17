@@ -32,11 +32,22 @@ use crate::runtime::host_api::nyrt_host_call_slot;
 /// This is the critical function that was being stripped by LTO.
 /// Plugins use this via dlsym() to create arrays.
 #[no_mangle]
-#[cfg(feature = "host-anchors")]
 pub extern "C" fn nyash_array_new_host() -> i64 {
+    let debug = crate::runtime::env_gate_box::debug_plugin();
     // Prefer plugin host to construct ArrayBox to avoid legacy dependency.
-    if let Ok(b) = crate::runtime::plugin_host_box::create_box("ArrayBox", &[]) {
-        return host_handles::to_handle_box(b) as i64;
+    match crate::runtime::plugin_host_box::create_box("ArrayBox", &[]) {
+        Ok(b) => {
+            let handle = host_handles::to_handle_box(b) as i64;
+            if debug {
+                eprintln!("[host-api] nyash_array_new_h (plugin) -> handle={}", handle);
+            }
+            return handle;
+        }
+        Err(e) => {
+            if debug {
+                eprintln!("[host-api] nyash_array_new_h plugin create failed: {:?}", e);
+            }
+        }
     }
     // Fallback (legacy): construct builtin ArrayBox when available.
     #[cfg(feature = "legacy-boxes")]
@@ -49,13 +60,17 @@ pub extern "C" fn nyash_array_new_host() -> i64 {
     }
     // No plugin and no legacy path: return 0 (invalid handle)
     #[cfg(not(feature = "legacy-boxes"))]
-    { 0 }
+    {
+        if debug {
+            eprintln!("[host-api] nyash_array_new_h returning 0 (no fallback available)");
+        }
+        0
+    }
 }
 
 // Provide a stable alias with the legacy symbol name expected by plugins
 // Many plugins link against `nyash_array_new_h`. Keep an alias that forwards
 // to the host-anchored implementation above to satisfy dlsym lookups.
-#[cfg(feature = "host-anchors")]
 #[export_name = "nyash_array_new_h"]
 pub extern "C" fn nyash_array_new_h_alias() -> i64 { nyash_array_new_host() }
 
@@ -69,7 +84,6 @@ pub extern "C" fn nyash_array_new_h_alias() -> i64 { nyash_array_new_host() }
 // so it is always retained and exported (together with -rdynamic).
 #[used]
 #[no_mangle]
-#[cfg(feature = "host-anchors")]
 pub static NYASH_HOST_API_KEEPERS: [extern "C" fn() -> i64; 1] = [nyash_array_new_host];
 
 

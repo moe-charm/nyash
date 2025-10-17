@@ -96,6 +96,7 @@ impl NyashRunner {
         let code_ref: String;
         let prelude_asts: Vec<nyash_rust::ast::ASTNode>;
         let alias_names: std::collections::HashSet<String>;
+        let alias_top_map: std::collections::HashMap<String, Vec<String>>;
 
         if crate::config::env::enable_using() && !quiet_pipe {
             let options = crate::runner::modes::common_util::resolve::UsingResolveOptions {
@@ -110,11 +111,14 @@ impl NyashRunner {
                     code_ref = result.cleaned_code;
                     prelude_asts = result.prelude_asts;
                     alias_names = result.alias_names;
+                    alias_top_map = result.alias_top_names;
 
                     if crate::config::env::resolve_trace() {
                         if !alias_names.is_empty() {
-                            eprintln!("[using/alias] collected: {:?}",
-                                     alias_names.iter().cloned().collect::<Vec<_>>());
+                            eprintln!(
+                                "[using/alias] collected: {:?}",
+                                alias_names.iter().cloned().collect::<Vec<_>>()
+                            );
                         }
                     }
                 }
@@ -127,6 +131,7 @@ impl NyashRunner {
             code_ref = code.clone();
             prelude_asts = Vec::new();
             alias_names = std::collections::HashSet::new();
+            alias_top_map = std::collections::HashMap::new();
         }
 
         // Pre-expand '@name[:T] = expr' sugar at line-head (same as common/llvm/pyvm paths)
@@ -146,6 +151,11 @@ impl NyashRunner {
         let ast = if !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
+        let ast = if !alias_top_map.is_empty() {
+            crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(&ast, &alias_top_map)
+        } else {
+            ast
+        };
         // Optional trace: check presence of raw alias variables before desugar
         if crate::config::env::resolve_trace() && !alias_names.is_empty() {
             fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
@@ -165,9 +175,7 @@ impl NyashRunner {
             if has_alias_var { eprintln!("[using/alias] pre-desugar: alias variable present in AST"); }
         }
         // Alias desugar: transform `Alias.X` to `Alias_X` to match renamed preludes
-        let ast = {
-            crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true)
-        };
+        let ast = crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true);
         if crate::config::env::resolve_trace() && !alias_names.is_empty() {
             fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
                 match n {

@@ -90,7 +90,7 @@ Decisions
 - Day 65: extern_c MVP (Phase 15.76 Week 1)
 
 ### 4.4 Independent Pattern Rediscovery
-**Case Study: Frozen Toolchain**
+**Case Study 1: Frozen Toolchain**
 - Problem: 2 parsers (Rust + Hakorune) = 2x maintenance
 - Solution (intuitive): "Freeze one, use as base"
 - Discovery (post-fact): Rust stage0, Go 1.4, OCaml ocamlc all do this
@@ -100,6 +100,14 @@ Decisions
 > "I just thought, maintaining 2 parsers at once is impossible.
 > So I figured, freeze one and use it as the foundation.
 > Then Claude found out Rust and Go do exactly the same thing!"
+
+**Case Study 2: SSA/PHI Bug Resolution (Day 70)** ⭐ NEW
+- Problem: Type error in loop condition (classical compiler problem)
+- Root Cause (ChatGPT-5): Loop-internal temporary variables PHI-fied
+- Solution: Loop-carried variable filtering (preheader ∩ assigned)
+- Time to Fix: **6 hours** (vs. months in traditional compilers)
+- Evidence: LLVM/Rust/Go faced same problem, took **years** to solve
+- Detailed analysis: See `04_CASE_STUDY_SSA_PHI.md`
 
 ---
 

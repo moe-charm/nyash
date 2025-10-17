@@ -6,6 +6,8 @@ use crate::mir::externs::registry as extreg;
 
 #[path = "extern_adapter/extern_array.rs"]
 mod extern_array;
+#[path = "extern_adapter/collections.rs"]
+mod collections;
 #[path = "extern_adapter/extern_env.rs"]
 mod extern_env;
 #[path = "extern_adapter/extern_file_dev.rs"]

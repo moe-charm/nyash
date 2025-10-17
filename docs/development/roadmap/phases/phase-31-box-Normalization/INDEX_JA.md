@@ -1,12 +1,50 @@
 # Phase‑31 — Box Normalization（Static→Singleton 正規化）
 
-最終更新: 2025‑10‑17（Map.values stage2 fix 反映）
+最終更新: 2025‑10‑19（Map router 回帰テスト + Type ID SSOT + トランポリン撤退振り返り）
 
 ## サマリ
 - ねらい: すべてのメソッド呼び出し形を「me + args」に統一し、static box を型ごとのシングルトンインスタンス（`Type.singleton`）に正規化する。
 - 効果: ルータ分岐削減、receiver 有無によるバグ根絶（今回の ArrayBox(1) 類）、Extern/HostBridge 経路の単純化、AOP/計測の注入点の一元化。
 - 方式: Builder で `Static(Type.method(args)) → Instance(Type.singleton.method(args))` に書換。ルータは常に receiver を渡す。Verifier で逸脱を Fail‑Fast。
-- 導入: フラグ既定OFFで段階導入（A→B→C）。プラグイン ABI はトランポリン自動生成で互換維持。
+- 導入: フラグ既定OFFで段階導入（A→B→C）。プラグイン側で `len`/`length` エイリアスを正規化（トランポリン撤退済み）。
+
+### 今日の更新（P0仕上げ＋P1 部分）
+- host anchors: `nyash_array_new_h` を既定ON（feature gate 撤去）。
+- extern_adapter(Array/Map): `nyrt.array.size` 受領者の HostHandle unwrap／Map.keys/values/size の dev ログ追加。
+- Router 再配線: `PluginBoxV2` の Array/Map スロットを表テーブル前提で正規に通す（builtin/plugin 両経路）。
+- env 読み統一: runtime 配下の直 `std::env::var` を `env_gate_box` に寄せ（進行中）。
+- Router/Adapter 回帰テスト: `map_host_keys_values_return_arrays` / `map_remove_returns_removed_array_len` などを追加し、HostSlot/Plugin 両経路で ArrayBox が返ることを固定。
+- Type ID 単一起点: Router/extern/loader から直 `builtin_type_id("MapBox")` や固定値参照（11/12/13）を排除し、`crate::types::ids::{map,array,string,by_name}` へ統一。rg 監視で再発チェックを継続。
+- Reentrant Guard（host slot 中の再入許可）: Map.values() → Array.set の再入を slot 配下のみ許可し、連鎖を安定化。
+  - 実装: `host_api::nyrt_host_call_slot` 実行中に thread‑local `IN_HOST_SLOT=true` を設定し、`plugin_loader_unified` のガードを `recursed && !in_slot` に変更。
+  - 効果: values→Array.set→Array.size の連鎖が正しく成立。代表スモーク `map_values_array_element_vm` は PASS。
+
+#### Runtime meta 層（Callable/Future）の箱化（追加）
+- ねらい: 言語機能の足場（Callable/Future）をホスト所有の薄い箱として分離し、プラグイン/外部I/Oの逆流を構造で防止。
+- 実装: `src/runtime/meta/{callable,future}/` を新設。README と LAYER_GUARD で責務を明記。
+- 互換: 既存の `runtime::{callable_box,future_box}` re-export は撤去済み。新規・既存ともに `runtime::meta::{callable,future}` を使用。
+- 影響: plugin-only/legacy いずれのビルドでも Callable/Future が安定（router/scheduler への依存のみ）。
+
+#### HostHandle -14 検知（境界テストの安定化・追加）
+- ENV: `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1`（互換 `NYASH_HOSTHANDLE_TEST_RET_MISMATCH=1`）で String.len 経路を -14 として観測。
+- 実装: VM の HostSlot/Extern で rc を stdout に `hosthandle-test rc=-14` として出力（テスト専用）。
+- スモーク: `tools/smokes/v2/profiles/plugins/hosthandle_boundary_suite_vm.sh` は一時ファイルに退避してから `-14` を grep（PIPE 経由の出力欠落を回避）。
+
+#### P1 安定化（今回分）
+- builtin ルータ: ARRAY/MAP の host route 判定を dev‑only ログで観測可能に（`HAKO_DEBUG_HOST_SLOT=1`）。
+- extern_adapter: Array/Map のレガシー分岐を撤去し、HostHandle unwrap をハブ化。`nyrt.array.size`/`nyrt.map.{keys,values,size}` の戻り値を正規化。
+- 回帰テスト追加:
+  - ParameterGuardBox（ENV ON/OFF）。
+  - ループヘッダ PHI 即時挿入（先頭固定・更新 in‑place）。
+  - DCE: Method 受け手／Closure captures の Copy 温存。
+  - Router/Adapter（今回追記）:
+    - `map_host_keys_values_return_arrays` — HostSlot 強制下で keys/values → ArrayBox → len が成立することを固定（ユニット）。
+    - `map_remove_returns_removed_array_len` — remove が削除値（ArrayBox）を返し、直後に len を呼べることを固定（ユニット）。
+
+### 次の一手（B段）— プラグイン互換トランポリン撤退（完了）
+- 旧互換ラッパ（`HAKO_PLUGIN_TRAMPOLINE`）は 2025-10-18 時点で撤去。
+- len/length エイリアスは各プラグイン（ArrayBox/MapBox/StringBox）が直接解決済み。
+- 追加ガードは不要。以降はプラグイン本体と Router テーブルで整合を維持する。
 
 ## スコープ / 非対象
 - 対象
@@ -21,7 +59,7 @@
 - すべての static 呼び出しが MIR 上で `receiver=Type.singleton` に正規化される。
 - ルータは receiver を常に受ける前提で動作し、static/instance の分岐が無い。
 - Verifier が「receiver 欠落」や「static 直呼び」を検出して Fail‑Fast（開発時）。
-- プラグイン ABI はトランポリンで互換維持。既存スモーク（quick→plugins→full）緑。
+- プラグイン ABI は各 Box resolver が直接エイリアスを提供（トランポリンなし）。既存スモーク（quick→plugins→full）緑。
 - HostBridge/Extern の呼び出しは `me + args` 規約に統一。引数正規化（プリミティブ化）で再発無し。
 
 ## 非機能（性能/安定）
@@ -54,11 +92,9 @@
   - static 正規化の `me` は観測不可（反射禁止）…観測を試みるパスを警告/エラー。
 - 影響: `src/mir/verify/*`
 
-### 4) プラグイン ABI 互換（トランポリン）
-- 自動生成方針:
-  - 旧: `extern "C" Foo_canonicalize(json)` → 内部 `Foo::canonicalize(Foo::singleton, json)` 呼び。
-  - 逆方向（必要時）: 新 ABI を旧 ABI に委譲する薄いラッパ。
-- 配置: 生成器は `build.rs` or 専用小モジュール（`tools/` 発）で最初は静的表を元に作成。
+### 4) プラグイン ABI 互換（直接 alias）
+- len/length などの互換は各プラグインの `resolve` 実装で提供。
+- 追加トランポリンや自動生成スクリプトは不要。
 
 ### 5) HostBridge/Extern（橋渡しの一元化）
 - 規約: `Extern(iface.method)` のハンドラは常に `me + args` 形に揃える（必要なら内部で `singleton` を補う）。
@@ -85,20 +121,17 @@
   - Builder 正規化（static→singleton）
   - ルータ分岐の掃除（receiver 常時）
   - Verifier 追加（開発時のみ Fail）
-  - トランポリン生成（最小箇所）
+  - プラグイン resolver の alias 対応を確認
 - スモーク
   - static/instance 同名メソッドの一致
   - HostBridge 経路（extern）での等価性
 - 成果: quick 緑 + plugins 代表 PASS
 
 ### Phase B（互換・計測）
-- 旧 ABI 域のトランポリンを網羅
-- ベンチ/サイズ/ビルド時間の観測（リグレッション無し）
-- full プロファイル PASS（WARN 非致命）
+- （完了）プラグインが直接 alias を提供することを確認。追加トランポリンは不要。
 
 ### Phase C（既定ON 検討）
-- CI/ドキュメントの既定を新規約に統一
-- 旧 ABI の非推奨化（1 リリース告知→削除計画）
+- （完了）CI/Docs は新規約に統一済み。旧 `HAKO_PLUGIN_TRAMPOLINE` は撤退済み。
 
 ---
 
@@ -113,7 +146,6 @@
   - `src/mir/verify/*`（新規/既存拡張）
 - プラグイン/Extern
   - `src/backend/mir_interpreter/handlers/calls/legacy/extern_handler.rs`（規約コメント追加・整合）
-  - 生成: `tools/` or `build.rs`（トランポリン）
 
 ---
 
@@ -127,6 +159,10 @@
 - スモーク
   - quick→plugins→full の差分比較（代表）
   - selfhost 側の静的 API（Hako）
+  - meta 層の代表確認（plugins プロファイル）:
+    - `tools/smokes/v2/profiles/plugins/callable_async_plugin_vm.sh`（Future 表示安定）
+    - `tools/smokes/v2/profiles/plugins/plugin_map_len_vm.sh`（len エイリアス整合）
+    - `tools/smokes/v2/profiles/plugins/set_bad_arity_vm.sh`（arity ガード Fail‑Fast）
 - 受け入れ基準
   - 既存スモーク緑 + 新規スモーク（static/instance 等価）緑
   - LLVM/VM 出力差異がゼロ/許容範囲
@@ -134,13 +170,12 @@
 ---
 
 ## リスクと対策
-- 互換性リスク（プラグイン）: トランポリンで遮断。段階導入。
+- 互換性リスク（プラグイン）: resolver alias を Fail-Fast 方針で維持。段階導入。
 - 反射の観測: LAYER_GUARD と Verifier。ドキュメントで未定義化を宣言。
 - 性能劣化: ベンチで観測し、必要ならホットパスのみ旧 ABI 直呼びエントリを併存。
 
 ## ロールバック
 - `HAKO_STATIC_AS_SINGLETON=0` で旧挙動へ即時復帰。
-- 生成トランポリンは残しても害無し（削除は安定後）。
 
 ---
 
@@ -148,19 +183,13 @@
 1. Builder に static→singleton 正規化を実装（最小: String/Array/Map 代表）
 2. Router の receiver 常時渡しを再点検（不要分岐の撤去）
 3. Verifier 追加（ModuleFunction 直呼び/receiver 欠落の Fail）
-4. トランポリン生成の雛形（最小 1 箇所）
-5. スモーク追加（static/instance 等価、extern 経路）
-6. Docs 反映（ガイド/リファレンス/ENV 記載）
+4. スモーク追加（static/instance 等価、extern 経路）
+5. Docs 反映（ガイド/リファレンス/ENV 記載）
 
-### Known issues（2025‑10‑17 時点）
-- MapBox.remove が戻り値 `Some(value)` を返さないケースが残っている（Stage‑2 values は復旧済み）。
-  - 対応方針: extern adapter で remove の戻り値を HostHandle 化し、EmitGuard 経路の素材化を統一。
-- me 注入の誤適用により plugin ModuleFunction へ影響する懸念。
-  - 対処: `method_index.static_signature()` に該当する静的シグネチャのみ `me` 合成を許可（Builder/VM 双方でガード）。
-- FileBox 系の `use of undefined value` は引数素材化の漏れが原因。
-  - 対処: mir_call 作成前後の LocalSSA を全発行経路に適用済みかスイープし、欠落箇所を補強（EmitGuard で統一）。
+### 本日の優先P0（追記）
+- Array.size 正規化の徹底（Builder normalize → `Extern("nyrt.array.size")` 固定、Optimizer で巻き戻し禁止）
+- EmitGuard 後の LocalSSA 素材化の再確認（values→size 連鎖で未定義参照を出さない）
 
----
 
 ## 付録（インターフェース最小定義）
 - `Type.singleton(): &Type`（内部/once 初期化、外部観測不可）
@@ -190,12 +219,12 @@
   - 同一関数内の静的メソッド連続呼び出しで `me` プレースホルダの重複生成が解消。
   - 将来の OnceLock 実体置換を 1 箇所で行える導線ができた。
 
-### Phase A‑1c — ModuleFunction トランポリン整備 & Verifier 補強（完了）
+### Phase A‑1c — ModuleFunction alias 整備 & Verifier 補強（完了）
 - 目的: ModuleFunction 経由の静的呼び出しで receiver 欠落を早期検出し、VM 側も常に receiver あり前提に揃える。
 - 実装:
   - Verifier: `ModuleFunction(box.method/arity)` で Known かつ Box 型の受領者が無い場合に Fail‑Fast。
   - Runtime: MethodRouter が Void 受領者を即時 InvalidInstruction とし、legacy fallback も receiver 前提に統一。
-  - Trampoline: `handlers/calls/trampolines.rs` を追加し、Array/Map/String/Console の ModuleFunction → Method 変換を表駆動化。
+  - ModuleFunction alias: `handlers/calls/trampolines.rs` を追加し、Array/Map/String/Console の ModuleFunction → Method 変換を表駆動化。
 
 ### Phase A‑1d — LegacyCallBridgeBox 導入（完了）
 - 目的: `emit_instruction(MirInstruction::Call)` の直叩きを Builder から排除し、ガード済みの入口に集約する。
@@ -216,6 +245,14 @@
 - 効果:
   - MIR 側は Box 型として `me` を扱い、VM 実行時に実体 Arc<NyashBox> が注入される。後続のマクロ/Verifier 強化に備えて受領者が具体化された。
 
+### Phase A‑3 — ループヘッダー PHI の「真のループキャリア変数」化（完了）
+- 目的: ループ条件で一時文字列（例: `ch`）が PHI 化され、`i < s.size()` が誤って `ch < s.size()`（String vs Integer）になる問題を根治する。
+- 実装:
+  - `build.rs` 側で preheader の変数スナップショットを取得し、事前スキャンで得た `assigned_vars` との積を取って PHI 対象を決定。
+  - 実装箇所: `src/mir/loop_builder/build.rs:36` 付近（preheader_vars キャプチャと loop_carried 生成）、`src/mir/loop_builder/phi.rs:14-48`（PHI 対象の retain）。
+- 効果:
+  - ループ条件の比較型が安定。`tools/smokes/v2/profiles/quick/apps/json_query_vm.sh` が PASS（以前の `String("0") < 1` 失敗が消失）。
+
 ### 残タスク（Phase A 継続）
 - ✅ **ParameterGuardBox 拡張**  
   Builder（pending entry copy を含む）と optimizer `repair_*` で `dst ∈ params` を禁止済み。v%0 上書き事故を構造的に遮断。
@@ -234,24 +271,24 @@
   - Lowering で `MapBox.size/0` → `nyrt.map.size(recv)` の直下ろしを追加。
 - 効果: plugins プロファイルの `parity_map_size_has_vm` / `strict_plugin_map_size_vm` が PASS。
 
-### Phase A‑1f — Map.keys/values と remove の整備（進行中）
-- 目的: `Map.values()` の結果を ArrayBox として安定化し、直後の `.size()` などで型不一致や未定義値を起こさない。
+### Phase A‑1f — Map.keys/values と remove の整備（完了）
+- 目的: `Map.values()` の戻り値を ArrayBox として統一し、`.size()` 連鎖で未定義値／HostHandle 漏れが発生しないよう構造化。
 - 実装:
-  - Extern adapter で `nyrt.map.{keys,values}` を HostSlot 経由（テーブル駆動）＋ Plugin 経由の橋渡しに対応。
-  - Builder で `Extern("nyrt.map.{values,keys}")` の結果に ArrayBox 注釈を付与（後段の利用で型ヒント）。
-  - Map プラグインで `remove()` が削除した値を返すよう修正（i64/文字列/配列ハンドルを TLV で返却）。
-- 残: `values()` 直後に `.size()` を呼ぶケースで、ArrayBox 注釈は付くものの、`.size()` 側の素材化順序が先行して未定義値参照になるパターンが残存。EmitGuard 後のローカル化を強制する追加ルールで詰める。
+  - `extern_adapter/collections.rs` を新設し、HostHandle unwrap をハブ化。`nyrt.map.{keys,values}` / `nyrt.array.size` が常に実体 Box を扱うよう統一。
+  - Extern adapter を host slot テーブル経由＋ PluginV2 経路の二本で正規化し、両経路で `VMValue::BoxRef` を返却。
+  - Map プラグインの `remove()` を HostHandle/TLV 返却へ統一し、削除した値を呼び出し元で即利用できるよう調整。
+- テスト:
+  - `map_host_keys_values_return_arrays` / `map_remove_returns_removed_array_len` を追加し、HostSlot 強制と plugin route の双方で ArrayBox が返る・`len()` が成立することを固定。
+  - `map_values_array_element_vm.sh` / `map_remove_returns_value_vm.sh` / `plugin_map_len_vm.sh` で代表スモークを常時監視。
 
-### Known issues（2025‑10‑16 plugins 再走後の把握）
-- MapBox.values の直後に `.size()` を呼ぶケースで、ArrayBox 注釈は付くものの、`.size()` 側の受け素材化が先行して未定義値参照になるパターンが残存。
-  - 対応: Builder 側の fast-path を拡張（ArrayBox 由来の `.size()` は `nyrt.array.size` に直下ろしし、EmitGuard 直後にローカル化）。Normalizer/Optimizer は Extern を保持。
+### Known issues（2025‑10‑19 時点）
 - me 注入の誤適用により plugin ModuleFunction へ影響する懸念。
   - 対処: `method_index.static_signature()` に該当する静的シグネチャのみ `me` 合成を許可（Builder/VM 双方でガード）。
 - FileBox 系の `use of undefined value` は引数素材化の漏れが原因。
   - 対処: mir_call 作成前後の LocalSSA を全発行経路に適用済みかスイープし、欠落箇所を補強（EmitGuard で統一）。
-- Plugin ABI: 既存 C ABI 互換のトランポリンを registry に登録し、外部呼び出し経路を段階移行。
+- Plugin ABI: 既存 C ABI 互換エントリを registry に登録し、外部呼び出し経路を段階移行（resolver alias で完結）。
 - Docs/Tests: Phase-31 変更点のドキュメント整備とスモーク追加（singleton/Verifier 回り）。
 
 ### 現在の既知問題（dev）
 - quick→plugins→full でのカテゴリ 2/3（出力差・モジュール解決）の再確認が未実施。LegacyCallBridgeBox 導入後、差分の再スキャンが P0‑5 で残っている。
-- Plugin ABI トランポリンの網羅化・自動生成は継続作業。現状は代表ケースのみ箱化されており、残りは TODO に記載のとおり。
+- Plugin ABI の追加トランポリンは不要。残りは resolver/Router 側の整合性チェックのみ。
