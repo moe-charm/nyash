@@ -183,6 +183,11 @@ impl MirBuilder {
             self.ensure_block_exists(entry)?;
             let mut me_origin: Option<ValueId> = None;
             if let Some(ref mut f) = self.current_function {
+                // Align static method lowering with instance method lowering:
+                // record that the interpreter should synthesize a static singleton `me`.
+                f.metadata
+                    .optimization_hints
+                    .push("static_singleton_me".to_string());
                 let me_id = self.value_gen.next();
                 me_origin = Some(me_id);
                 f.params.push(me_id);

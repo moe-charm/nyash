@@ -6,7 +6,11 @@ use std::collections::HashSet;
 /// Desugar Alias access: Alias.X(.Y ... ) => X(.Y ...), or to `Alias_X` when `prefix` is provided.
 /// - If `prefix` is None: drop the alias for simple flatten-merge use cases.
 /// - If `prefix` is Some(alias): transform `Alias.X` into `Alias_X` to avoid collisions.
-pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_prefixed: bool) -> ASTNode {
+pub fn desugar_alias_field_access(
+    ast: &ASTNode,
+    aliases: &HashSet<String>,
+    to_prefixed: bool,
+) -> ASTNode {
     fn rewrite(node: &ASTNode, aliases: &HashSet<String>, to_prefixed: bool) -> ASTNode {
         match node {
             ASTNode::FieldAccess { object, field, .. } => {
@@ -14,17 +18,35 @@ pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_p
                 if let ASTNode::Variable { name, .. } = &o2 {
                     if aliases.contains(name) {
                         if to_prefixed {
-                            return ASTNode::Variable { name: format!("{}_{}", name, field), span: Span::unknown() };
+                            return ASTNode::Variable {
+                                name: format!("{}_{}", name, field),
+                                span: Span::unknown(),
+                            };
                         } else {
-                            return ASTNode::Variable { name: field.clone(), span: Span::unknown() };
+                            return ASTNode::Variable {
+                                name: field.clone(),
+                                span: Span::unknown(),
+                            };
                         }
                     }
                 }
-                ASTNode::FieldAccess { object: Box::new(o2), field: field.clone(), span: Span::unknown() }
+                ASTNode::FieldAccess {
+                    object: Box::new(o2),
+                    field: field.clone(),
+                    span: Span::unknown(),
+                }
             }
-            ASTNode::MethodCall { object, method, arguments, .. } => {
+            ASTNode::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 let o2 = rewrite(object, aliases, to_prefixed);
-                let args2: Vec<ASTNode> = arguments.iter().map(|a| rewrite(a, aliases, to_prefixed)).collect();
+                let args2: Vec<ASTNode> = arguments
+                    .iter()
+                    .map(|a| rewrite(a, aliases, to_prefixed))
+                    .collect();
                 if to_prefixed {
                     if let ASTNode::Variable { name, .. } = &o2 {
                         // Case A: Alias.method(args) → Alias_Alias.method/arity(args)
@@ -32,8 +54,13 @@ pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_p
                             // Alias.method(args) → Alias_Alias.method/arity(args)
                             // Works for typical pattern where prelude defines `static box Alias { ... }`.
                             let arity = args2.len();
-                            let fname = format!("{}_{}.{}{}", name, name, method, format!("/{}", arity));
-                            return ASTNode::FunctionCall { name: fname, arguments: args2, span: Span::unknown() };
+                            let fname =
+                                format!("{}_{}.{}{}", name, name, method, format!("/{}", arity));
+                            return ASTNode::FunctionCall {
+                                name: fname,
+                                arguments: args2,
+                                span: Span::unknown(),
+                            };
                         }
                         // Case B: Alias-prefixed static box: P_My.greet() → FunctionCall "P_My.greet/0"
                         // Detect by checking if the variable starts with any alias + '_'
@@ -42,15 +69,29 @@ pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_p
                             if name.starts_with(&pref) {
                                 let arity = args2.len();
                                 let fname = format!("{}.{}{}", name, method, format!("/{}", arity));
-                                return ASTNode::FunctionCall { name: fname, arguments: args2, span: Span::unknown() };
+                                return ASTNode::FunctionCall {
+                                    name: fname,
+                                    arguments: args2,
+                                    span: Span::unknown(),
+                                };
                             }
                         }
                     }
                 }
-                ASTNode::MethodCall { object: Box::new(o2), method: method.clone(), arguments: args2, span: Span::unknown() }
+                ASTNode::MethodCall {
+                    object: Box::new(o2),
+                    method: method.clone(),
+                    arguments: args2,
+                    span: Span::unknown(),
+                }
             }
-            ASTNode::FunctionCall { name, arguments, .. } => {
-                let args2: Vec<ASTNode> = arguments.iter().map(|a| rewrite(a, aliases, to_prefixed)).collect();
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
+                let args2: Vec<ASTNode> = arguments
+                    .iter()
+                    .map(|a| rewrite(a, aliases, to_prefixed))
+                    .collect();
                 if to_prefixed {
                     // Rewrite qualified calls like Alias.Box.method(...) to CompilerMod_Box.method/arity
                     // to match lowered static method function names.
@@ -62,45 +103,100 @@ pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_p
                                 let head = &rest[..dot_pos]; // Box or top symbol
                                 let tail = &rest[dot_pos + 1..]; // method or deeper
                                 let arity = args2.len();
-                                let new_name = format!("{}_{}.{}{}", a, head, tail, format!("/{}", arity));
-                                return ASTNode::FunctionCall { name: new_name, arguments: args2, span: Span::unknown() };
+                                let new_name =
+                                    format!("{}_{}.{}{}", a, head, tail, format!("/{}", arity));
+                                return ASTNode::FunctionCall {
+                                    name: new_name,
+                                    arguments: args2,
+                                    span: Span::unknown(),
+                                };
                             } else {
                                 // Alias.method(...) → Alias_Alias.method/arity （static box同名規約）
                                 let arity = args2.len();
-                                let new_name = format!("{}_{}.{}{}", a, a, rest, format!("/{}", arity));
-                                return ASTNode::FunctionCall { name: new_name, arguments: args2, span: Span::unknown() };
+                                let new_name =
+                                    format!("{}_{}.{}{}", a, a, rest, format!("/{}", arity));
+                                return ASTNode::FunctionCall {
+                                    name: new_name,
+                                    arguments: args2,
+                                    span: Span::unknown(),
+                                };
                             }
                         }
                     }
                 }
-                ASTNode::FunctionCall { name: name.clone(), arguments: args2, span: Span::unknown() }
+                ASTNode::FunctionCall {
+                    name: name.clone(),
+                    arguments: args2,
+                    span: Span::unknown(),
+                }
             }
-            ASTNode::ArrayLiteral { elements, .. } => {
-                ASTNode::ArrayLiteral { elements: elements.iter().map(|e| rewrite(e, aliases, to_prefixed)).collect(), span: Span::unknown() }
-            }
-            ASTNode::MapLiteral { entries, .. } => {
-                ASTNode::MapLiteral { entries: entries.iter().map(|(k, v)| (k.clone(), rewrite(v, aliases, to_prefixed))).collect(), span: Span::unknown() }
-            }
-            ASTNode::Assignment { target, value, .. } => {
-                ASTNode::Assignment { target: Box::new(rewrite(target, aliases, to_prefixed)), value: Box::new(rewrite(value, aliases, to_prefixed)), span: Span::unknown() }
-            }
-            ASTNode::Return { value, .. } => {
-                ASTNode::Return { value: value.as_ref().map(|v| Box::new(rewrite(v, aliases, to_prefixed))), span: Span::unknown() }
-            }
-            ASTNode::If { condition, then_body, else_body, .. } => {
+            ASTNode::ArrayLiteral { elements, .. } => ASTNode::ArrayLiteral {
+                elements: elements
+                    .iter()
+                    .map(|e| rewrite(e, aliases, to_prefixed))
+                    .collect(),
+                span: Span::unknown(),
+            },
+            ASTNode::MapLiteral { entries, .. } => ASTNode::MapLiteral {
+                entries: entries
+                    .iter()
+                    .map(|(k, v)| (k.clone(), rewrite(v, aliases, to_prefixed)))
+                    .collect(),
+                span: Span::unknown(),
+            },
+            ASTNode::Assignment { target, value, .. } => ASTNode::Assignment {
+                target: Box::new(rewrite(target, aliases, to_prefixed)),
+                value: Box::new(rewrite(value, aliases, to_prefixed)),
+                span: Span::unknown(),
+            },
+            ASTNode::Return { value, .. } => ASTNode::Return {
+                value: value
+                    .as_ref()
+                    .map(|v| Box::new(rewrite(v, aliases, to_prefixed))),
+                span: Span::unknown(),
+            },
+            ASTNode::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
                 let cond2 = Box::new(rewrite(condition, aliases, to_prefixed));
-                let then2 = then_body.iter().map(|n| rewrite(n, aliases, to_prefixed)).collect();
-                let else2 = else_body.as_ref().map(|b| b.iter().map(|n| rewrite(n, aliases, to_prefixed)).collect());
-                ASTNode::If { condition: cond2, then_body: then2, else_body: else2, span: Span::unknown() }
+                let then2 = then_body
+                    .iter()
+                    .map(|n| rewrite(n, aliases, to_prefixed))
+                    .collect();
+                let else2 = else_body
+                    .as_ref()
+                    .map(|b| b.iter().map(|n| rewrite(n, aliases, to_prefixed)).collect());
+                ASTNode::If {
+                    condition: cond2,
+                    then_body: then2,
+                    else_body: else2,
+                    span: Span::unknown(),
+                }
             }
-            ASTNode::Loop { condition, body, .. } => {
+            ASTNode::Loop {
+                condition, body, ..
+            } => {
                 let c2 = Box::new(rewrite(condition, aliases, to_prefixed));
-                let b2 = body.iter().map(|n| rewrite(n, aliases, to_prefixed)).collect();
-                ASTNode::Loop { condition: c2, body: b2, span: Span::unknown() }
+                let b2 = body
+                    .iter()
+                    .map(|n| rewrite(n, aliases, to_prefixed))
+                    .collect();
+                ASTNode::Loop {
+                    condition: c2,
+                    body: b2,
+                    span: Span::unknown(),
+                }
             }
-            ASTNode::Program { statements, .. } => {
-                ASTNode::Program { statements: statements.iter().map(|n| rewrite(n, aliases, to_prefixed)).collect(), span: Span::unknown() }
-            }
+            ASTNode::Program { statements, .. } => ASTNode::Program {
+                statements: statements
+                    .iter()
+                    .map(|n| rewrite(n, aliases, to_prefixed))
+                    .collect(),
+                span: Span::unknown(),
+            },
             // Default: clone for other nodes
             x => x.clone(),
         }
@@ -116,16 +212,24 @@ pub fn rename_prelude_top_symbols(ast: &ASTNode, alias: &str) -> ASTNode {
             let mut out: Vec<ASTNode> = Vec::with_capacity(statements.len());
             for st in statements.iter() {
                 let n = match st {
-                    ASTNode::BoxDeclaration { name, is_static, .. } if *is_static => {
+                    ASTNode::BoxDeclaration {
+                        name, is_static, ..
+                    } if *is_static => {
                         let mut c = st.clone();
-                        if let ASTNode::BoxDeclaration { name: ref mut nm, .. } = &mut c {
+                        if let ASTNode::BoxDeclaration {
+                            name: ref mut nm, ..
+                        } = &mut c
+                        {
                             *nm = format!("{}_{}", alias, name);
                         }
                         c
                     }
                     ASTNode::FunctionDeclaration { name, .. } => {
                         let mut c = st.clone();
-                        if let ASTNode::FunctionDeclaration { name: ref mut nm, .. } = &mut c {
+                        if let ASTNode::FunctionDeclaration {
+                            name: ref mut nm, ..
+                        } = &mut c
+                        {
                             *nm = format!("{}_{}", alias, name);
                         }
                         c
@@ -134,7 +238,10 @@ pub fn rename_prelude_top_symbols(ast: &ASTNode, alias: &str) -> ASTNode {
                 };
                 out.push(n);
             }
-            ASTNode::Program { statements: out, span: Span::unknown() }
+            ASTNode::Program {
+                statements: out,
+                span: Span::unknown(),
+            }
         }
         _ => ast.clone(),
     }
@@ -146,7 +253,9 @@ pub fn collect_prelude_top_names(ast: &ASTNode) -> Vec<String> {
     if let ASTNode::Program { statements, .. } = ast {
         for st in statements.iter() {
             match st {
-                ASTNode::BoxDeclaration { name, is_static, .. } if *is_static => out.push(name.clone()),
+                ASTNode::BoxDeclaration {
+                    name, is_static, ..
+                } if *is_static => out.push(name.clone()),
                 ASTNode::FunctionDeclaration { name, .. } => out.push(name.clone()),
                 _ => {}
             }
@@ -195,36 +304,135 @@ fn rewrite_internal_refs_after_top_rename(
 
     fn visit(n: &N, map: &HashMap<String, String>) -> N {
         match n {
-            N::Variable { name, .. } => N::Variable { name: rewrite_name(name, map), span: Span::unknown() },
+            N::Variable { name, .. } => N::Variable {
+                name: rewrite_name(name, map),
+                span: Span::unknown(),
+            },
             N::FieldAccess { object, field, .. } => {
                 let o2 = visit(object, map);
-                N::FieldAccess { object: Box::new(o2), field: field.clone(), span: Span::unknown() }
+                N::FieldAccess {
+                    object: Box::new(o2),
+                    field: field.clone(),
+                    span: Span::unknown(),
+                }
             }
-            N::MethodCall { object, method, arguments, .. } => {
+            N::BoxDeclaration {
+                name,
+                fields,
+                public_fields,
+                private_fields,
+                methods,
+                constructors,
+                init_fields,
+                weak_fields,
+                is_interface,
+                extends,
+                implements,
+                type_parameters,
+                is_static,
+                static_init,
+                span,
+            } => {
+                let mut new_methods = std::collections::HashMap::new();
+                for (k, v) in methods.iter() {
+                    new_methods.insert(k.clone(), visit(v, map));
+                }
+                let mut new_ctors = std::collections::HashMap::new();
+                for (k, v) in constructors.iter() {
+                    new_ctors.insert(k.clone(), visit(v, map));
+                }
+                let new_static = static_init
+                    .as_ref()
+                    .map(|stmts| stmts.iter().map(|s| visit(s, map)).collect());
+                N::BoxDeclaration {
+                    name: name.clone(),
+                    fields: fields.clone(),
+                    public_fields: public_fields.clone(),
+                    private_fields: private_fields.clone(),
+                    methods: new_methods,
+                    constructors: new_ctors,
+                    init_fields: init_fields.clone(),
+                    weak_fields: weak_fields.clone(),
+                    is_interface: *is_interface,
+                    extends: extends.clone(),
+                    implements: implements.clone(),
+                    type_parameters: type_parameters.clone(),
+                    is_static: *is_static,
+                    static_init: new_static,
+                    span: span.clone(),
+                }
+            }
+            N::FunctionDeclaration {
+                name,
+                params,
+                body,
+                is_static,
+                is_override,
+                span,
+            } => {
+                let new_body = body.iter().map(|stmt| visit(stmt, map)).collect();
+                N::FunctionDeclaration {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: new_body,
+                    is_static: *is_static,
+                    is_override: *is_override,
+                    span: span.clone(),
+                }
+            }
+            N::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 let o2 = visit(object, map);
                 let a2: Vec<N> = arguments.iter().map(|a| visit(a, map)).collect();
-                N::MethodCall { object: Box::new(o2), method: method.clone(), arguments: a2, span: Span::unknown() }
+                N::MethodCall {
+                    object: Box::new(o2),
+                    method: method.clone(),
+                    arguments: a2,
+                    span: Span::unknown(),
+                }
             }
-            N::FunctionCall { name, arguments, .. } => {
+            N::FunctionCall {
+                name, arguments, ..
+            } => {
                 let new_name = rewrite_name(name, map);
                 let a2: Vec<N> = arguments.iter().map(|a| visit(a, map)).collect();
-                N::FunctionCall { name: new_name, arguments: a2, span: Span::unknown() }
+                N::FunctionCall {
+                    name: new_name,
+                    arguments: a2,
+                    span: Span::unknown(),
+                }
             }
             N::Assignment { target, value, .. } => {
                 let t2 = visit(target, map);
                 let v2 = visit(value, map);
-                N::Assignment { target: Box::new(t2), value: Box::new(v2), span: Span::unknown() }
+                N::Assignment {
+                    target: Box::new(t2),
+                    value: Box::new(v2),
+                    span: Span::unknown(),
+                }
             }
-            N::ArrayLiteral { elements, .. } => {
-                N::ArrayLiteral { elements: elements.iter().map(|e| visit(e, map)).collect(), span: Span::unknown() }
-            }
+            N::ArrayLiteral { elements, .. } => N::ArrayLiteral {
+                elements: elements.iter().map(|e| visit(e, map)).collect(),
+                span: Span::unknown(),
+            },
             N::MapLiteral { entries, .. } => {
                 // Keys are Strings; rewrite only values
-                N::MapLiteral { entries: entries.iter().map(|(k, v)| (k.clone(), visit(v, map))).collect(), span: Span::unknown() }
+                N::MapLiteral {
+                    entries: entries
+                        .iter()
+                        .map(|(k, v)| (k.clone(), visit(v, map)))
+                        .collect(),
+                    span: Span::unknown(),
+                }
             }
-            N::Program { statements, .. } => {
-                N::Program { statements: statements.iter().map(|s| visit(s, map)).collect(), span: Span::unknown() }
-            }
+            N::Program { statements, .. } => N::Program {
+                statements: statements.iter().map(|s| visit(s, map)).collect(),
+                span: Span::unknown(),
+            },
             _ => n.clone(),
         }
     }
@@ -270,6 +478,13 @@ pub fn rewrite_main_alias_refs(
     ast: &ASTNode,
     alias_map: &std::collections::HashMap<String, Vec<String>>,
 ) -> ASTNode {
+    if std::env::var("NYASH_DEBUG_ALIAS_REWRITE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        eprintln!("[alias-rewrite] alias_map={:?}", alias_map);
+    }
     let mut out = ast.clone();
     for (alias, tops) in alias_map.iter() {
         if tops.is_empty() {
@@ -313,7 +528,10 @@ mod tests {
     fn field_access_alias_prefixed() {
         // Alias.Name -> Alias_Name (to_prefixed=true)
         let ast = ASTNode::FieldAccess {
-            object: Box::new(ASTNode::Variable { name: "CompilerMod".into(), span: Span::unknown() }),
+            object: Box::new(ASTNode::Variable {
+                name: "CompilerMod".into(),
+                span: Span::unknown(),
+            }),
             field: "Main".into(),
             span: Span::unknown(),
         };
@@ -330,14 +548,22 @@ mod tests {
         let ast = ASTNode::FunctionCall {
             name: "CompilerMod.MirEmitterBox.emit".into(),
             arguments: vec![
-                ASTNode::Variable { name: "x".into(), span: Span::unknown() },
-                ASTNode::Variable { name: "y".into(), span: Span::unknown() },
+                ASTNode::Variable {
+                    name: "x".into(),
+                    span: Span::unknown(),
+                },
+                ASTNode::Variable {
+                    name: "y".into(),
+                    span: Span::unknown(),
+                },
             ],
             span: Span::unknown(),
         };
         let out = desugar_alias_field_access(&ast, &hs(&["CompilerMod"]), true);
         match out {
-            ASTNode::FunctionCall { name, arguments, .. } => {
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
                 assert_eq!(name, "CompilerMod_MirEmitterBox.emit/2");
                 assert_eq!(arguments.len(), 2);
             }
@@ -349,14 +575,19 @@ mod tests {
     fn method_call_alias_receiver() {
         // Alias.method() -> Alias_Alias.method/0()
         let ast = ASTNode::MethodCall {
-            object: Box::new(ASTNode::Variable { name: "CompilerMod".into(), span: Span::unknown() }),
+            object: Box::new(ASTNode::Variable {
+                name: "CompilerMod".into(),
+                span: Span::unknown(),
+            }),
             method: "main".into(),
             arguments: vec![],
             span: Span::unknown(),
         };
         let out = desugar_alias_field_access(&ast, &hs(&["CompilerMod"]), true);
         match out {
-            ASTNode::FunctionCall { name, arguments, .. } => {
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
                 assert_eq!(name, "CompilerMod_CompilerMod.main/0");
                 assert!(arguments.is_empty());
             }
@@ -371,8 +602,14 @@ mod tests {
             statements: vec![
                 make_static_box("X"),
                 ASTNode::Assignment {
-                    target: Box::new(ASTNode::Variable { name: "y".into(), span: Span::unknown() }),
-                    value: Box::new(ASTNode::Variable { name: "X".into(), span: Span::unknown() }),
+                    target: Box::new(ASTNode::Variable {
+                        name: "y".into(),
+                        span: Span::unknown(),
+                    }),
+                    value: Box::new(ASTNode::Variable {
+                        name: "X".into(),
+                        span: Span::unknown(),
+                    }),
                     span: Span::unknown(),
                 },
             ],
@@ -389,8 +626,19 @@ mod tests {
         // Program: fn call: Helper.run() → after alias P: P_Helper.run()
         let ast = ASTNode::Program {
             statements: vec![
-                ASTNode::FunctionDeclaration { name: "Helper".into(), params: vec![], body: vec![], is_static: false, is_override: false, span: Span::unknown() },
-                ASTNode::FunctionCall { name: "Helper.run".into(), arguments: vec![], span: Span::unknown() },
+                ASTNode::FunctionDeclaration {
+                    name: "Helper".into(),
+                    params: vec![],
+                    body: vec![],
+                    is_static: false,
+                    is_override: false,
+                    span: Span::unknown(),
+                },
+                ASTNode::FunctionCall {
+                    name: "Helper.run".into(),
+                    arguments: vec![],
+                    span: Span::unknown(),
+                },
             ],
             span: Span::unknown(),
         };
@@ -403,7 +651,10 @@ mod tests {
     #[test]
     fn alias_collision_is_guarded() {
         // Pre-existing prefixed name collides with upcoming alias rename
-        let ast = ASTNode::Program { statements: vec![make_static_box("X")], span: Span::unknown() };
+        let ast = ASTNode::Program {
+            statements: vec![make_static_box("X")],
+            span: Span::unknown(),
+        };
         let mut used = std::collections::HashSet::new();
         // Simulate that A_X is already taken
         used.insert("A_X".to_string());
@@ -416,8 +667,19 @@ mod tests {
         // Qualified with two dots: Top.Sub.fn() → Alias_Top.Sub.fn()
         let ast = ASTNode::Program {
             statements: vec![
-                ASTNode::FunctionDeclaration { name: "Top".into(), params: vec![], body: vec![], is_static: false, is_override: false, span: Span::unknown() },
-                ASTNode::FunctionCall { name: "Top.Sub.run".into(), arguments: vec![], span: Span::unknown() },
+                ASTNode::FunctionDeclaration {
+                    name: "Top".into(),
+                    params: vec![],
+                    body: vec![],
+                    is_static: false,
+                    is_override: false,
+                    span: Span::unknown(),
+                },
+                ASTNode::FunctionCall {
+                    name: "Top.Sub.run".into(),
+                    arguments: vec![],
+                    span: Span::unknown(),
+                },
             ],
             span: Span::unknown(),
         };
@@ -432,14 +694,19 @@ mod tests {
         // P_My.greet() → FunctionCall "P_My.greet/0"
         let aliases = hs(&["P"]);
         let ast = ASTNode::MethodCall {
-            object: Box::new(ASTNode::Variable { name: "P_My".into(), span: Span::unknown() }),
+            object: Box::new(ASTNode::Variable {
+                name: "P_My".into(),
+                span: Span::unknown(),
+            }),
             method: "greet".into(),
             arguments: vec![],
             span: Span::unknown(),
         };
         let out = desugar_alias_field_access(&ast, &aliases, true);
         match out {
-            ASTNode::FunctionCall { name, arguments, .. } => {
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
                 assert_eq!(name, "P_My.greet/0");
                 assert!(arguments.is_empty());
             }

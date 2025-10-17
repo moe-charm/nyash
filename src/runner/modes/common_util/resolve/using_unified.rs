@@ -146,6 +146,16 @@ pub fn resolve_using_with_preludes(
             }
         }
     }
+    if std::env::var("NYASH_DEBUG_ALIAS_REWRITE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        eprintln!(
+            "[alias-collect] aliases={:?} alias_top_names={:?}",
+            alias_names, alias_top_names
+        );
+    }
 
     Ok(UsingResolveResult {
         cleaned_code,

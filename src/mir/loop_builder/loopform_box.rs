@@ -452,6 +452,10 @@ impl LoopFormBox {
             );
         }
 
+        // 🔥 FIX: Set loop_latch BEFORE building body (for continue support)
+        loop_builder.loop_latch = Some(latch_bb);
+        loop_builder.loop_header = Some(self.header_bb);
+
         // Build Body block
         loop_builder.parent_builder.start_new_block(body_bb)?;
 

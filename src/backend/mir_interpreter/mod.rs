@@ -28,6 +28,7 @@ pub mod extern_adapter;
 pub mod diagnostics;
 mod operator_guard;
 mod vm_config;
+pub mod debug_util;
 pub mod resolve;
 pub mod contracts;
 

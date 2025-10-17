@@ -264,7 +264,8 @@ impl MirBuilder {
                 &self.local_ssa_map,
             )
         } else {
-            self.safe_next_value()
+            // Fallback to legacy generator when allocator is disabled
+            self.value_gen.next()
         }
     }
 

@@ -172,6 +172,18 @@ All values are normalized via `env_gate_box` helpers so aliases stay in sync. Pr
   - プラグインホスト／個別プラグインのデバッグ出力を有効化します（呼び出し先/戻り／TLV サイズ／instance_id など）。
   - `MapBox.values/keys` の Stage‑2 経路や `ArrayBox.set/length` のトレースに有効。
 
+### VM call trace & module resolver (dev only)
+
+- `NYASH_VM_CALL_ARG_TRACE=1`
+  - VM 関数呼び出し時の引数を「種類(kind) + プレビュー(最大64文字)」で出力します。
+  - 実装は `backend/mir_interpreter/debug_util::format_arg_debug` に集約（ハードコード化を避け、将来拡張に備える）。
+- `HAKO_DEBUG_MODULE_FN_ARGS=1`
+  - ModuleFunction 呼び出し時の引数を詳細表示（`NYASH_VM_CALL_ARG_TRACE` と同等の出力形式）。
+- `NYASH_VM_LIST_MODULE_FUNCS=1`
+  - 未解決のモジュール関数名に対して、接頭辞一致で登録済み関数一覧を stderr に出力（診断用）。
+
+注: すべてデバッグ専用・既定OFF。プロダクション用途では使用しないこと。
+
 Note: host slot 再入は自動（フラグ無し）
 - `nyrt_host_call_slot` 実行中は thread‑local で in‑slot コンテキストが立ちます。プラグインローダはこの間のみ再入を許可します（ドキュメント上のメモであり、ENV スイッチはありません）。
 

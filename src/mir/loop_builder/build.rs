@@ -436,13 +436,53 @@ impl<'a> LoopBuilder<'a> {
         // Create LoopFormBox
         let mut loopform = super::loopform_box::LoopFormBox::new(preheader_bb);
 
-        // Build loop structure
+        // Build loop structure (passing self for continue/break support)
         let loop_structure = loopform.build_loop(
-            self.parent_builder,
+            self,
             &condition,
             &preheader_vars,
             &body,
         )?;
+
+        // 🔥 DEBUG: Check condition block inst_count immediately after build_loop() returns
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            if let Some(cond_bb) = loop_structure.condition_bb {
+                let inst_count_after_return = if let Some(ref function) = self.parent_builder.current_function {
+                    if let Some(block) = function.get_block(cond_bb) {
+                        block.instructions.len()
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                eprintln!(
+                    "[loopform] 🔥 IMMEDIATELY AFTER build_loop() return: cond_bb={:?} inst_count={}",
+                    cond_bb, inst_count_after_return
+                );
+            }
+        }
+
+        // 🔥 FIX: Set loop_header for continue statement support
+        self.loop_header = Some(loop_structure.header_bb);
+
+        // 🔥 FIX: Set loop_latch for LoopFormBox continue support
+        self.loop_latch = Some(loop_structure.latch_bb);
+
+        // 🔥 FIX: Push loop context (header/exit) for break/continue support
+        crate::mir::builder::loops::push_loop_context(
+            self.parent_builder,
+            loop_structure.header_bb,
+            loop_structure.exit_bb,
+        );
+
+        // 🔥 FIX: Wire preheader → header jump (CRITICAL!)
+        // Without this, preheader returns immediately without entering the loop
+        self.parent_builder.current_block = Some(preheader_bb);
+        self.emit_jump(loop_structure.header_bb)?;
 
         // Trace output
         if crate::runtime::env_gate_box::bool_any(&[
@@ -460,6 +500,52 @@ impl<'a> LoopBuilder<'a> {
 
         // Set exit block as current
         self.set_current_block(loop_structure.exit_bb)?;
+
+        // 🔥 FIX: Set Exit variable values (header PHI values)
+        // Without break, Exit receives values from Header PHI (cond=false branch)
+        // With break, Exit-PHI would be needed (TODO: implement break support)
+        for phi_node in &loop_structure.phi_nodes {
+            self.parent_builder.variable_map.insert(
+                phi_node.var_name.clone(),
+                phi_node.phi_value,
+            );
+        }
+
+        // Trace output
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            eprintln!(
+                "[loopform] ✅ Exit variable_map updated: {} variables from header PHI",
+                loop_structure.phi_nodes.len()
+            );
+        }
+
+        // 🔥 FIX: Pop loop context (cleanup)
+        crate::mir::builder::loops::pop_loop_context(self.parent_builder);
+
+        // 🔥 DEBUG: Check condition block inst_count BEFORE return
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            if let Some(cond_bb) = loop_structure.condition_bb {
+                let inst_count_before_return = if let Some(ref function) = self.parent_builder.current_function {
+                    if let Some(block) = function.get_block(cond_bb) {
+                        block.instructions.len()
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                };
+                eprintln!(
+                    "[loopform] 🔥 BEFORE build_loop_with_loopform() return: cond_bb={:?} inst_count={}",
+                    cond_bb, inst_count_before_return
+                );
+            }
+        }
 
         // Return void value
         let void_dst = self.new_value();

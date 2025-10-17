@@ -36,6 +36,9 @@ pub struct LoopBuilder<'a> {
     /// ループヘッダーID（continueで使用）
     pub(super) loop_header: Option<BasicBlockId>,
 
+    /// ループラッチID（LoopFormBox経路でのcontinue用）
+    pub(super) loop_latch: Option<BasicBlockId>,
+
     /// continue文からの変数スナップショット
     pub(super) continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
 
@@ -128,6 +131,7 @@ impl<'a> LoopBuilder<'a> {
             incomplete_phis: HashMap::new(),
             block_var_maps: HashMap::new(),
             loop_header: None,
+            loop_latch: None,  // LoopFormBox経路でのcontinue用
             continue_snapshots: Vec::new(),
             exit_snapshots: Vec::new(),  // exit PHI用のスナップショット
             // フェーズM: no_phi_modeフィールド削除

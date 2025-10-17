@@ -1,4 +1,3 @@
-
 //! vm_pipeline: Helper module for the main VM execution pipeline.
 //! Breaks down the monolithic execute_vm_engine into smaller, testable stages.
 
@@ -39,9 +38,19 @@ pub fn resolve_preludes_and_aliases(
     runner: &NyashRunner,
     code: &str,
     filename: &str,
-) -> Result<(String, Vec<ASTNode>, HashSet<String>, std::collections::HashMap<String, Vec<String>>)> {
+) -> Result<(
+    String,
+    Vec<ASTNode>,
+    HashSet<String>,
+    std::collections::HashMap<String, Vec<String>>,
+)> {
     if !crate::config::env::enable_using() {
-        return Ok((code.to_string(), Vec::new(), HashSet::new(), std::collections::HashMap::new()));
+        return Ok((
+            code.to_string(),
+            Vec::new(),
+            HashSet::new(),
+            std::collections::HashMap::new(),
+        ));
     }
 
     let use_ast = crate::config::env::using_ast_enabled();
@@ -76,7 +85,10 @@ pub fn resolve_preludes_and_aliases(
             // Quiet pipeline: proceed without AST merge.
             // Aliases were already collected above; module registration is handled by the runner preprocessor.
             if crate::config::env::resolve_trace() {
-                crate::runner::trace::log("[using] AST merge disabled but quiet pipeline active — skipping prelude merge".to_string());
+                crate::runner::trace::log(
+                    "[using] AST merge disabled but quiet pipeline active — skipping prelude merge"
+                        .to_string(),
+                );
             }
         } else {
             return Err(PipelineError::UsingResolution(
@@ -111,7 +123,10 @@ pub fn resolve_preludes_and_aliases(
 
     if !alias_names.is_empty() && !prelude_asts.is_empty() {
         for ast in prelude_asts.iter() {
-            let tops = crate::runner::modes::common_util::resolve::alias_tools::collect_prelude_top_names(ast);
+            let tops =
+                crate::runner::modes::common_util::resolve::alias_tools::collect_prelude_top_names(
+                    ast,
+                );
             for alias in alias_names.iter() {
                 let prefix = format!("{}_", alias);
                 let entry = alias_top_map.entry(alias.clone()).or_default();
@@ -136,7 +151,10 @@ pub fn parse_and_merge_ast(
     alias_top_map: &std::collections::HashMap<String, Vec<String>>,
 ) -> Result<ASTNode> {
     // Opt-in dev flag: prefer front::parser_layer facade for parsing
-    let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+    let use_facade = std::env::var("HAKO_FRONT_USE_FACADE")
+        .ok()
+        .map(|v| v == "1" || v == "true" || v == "on")
+        .unwrap_or(false);
     let main_ast = if use_facade {
         crate::front::parser_layer::facade::parse_source_to_ast(code)
             .map_err(|e| PipelineError::Parse(e.message))?
@@ -155,7 +173,10 @@ pub fn parse_and_merge_ast(
     };
 
     let merged = if !alias_top_map.is_empty() {
-        crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(&merged, alias_top_map)
+        crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(
+            &merged,
+            alias_top_map,
+        )
     } else {
         merged
     };
@@ -200,8 +221,9 @@ pub fn register_user_boxes_from_ast(ast: &ASTNode) {
                 implements,
                 type_parameters,
                 is_static,
-                .. 
-            } = st {
+                ..
+            } = st
+            {
                 if *is_static {
                     static_names.push(name.clone());
                     continue;
@@ -242,7 +264,10 @@ pub fn register_user_boxes_from_ast(ast: &ASTNode) {
                 &self,
                 name: &str,
                 args: &[Box<dyn crate::box_trait::NyashBox>],
-            ) -> std::result::Result<Box<dyn crate::box_trait::NyashBox>, crate::box_factory::RuntimeError> {
+            ) -> std::result::Result<
+                Box<dyn crate::box_trait::NyashBox>,
+                crate::box_factory::RuntimeError,
+            > {
                 let opt = { self.decls.read().unwrap().get(name).cloned() };
                 let decl = match opt {
                     Some(d) => d,
@@ -260,11 +285,19 @@ pub fn register_user_boxes_from_ast(ast: &ASTNode) {
                 let _ = inst.init(args);
                 Ok(Box::new(inst))
             }
-            fn box_types(&self) -> Vec<&str> { vec![] }
-            fn is_available(&self) -> bool { true }
-            fn factory_type(&self) -> crate::box_factory::FactoryType { crate::box_factory::FactoryType::User }
+            fn box_types(&self) -> Vec<&str> {
+                vec![]
+            }
+            fn is_available(&self) -> bool {
+                true
+            }
+            fn factory_type(&self) -> crate::box_factory::FactoryType {
+                crate::box_factory::FactoryType::User
+            }
         }
-        let factory = InlineUserBoxFactory { decls: Arc::new(RwLock::new(decls)) };
+        let factory = InlineUserBoxFactory {
+            decls: Arc::new(RwLock::new(decls)),
+        };
         crate::runtime::unified_registry::register_user_defined_factory(Arc::new(factory));
     }
 }
@@ -281,7 +314,230 @@ pub fn compile_and_execute_mir(ast: ASTNode, no_optimize: bool) -> Result<()> {
         Ok(code) => {
             // Result printing is handled in the VM engine leaf for robustness.
             process::exit(code)
-        },
+        }
         Err(e) => Err(PipelineError::VmExecution(e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::ASTNode;
+    use crate::cli::CliConfig;
+    use crate::runner::NyashRunner;
+    use tempfile::tempdir;
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    struct DirGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl DirGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let original = std::env::current_dir().expect("current dir");
+            std::env::set_current_dir(path).expect("set current dir");
+            Self { original }
+        }
+    }
+
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.original);
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(ref value) = self.original {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    fn find_main_assignment_value(ast: &ASTNode) -> &ASTNode {
+        if let ASTNode::Program { statements, .. } = ast {
+            for st in statements {
+                if let ASTNode::BoxDeclaration { name, methods, .. } = st {
+                    if name == "Main" {
+                        if let Some(ASTNode::FunctionDeclaration { body, .. }) = methods.get("main")
+                        {
+                            for stmt in body {
+                                if let ASTNode::Assignment { value, .. } = stmt {
+                                    return value.as_ref();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        panic!("Main.main assignment not found in AST: {:?}", ast);
+    }
+
+    fn assert_alias_call(node: &ASTNode) {
+        match node {
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
+                assert_eq!(
+                    name, "FU_Utils.add/2",
+                    "function call not rewritten: {name}"
+                );
+                assert_eq!(
+                    arguments.len(),
+                    2,
+                    "unexpected arity for rewritten function call"
+                );
+            }
+            ASTNode::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if let ASTNode::Variable { name, .. } = object.as_ref() {
+                    assert_eq!(name, "FU_Utils", "alias receiver not prefixed: {name}");
+                } else {
+                    panic!("unexpected method receiver shape: {:?}", object);
+                }
+                assert_eq!(method, "add", "method name changed unexpectedly");
+                assert_eq!(arguments.len(), 2, "unexpected arity for method call");
+            }
+            other => panic!(
+                "unexpected assignment form after alias rewrite: {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn alias_without_explicit_as_prefixed_and_rewritten() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        let _root_guard = EnvGuard::set("NYASH_ROOT", root.to_str().unwrap());
+        let _using_guard = EnvGuard::set("NYASH_USING", "1");
+        let _using_ast_guard = EnvGuard::set("NYASH_USING_AST", "1");
+        let _using_file_guard = EnvGuard::set("NYASH_ALLOW_USING_FILE", "1");
+        let _modules_guard = EnvGuard::set("NYASH_MODULES", "");
+
+        let config = r#"
+[using.flow_utils]
+path = "lib/flow_utils/"
+main = "utils.nyash"
+
+[using.aliases]
+FU = "flow_utils"
+
+[using]
+paths = ["lib"]
+"#;
+        std::fs::write(root.join("nyash.toml"), config).unwrap();
+
+        let lib_dir = root.join("lib/flow_utils");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::write(
+            lib_dir.join("utils.nyash"),
+            r#"flow Utils {
+  add(a, b) { return a + b }
+}
+"#,
+        )
+        .unwrap();
+
+        let main_path = root.join("main.nyash");
+        std::fs::write(
+            &main_path,
+            r#"using FU
+flow Main {
+  main() {
+    local v
+    v = Utils.add(10, 20)
+    print(v)
+    return 0
+  }
+}
+"#,
+        )
+        .unwrap();
+
+        let runner = NyashRunner::new(CliConfig::default());
+        let _dir_guard = DirGuard::change_to(root);
+        let ctx_check = runner.init_using_context();
+        assert!(
+            ctx_check.aliases.contains_key("FU"),
+            "using context aliases missing FU mapping: {:?}",
+            ctx_check.aliases.keys().collect::<Vec<_>>()
+        );
+        let code = std::fs::read_to_string(&main_path).unwrap();
+        let (clean, preludes, aliases, alias_top_map) =
+            resolve_preludes_and_aliases(&runner, &code, main_path.to_str().unwrap()).unwrap();
+
+        assert!(
+            aliases.contains("FU"),
+            "alias set should include FU but was {:?}",
+            aliases
+        );
+        assert!(
+            !preludes.is_empty(),
+            "expected prelude ASTs to be collected for alias"
+        );
+        let tops = alias_top_map
+            .get("FU")
+            .expect("expected top-level names for alias FU");
+        assert!(
+            tops.contains(&"Utils".to_string()),
+            "alias tops missing Utils entry: {:?}",
+            tops
+        );
+        let prelude_names: Vec<String> = preludes
+            .iter()
+            .flat_map(|ast| match ast {
+                ASTNode::Program { statements, .. } => statements
+                    .iter()
+                    .filter_map(|st| match st {
+                        ASTNode::BoxDeclaration { name, .. } => Some(name.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            })
+            .collect();
+        assert!(
+            prelude_names.iter().any(|n| n == "FU_Utils"),
+            "preludes missing renamed alias box: {:?}",
+            prelude_names
+        );
+
+        use crate::parser::NyashParser;
+        let raw_main_ast = NyashParser::parse_from_string(&clean).unwrap();
+        let rewritten_main =
+            crate::runner::modes::common_util::resolve::alias_tools::rewrite_main_alias_refs(
+                &raw_main_ast,
+                &alias_top_map,
+            );
+        let rewritten_main_value = find_main_assignment_value(&rewritten_main);
+        assert_alias_call(rewritten_main_value);
+
+        let merged = parse_and_merge_ast(&clean, preludes, &alias_top_map).unwrap();
+        let merged_value = find_main_assignment_value(&merged);
+        assert_alias_call(merged_value);
+
+        let processed = process_ast_macros_and_aliases(merged, &aliases).unwrap();
+        let processed_value = find_main_assignment_value(&processed);
+        assert_alias_call(processed_value);
     }
 }

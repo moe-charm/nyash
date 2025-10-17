@@ -40,7 +40,7 @@ impl<'a> LoopBuilder<'a> {
         self.switch_to_unreachable_block_with_void()
     }
 
-    /// Handle a `continue` statement: snapshot vars, jump to loop header, then continue in a fresh unreachable block.
+    /// Handle a `continue` statement: snapshot vars, jump to latch (LoopFormBox) or header (Legacy), then continue in a fresh unreachable block.
     pub(super) fn do_continue(&mut self) -> Result<ValueId, String> {
         // Snapshot variables at current block to be considered as a predecessor input
         let snapshot = self.get_current_variable_map();
@@ -48,8 +48,17 @@ impl<'a> LoopBuilder<'a> {
         self.block_var_maps.insert(cur_block, snapshot.clone());
         self.continue_snapshots.push((cur_block, snapshot));
 
-        if let Some(header) = self.loop_header {
+        // 🔥 FIX: LoopFormBox path jumps to latch, Legacy path jumps to header
+        if let Some(latch) = self.loop_latch {
+            // LoopFormBox path: continue → latch
+            eprintln!("[continue] LoopFormBox: jumping to latch={:?}", latch);
+            self.jump_with_pred(latch)?;
+        } else if let Some(header) = self.loop_header {
+            // Legacy path: continue → header (backward compatibility)
+            eprintln!("[continue] Legacy: jumping to header={:?}", header);
             self.jump_with_pred(header)?;
+        } else {
+            eprintln!("[continue] ❌ ERROR: No latch or header set!");
         }
 
         self.switch_to_unreachable_block_with_void()

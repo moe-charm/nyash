@@ -1,0 +1,22 @@
+// cfg_navigator.hako — CfgNavigatorBox（ブロックの先頭/末尾シーク）
+
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+
+static box CfgNavigatorBox {
+  // Provide index_of_from to avoid tail-based fallback/ambiguous resolution
+  index_of_from(text, needle, pos) { return StringOps.index_of_from(text, needle, pos) }
+
+  _int_to_str(n) {
+    if n == 0 { return "0" }
+    if n < 0 { return "-" + me._int_to_str(0 - n) }
+    local v=n local out="" local digits="0123456789"
+    loop(v>0){ local d=v%10 local ch=digits.substring(d,d+1) out=ch+out v=v/10 }
+    return out
+  }
+  // Escape-aware array end finder via JsonCursorBox
+  _seek_array_end(text, pos){ return JsonCursorBox.seek_array_end(text, pos) }
+
+  block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=StringOps.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+15 }
+  block_insts_end(mjson,insts_start){ return JsonCursorBox.seek_array_end(mjson,insts_start) }
+}

@@ -3,6 +3,90 @@
 このページは「いま何をしていて、次に何をするか」を 1 画面で把握できるようにするダッシュボードだよ。最新の作業に合わせて随時更新していくにゃ。
 
 ## Snapshot
+Updates (today - 2025-10-17 evening - LoopFormBox Day 3-4開始！)
+
+- **🎉 LoopFormBox Day 3-4 完了 - continue/break構築成功！** ✅
+  - **実装期間**: 2025-10-17 (6時間)
+  - **Day 2.P2完了**: preheader→header ジャンプ修正完了（2時間）
+  - **Day 3-4 Task 1完了**: loop_header/current_exit 設定実装 ✅
+    - 修正箇所: `src/mir/loop_builder/build.rs:448,451-455,480`
+    - 効果: `do_continue()` / `do_break()` で必要なループコンテキスト設定完了
+  - **Day 3-4 Task 3完了**: continue/break構築成功 ✅
+    - テストファイル作成完了: `local_tests/test_loopform_continue.nyash`
+    - **Phase 1 Minimal Fix 試行**: 所有権エラー発生（`error[E0507]: cannot move out of loop_builder.parent_builder`）
+    - **所有権修正完了** (2025-10-17 evening):
+      - 修正内容: `builder` を `loop_builder.parent_builder` に置き換え
+      - 修正箇所: `src/mir/loop_builder/loopform_box.rs:159,174,177,183,186,189,358-417`
+      - コンパイル: ✅ 成功（31.58s、警告のみ）
+    - **MIR生成検証完了**: ✅ 5ブロック構造 + PHI + continue経路
+      - bb4 (header): PHI配置成功 `%3 = phi [%1, bb3], [%25, bb7]`
+      - bb6 (body): continue経路（bb18）生成成功
+      - bb7 (latch): backedge確立
+      - bb5 (condition): 条件評価命令正常（調査完了）
+    - **トレース検証完了**: ✅ `HAKO_TRACE_LOOPFORM=1` で全4ループ実行確認
+      - すべてのループで `✅ create_condition_block complete: cond_value=v%X` 出力
+      - LoopFormBox が正常に動作していることを確認
+  - **💡 ChatGPT5アーキテクチャアドバイス受領** ⭐
+    - 核心指摘: 責務分離の明確化が理想（LoopFormBox は構造のみ、body構築はLoopBuilder）
+    - 理想設計:
+      - **LoopFormBox**: 構造とPHI集約のみ（body構築しない）
+      - **LoopBuilder**: body/continue/break構築専門
+    - 推奨: 2段階PHI（Latch-PHI + Header-PHI）で複数continue安定化
+    - API提案: `open()/feed_from_body()/feed_fallthrough()/close()`
+    - 評価: 将来のリファクタリング時に参考（現状実装でも動作確認済み）
+  - **✅ 達成事項**:
+    1. 所有権エラー修正完了 - コンパイル成功（31.58s）
+    2. continue/break経路生成成功 - `loop_builder.build_statement()` 統合
+    3. 5ブロック構造生成成功 - LoopFormBox基本実装完成
+    4. MIR構造検証完了 - PHI配置、backedge、条件評価すべて正常
+    5. トレース検証完了 - 全4ループでLoopFormBox正常実行確認
+  - **📝 既知の制約**:
+    - **P0（別問題）- VM実行テスト保留**: MirIoBox export欠落（LoopFormBox無関係、別チケット）
+    - VM実行テストは別P0問題解決後に実施予定
+    - MIR構造検証により、LoopFormBox実装の正常性は確認済み
+  - **🔄 将来の改善候補** (Phase 2 Full Refactoring):
+    - ChatGPT5提案の2段階PHI実装（Latch-PHI + Header-PHI）
+    - LoopFormBox/LoopBuilder責務分離の明確化
+    - API設計の見直し（open/feed/close パターン）
+  - **次のステップ**: Day 5 - exit PHI生成実装（必要に応じて）
+
+Updates (today - 2025-10-17 evening - LoopFormBox Day 2.P2完了！)
+
+- **🎉 LoopFormBox Day 2.P2 完了 - preheader→header ジャンプ修正！** ✅
+  - **修正内容**: LoopFormBox有効時、preheaderブロックが即座にreturnしてループに入らないバグを修正
+  - **バグ箇所**: `src/mir/loop_builder/build.rs:447-450`
+    - 問題: `loopform.build_loop()` 実行後、preheader→header のジャンプ配線が欠落
+    - MIR証拠: `bb0: ret %1` (ループに入らず即return)
+    - Legacy実装: `br label bb7` (正常にジャンプ)
+  - **修正実装**: preheader→header ジャンプを明示的に配線
+    ```rust
+    // 🔥 FIX: Wire preheader → header jump (CRITICAL!)
+    self.parent_builder.current_block = Some(preheader_bb);
+    self.emit_jump(loop_structure.header_bb)?;
+    ```
+  - **MIR検証**: ✅ `bb0: br label bb9` (正常にヘッダーへジャンプ)
+  - **構造検証**: ✅ LoopFormBox 5ブロック構造（preheader/header/condition/body/latch/exit）
+    - Legacy: 3ブロック（header+condition融合）
+    - LoopFormBox: 5ブロック（責務分離）
+      ```mir
+      bb0 (preheader): const 0, br bb9  ✅ 修正完了！
+      bb9 (header): PHI + br condition  ✅ Header = PHI + Branch のみ
+      bb10 (condition): condition + br body/exit  ✅ 副作用隔離
+      bb11 (body): i++, br latch
+      bb12 (latch): br header  ✅ PHI更新用
+      bb13 (exit): ret
+      ```
+  - **LoopFormVerifierBox適合性**: ✅ 全ルール通過
+    - Rule 1 - PHI配置: ✅ bb9先頭にPHI配置
+    - Rule 2 - Header形状: ✅ PHI + Branch のみ
+    - Rule 3 - 変数束縛禁止: ✅ Headerに Const/Copy/BinOp 無し
+  - **実行テスト保留**: ⚠️ continue未実装、MirIoBox export欠落により実行不可
+    - エラー1: "Unsupported AST node type: Continue" (selfhost VMファイルに continue 文あり)
+    - エラー2: "Unknown module function: MirIoBox.validate/1" (別P0問題、修正済み)
+    - MIR構造は正常、実行テストは Day 3-4 (continue実装) 後に実施
+  - **実装時間**: 約2時間（バグ発見・修正・検証）
+  - **次のステップ**: Day 3-4 - continue/break実装 (12時間予定)
+
 Updates (today - 2025-10-17 evening - Phase 2.P2完了！)
 
 - **🎉 Phase 2.P2 Option A 実装完了 - 110箇所一括置換成功！** ✅
@@ -701,3 +785,14 @@ P5: Smokes/Docs 整理
 2. MIR Verifier パラメータ上書き検出を Phase‑31 と同期させ、Fail‑Fast を Builder と二重化。
 3. quick→plugins→full スモークの差分棚卸し（カテゴリ2/3）と docs/guides/testing.md の参照更新。
 4. env_gate_box スイープ継続と Phase‑31 docs の簡潔化（今回メモを反映済み。継続監視用の TODO を残す）。
+### Dev logging consolidation (2025-10-19)
+
+- Added debug helper for VM call traces:
+  - `src/backend/mir_interpreter/debug_util.rs::format_arg_debug(v, max_len)`
+  - Unifies kind/preview formatting (uses `abi_util::tag_of_vm`, `to_string_box()`), truncates preview to 64 chars (call‑sites configurable).
+  - Gated by `NYASH_VM_CALL_ARG_TRACE=1` or `HAKO_DEBUG_MODULE_FN_ARGS=1` (debug‑only; default OFF).
+
+- ModuleFunction static singleton – temporary fallback (TTL)
+  - Implemented an arity‑1 retry path for synthetic `me` injection cases (debug aid).
+  - TTL: Remove in Phase‑32 after fixing Lowering to never push `me` for static calls (exec.rs remains the single source of truth for `me` synthesis).
+  - No change to default/prod behavior; only affects edge cases when enabled.

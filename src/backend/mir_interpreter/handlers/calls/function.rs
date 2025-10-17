@@ -590,20 +590,25 @@ impl MirInterpreter {
 
         // Exact match first
         if let Some(func) = self.functions.get(&want_name).cloned() {
+            // When static_singleton_me hint is present, pass only user args
+            // (drop potential placeholder) so exec_function_inner can synthesize `me`.
+            let needs_me_inject = func
+                .metadata
+                .optimization_hints
+                .iter()
+                .any(|h| h == "static_singleton_me");
+            let args_src: &[ValueId] = if needs_me_inject && args.len() == func.params.len() && !args.is_empty() {
+                &args[1..]
+            } else {
+                args
+            };
+
             let mut argv: Vec<VMValue> = Vec::new();
-            for (idx, a) in args.iter().enumerate() {
+            for (idx, a) in args_src.iter().enumerate() {
                 let vm_val = self.reg_load(*a)?;
                 if std::env::var("HAKO_DEBUG_MODULE_FN_ARGS").is_ok() {
-                    eprintln!("[MODULE-FN-ARGS] {}  arg[{}]: ValueId={:?} → VMValue={}",
-                              want_name, idx, a, match &vm_val {
-                        VMValue::String(s) => format!("String({})", s),
-                        VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()),
-                        VMValue::Integer(i) => format!("Integer({})", i),
-                        VMValue::Bool(b) => format!("Bool({})", b),
-                        VMValue::Float(f) => format!("Float({})", f),
-                        VMValue::Void => "Void".to_string(),
-                        VMValue::Future(f) => format!("Future({})", f.to_string_box().value),
-                    });
+                    let (kind, preview) = crate::backend::mir_interpreter::debug_util::format_arg_debug(&vm_val, 64);
+                    eprintln!("[MODULE-FN-ARGS] {}  arg[{}]: kind={} preview='{}' id={:?}", want_name, idx, kind, preview, a);
                 }
                 argv.push(vm_val);
             }
@@ -620,6 +625,45 @@ impl MirInterpreter {
                     }
                 }
                 return r;
+            }
+        }
+
+        // Fallback: when synthetic `me` injection added one extra argument, allow
+        // lookup to retry with explicit arity reduced by one.
+        if args.len() > 0 {
+            let fallback_name = if name.contains('/') {
+                if let Some((prefix, _)) = name.split_once('/') {
+                    format!("{}/{}", prefix, args.len().saturating_sub(1))
+                } else {
+                    format!("{}/{}", name, args.len().saturating_sub(1))
+                }
+            } else {
+                format!("{}/{}", name, args.len().saturating_sub(1))
+            };
+            if let Some(func) = self.functions.get(&fallback_name).cloned() {
+                let mut argv: Vec<VMValue> = Vec::new();
+                for (idx, a) in args.iter().enumerate() {
+                    let vm_val = self.reg_load(*a)?;
+                    if std::env::var("HAKO_DEBUG_MODULE_FN_ARGS").is_ok() {
+                        let (kind, preview) = crate::backend::mir_interpreter::debug_util::format_arg_debug(&vm_val, 64);
+                        eprintln!("[MODULE-FN-ARGS] {} (fallback) arg[{}]: kind={} preview='{}' id={:?}", fallback_name, idx, kind, preview, a);
+                    }
+                    argv.push(vm_val);
+                }
+                {
+                    let r = self.exec_function_inner(&func, Some(&argv));
+                    if is_birth_fn {
+                        if let Some(k) = birth_key { self.contracts_in_birth.remove(&k); }
+                        if r.is_ok() {
+                            if let Some(first) = args.get(0) {
+                                self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
+                            }
+                        } else {
+                            if let Some(first) = args.get(0) { self.regs.remove(first); }
+                        }
+                    }
+                    return r;
+                }
             }
         }
 
@@ -659,6 +703,23 @@ impl MirInterpreter {
             }
         }
 
+        if std::env::var("NYASH_VM_LIST_MODULE_FUNCS")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            let prefix = name.split_once('.').map(|(c, _)| c).unwrap_or(name);
+            let matches: Vec<String> = self
+                .functions
+                .keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect();
+            eprintln!(
+                "[vm-module-debug] missing={} prefix={} matches={:?}",
+                name, prefix, matches
+            );
+        }
         Err(VMError::InvalidInstruction(format!(
             "Unknown module function: {} (arity={})",
             name,

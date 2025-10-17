@@ -24,6 +24,7 @@ path = "apps/lib/json_native/utils/string.hako"
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
 JsonNode = "json_node"
+MirIoBox = "selfhost.shared.mir.io"
 
 [using.json_node]
 path = "apps/lib/json_native/core/node.hako"
@@ -78,6 +79,7 @@ selfhost.vm.handlers = "selfhost/vm/boxes/op_handlers.hako"
 selfhost.json.core.json_scan = "selfhost/shared/json/core/json_scan.hako"
 selfhost.json.core.string_scan = "selfhost/shared/json/core/string_scan.hako"
 selfhost.json.utils.json_frag = "selfhost/shared/json/utils/json_frag.hako"
+selfhost.shared.mir.io = "selfhost/shared/mir/mir_io_box.hako"
 selfhost.json.cursor = "selfhost/shared/json/json_cursor.hako"
 selfhost.vm.probe = "selfhost/vm/boxes/minivm_probe.hako"
 selfhost.core.timer = "apps/core/timer/TimerBox.hako"

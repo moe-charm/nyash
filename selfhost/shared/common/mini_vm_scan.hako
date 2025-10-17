@@ -1,5 +1,5 @@
 // Mini-VM scanning and numeric helpers
-using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+using "selfhost/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
@@ -77,4 +77,3 @@ static box MiniVmScan {
     return ""
   }
 }
-

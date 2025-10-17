@@ -49,7 +49,7 @@ EOF
 
   local output rc
   output=$(run_nyash_vm main.nyash 2>&1 | grep -v '^Result: ')
-  if echo "$output" | grep -q "`using` resolution error:"; then
+  if echo "$output" | grep -q '`using` resolution error:'; then
     test_skip "flow_using_alias_vm" "AST prelude merge disabled in this profile"
   else
     compare_outputs "30" "$output" "flow_using_alias_vm"

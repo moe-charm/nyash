@@ -145,6 +145,10 @@ log_error() {
 
 # 共通ノイズフィルタ（VM実行時の出力整形）
 filter_noise() {
+    if [ "${SMOKES_DISABLE_FILTER:-0}" = "1" ]; then
+        cat
+        return
+    fi
     # プラグイン初期化やメタログ、動的ローダの案内等を除去
     # Categories: Plugin init, Using resolver, Builder internals, Dev warnings, Error normalization, etc.
     grep -v "^\[UnifiedBoxRegistry\]" \
