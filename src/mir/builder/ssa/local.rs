@@ -38,14 +38,27 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
             return loc;
         }
         // Phase 2.2: Avoid function parameters (v%0-v%N) - never reuse parameter registers
+        // Phase 2.P2: Avoid variable_map collision - never reuse existing local variables
+        // Phase 2.P2+: Also check value_types (all defined ValueIds, including PHI sources)
         let mut loc = builder.value_gen.next();
-        // Ensure the freshly allocated ValueId never aliases the source or function parameters.
+        // Ensure the freshly allocated ValueId never aliases:
+        // - the source value (v)
+        // - function parameters (fun.params)
+        // - existing local variables (variable_map)
+        // - any defined values (value_types) - prevents SSA violations
         if let Some(ref fun) = builder.current_function {
-            while loc == v || fun.params.contains(&loc) {
+            while loc == v
+                || fun.params.contains(&loc)
+                || builder.variable_map.values().any(|&vid| vid == loc)
+                || builder.value_types.contains_key(&loc)
+            {
                 loc = builder.value_gen.next();
             }
         } else {
-            while loc == v {
+            while loc == v
+                || builder.variable_map.values().any(|&vid| vid == loc)
+                || builder.value_types.contains_key(&loc)
+            {
                 loc = builder.value_gen.next();
             }
         }
