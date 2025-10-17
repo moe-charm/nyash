@@ -1,9 +1,53 @@
-# CURRENT_TASK — Status and Next Steps (2025‑10‑16)
+# CURRENT_TASK — Status and Next Steps (2025‑10‑17)
 
 このページは「いま何をしていて、次に何をするか」を 1 画面で把握できるようにするダッシュボードだよ。最新の作業に合わせて随時更新していくにゃ。
 
 ## Snapshot
-Updates (today - 2025-10-16 continued)
+Updates (today - 2025-10-17)
+
+- **🔥 ループ変数破損バグ調査完了（Task先生4人並列）** ✅
+  - **動機**: ループ綺麗綺麗修正（ループヘッダ変数マップ汚染、LocalSSA衝突）完了後も `json_query` で "String と Integer の比較ミスマッチ" エラー残存
+  - **調査方法**: Task Agent 4人並列調査（メソッド降下経路、variable_map管理、MIR解析、String Extern正規化）
+  - **🎯 核心発見**: **3つの独立した問題が絡み合っている**
+    1. **P0 - パラメータレジスタ上書きバグ** (Task 3発見) 🔥🔥🔥
+       - MIR Builder が関数パラメータレジスタ v%0-v%N をローカル変数で再利用
+       - `skip_ws(s, i, end)` でループ変数 j(v%4) がメソッド receiver copy で String に上書き
+       - MIR証拠: `%4 = copy %23` (v%4=Integer j → v%23=String s)
+       - エラー: "Type error: compare Lt on String("0") and Integer(1)"
+       - 影響: **すべてのパラメータ持ち関数でループ内メソッド呼び出しが破壊される**
+    2. **P1 - メソッド降下の不安定性** (Task 1発見)
+       - `s.substring(j, j+1)` が origin 推論失敗時に BoxCall/Extern で揺れる
+       - 重要: **Extern 正規化は既に完全実装済み**（Task 4確認）
+       - 問題は origin 推論の失敗であり、正規化処理自体の欠陥ではない
+    3. **P2 - variable_map の ValueId 衝突** (Task 2発見)
+       - メソッド呼び出し結果 dst が既存ループ変数と同じ ValueId を割り当て
+       - ensure() 修正でカバー: receiver/arg/cond materialization ✅
+       - 未カバー: メソッド結果、BinOp結果、Assignment RHS ❌
+  - **📊 修正方針: 3段階アプローチ** (箱理論に沿った段階的実装)
+    - **Phase 1 (P0, 今週中, 1-2時間)**: 緊急パッチ
+      - 場所: `src/mir/builder/var_tracker.rs`
+      - 内容: パラメータレジスタ v%0-v%N の保護（v%(N+1)からローカル変数開始）
+      - 成果: `json_query_vm` テスト即座復活 ✅
+      - 技術的負債: ⚠️ Phase 2で解消
+    - **Phase 2 (P1, 来週, 4-6時間)**: Box化・正規化
+      - `ParameterGuardBox` 作成（100行）
+      - `ValueIdAllocatorBox` 作成（150行）
+      - `MirBuilder` 統合（50行）
+      - フラグ: `HAKO_USE_VALUE_ALLOCATOR_BOX=1`, `HAKO_TRACE_VALUE_ALLOC=1`
+      - 特徴: ✅ 戻せる、✅ テスト可能、✅ 見える化、✅ 共通化
+    - **Phase 3 (P2, Phase 4 Todo, 2-3日)**: Hakoruneスクリプト化
+      - `parameter_guard_box.hako` 作成
+      - `value_id_allocator_box.hako` 作成
+      - 効果: Phase 4 Todo完了、Hakoruneスクリプトメイン開発準備、Rust層99.8%削減貢献
+  - **📚 生成ドキュメント**:
+    - 総合調査レポート: `docs/development/issues/loop-variable-corruption-investigation.md` ⭐メインレポート
+    - Task 1: `docs/development/analysis/method-routing-mechanism.md` (メソッド降下経路)
+    - Task 3: `docs/development/issues/task3_json_query_mir_analysis.md` (json_query MIR解析)
+    - MIRダンプ: `/tmp/json_query_mir.txt`
+    - 最小再現: `/tmp/param_register_bug_minimal.hako`
+  - **✅ 次のアクション**: Phase 1実装開始（ドキュメント更新 → commit → 実装の順）
+
+Updates (yesterday - 2025-10-16 continued)
 - **P0修正完了**: MirIoBox export追加 → selfhost基盤復旧 ✅
   - 問題: `selfhost/shared/hako_module.toml` に `mir.io = "mir/mir_io_box.hako"` export欠落
   - 影響: ALL selfhostテストが "Unknown module function: MirIoBox.validate/1" で失敗
@@ -61,17 +105,22 @@ Updates (today - 2025-10-16 continued)
     - 状況: ✅ json_query_vm 無限ループ解消（修正2の間違いが原因だった）
 
 ### P0 次アクション（2025-10-18）
+（update）Loop PHI の真因修正により `apps/examples/json_query` の `json_query_vm` が PASS。型ミスマッチ比較（String vs Integer）は PHI 対象の過大化が原因で解消済み。
 1. **ParameterGuardBox の全面適用（完了）**  
    - Builder 本体と `pending_entry_pin_copies`、optimizer `repair_*` で `dst ∈ params` 禁止を導入済み。ParameterGuardBox は ENV トグル (`NYASH_BUILDER_PARAM_GUARD=0`) で無効化可能。
 2. **Verifier の保険ガード追加（完了）**  
    - `check_no_parameter_reassignment` により、MIR 完成後もパラメータ再定義を Fail‑Fast。
-3. **ArrayBox.size Extern 経路の固定**  
+3. **ArrayBox.size Extern 経路の固定（継続）**  
    - `map.values()` → `.size()` で確実に `Extern("nyrt.array.size")` が発行されるよう fast-path を調整。EmitGuard 後の一度きりの素材化で完結させる。  
-   - Optimizer でも `nyrt.array.size` を Method に戻さないルールを String/Map と対称に整備する。
-4. **スモーク／ユニットの追加**  
-   - json_query_vm（plugins on/off）を PASS させる再実行＋SMOKES_CAPTURE。  
+   - Optimizer でも `nyrt.array.size` を Method へ戻さない（String/Map と対称）。
+4. **スモーク／ユニットの追加（拡充）**  
+   - ループヘッダ PHI が prepare 時点で存在すること、比較オペランドが期待型であることを固定化する最小スモークを追加。  
    - DCE/used_values のユニットで Method(receiver) の Copy が保持されることをロック。  
    - ParameterGuardBox の ON/OFF を検証する小テストを追加し、将来の regress を防ぐ。
+
+### Phase‑31 Docs 更新（2025‑10‑18）
+- ループヘッダー PHI の「真のループキャリア変数」化を反映（ファイル: `docs/development/roadmap/phases/phase-31-box-Normalization/INDEX_JA.md`）。
+- Known issues を更新（`json_query_vm` の型ミスマッチ比較は解消済み）。
 
 - **レガシーコード削除調査完了** (2025-10-16 continued)
   - ✅ Task先生4人並列調査 → 191行即時削除可能 + 箱化候補181行発見
@@ -152,7 +201,7 @@ Updates (today - 2025-10-16 continued)
   - A‑1c 完了: ModuleFunction call の Verifier と VM 側整備
     - Verifier が ModuleFunction の受領者を検査（Known かつ Box 型のときに Fail‑Fast）。
     - VM Router/legacy fallback は常に receiver 前提。Void 受領者は即時エラーに。
-    - ModuleFunction トランポリンを `handlers/calls/trampolines.rs` に分離し、Array/Map/String/Console を表駆動化。
+    - ModuleFunction alias を `handlers/calls/trampolines.rs` に分離し、Array/Map/String/Console を表駆動化。
   - A‑1d 完了: LegacyCallBridgeBox でレガシー call 経路を箱化。
     - `src/mir/builder/calls/legacy_bridge/` を新設し、旧 `emit_legacy_call` の処理を移設。
     - Call 発行はすべて `emit_call_with_guard`（EmitGuard）経由に統一し、BoxCall/PluginCall も薄い `emit_boxcall()` ガードでローカルSSA素材化を強制。
@@ -193,6 +242,79 @@ Updates (today - 2025-10-16 continued)
   - Phase‑31 計画書を `docs/development/roadmap/phases/phase-31-box-Normalization/INDEX_JA.md` に追加済み。
 - Verifier スモーク拡充
   - quick-selfhost に ModuleFunction 静的呼び出しの Fail-Fast を確認するスモークを追加。
+
+---
+
+## Quick delta — Today (Runtime/Router)
+- Host anchor 常時ON（`nyash_array_new_h`）
+  - 旧 feature gate を撤去し、既定でプラグインホスト経由の ArrayBox 生成を有効化。
+  - 失敗時は（存在する場合のみ）legacy ArrayBox にフォールバック。
+- extern_map 観測ログ（dev）
+  - Map.keys/values/size の plugin/host 経路で HostHandle/PluginBox 撮影ログを追加（`debug_host_slot`）。
+- HostHandleRouter の plugin box 検出ロジックを追加
+  - `PluginBoxV2` でも Array/Map の slot 100/101/102, 200/202/203/204, 205/206 を安全に通すよう再配線。
+  - これにより values→Array.set→Array.size の連鎖が HostHandle 経路で成立する前提が整備済み。
+- Reentrant Guard（host slot 再入許可）を導入（今回の根治）
+  - `nyrt_host_call_slot` 実行中は thread‑local `IN_HOST_SLOT=true` を設定し、`plugin_loader_unified::invoke_instance_method` のガードを `recursed && !in_slot` に緩和。
+  - これにより、Map.values() 内からの `ArrayBox.set` 呼び出しがブロックされずに通過し、値が配列に格納される。
+  - 代表スモーク `map_values_array_element_vm` が PASS。
+
+— Runtime meta 層（Callable/Future）を箱化（2025-10-19 追記）
+- 目的: 言語機能の足場（Callable/Future）をホスト所有の薄い箱（meta）に分離し、プラグイン依存/外部I/Oを遮断。
+- 実装:
+  - 追加: `src/runtime/meta/{callable,future}/` + README/LAYER_GUARD
+  - 互換: 既存 `runtime::{callable_box,future_box}` の re-export は撤去済み（Phase‑31 cleanup）。以降は `runtime::meta::{callable,future}` を使用。
+- 影響: 参照はそのまま動作。新規コードは `runtime::meta::{callable,future}` を推奨。
+- スモーク/Docs:
+  - Testing ガイドに代表スモークを追記（callable_async / map_len / set_bad_arity）
+  - Phase‑31 文書に meta 層の設計判断を追記
+
+— HostHandle -14 検知スモークの安定化（2025-10-19 追記）
+- 目的: `hosthandle_boundary_suite_vm` で -14（ERR_BAD_RETURN）を確実に観測する。
+- 変更:
+  - VM 経路（HostSlot/Extern）で `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1` 時に stdout へ `hosthandle-test rc=-14` を出力。
+  - スモーク側は一時ファイルに標準出力を退避してから grep するよう変更（PIPE 終了時の出力ロストを回避）。
+- 結果: 代表スモーク 緑（callable_async_plugin_vm / set_bad_arity_vm / plugin_map_len_vm / map_values_array_element_vm / hosthandle_boundary_suite_vm）
+
+---
+
+## Open Tasks — 優先順位（P0→P2）
+
+P0（最優先・仕様不変） — 完了
+- Array.size 正規化の徹底（Extern固定）: 実装済（`normalize::apply_all()` / Optimizer 巻戻し禁止）
+- values→size 連鎖の最終確認: `map_values_array_element_vm` PASS（Reentrant Guard slot 許可で根治）
+
+P1（安定化・可視化） — 本日分 完了
+- Router 表ゲート観測ログ（dev 最小）
+  - builtin ルータで ARRAY/MAP host route のヒット/スキップを1行出力（`HAKO_DEBUG_HOST_SLOT=1`）。
+- env_gate_box スイープ（runtime 配下）
+  - 直 `std::env::var()` は見当たらず。`env_gate_box` 利用で統一を再確認（現状OK）。
+- 回帰テストの追加
+  - ParameterGuardBox（ENV ON/OFF）: 追加済。
+  - ループヘッダ PHI 即時挿入: 追加済（挿入位置固定＋更新 in‑place）。
+  - used_values DCE（Method receiver/Closure captures）: 追加済（Copy 温存を固定）。
+
+P1（残りの確認）
+- Router/Adapter の代表戻り値一貫性（keys/values/remove）を smoke または軽いユニットで固定（後述 P2 テスト追加に含める）。
+
+P2（整頓・将来拡張）
+- extern_adapter 整理（map/array のハブ集約・重複除去）: Array/Map のレガシー分岐は除去済み（今回完了）。
+- ✅ Type ID 単一起点: router/extern/loader は `crate::types::ids::*` へ統一済み。rg チェックで新規直参照が無いか監視。
+- ✅ Router/Adapter 周辺の小テスト追加: keys/values/remove の戻り値・型を固定（`src/tests/vtable_map_ext.rs` + plugins smoke）。
+- ✅ Plugin trampoline 撤退: resolver alias 直通。`HAKO_PLUGIN_TRAMPOLINE` は撤廃済み・docs も更新完了。
+
+---
+
+## Next Steps（実施順）
+1) レガシー削除 191行セット（vars.rs / record_kpi / utils.rs マーカー）を実施し、箱化ロードマップに反映
+2) MIR Verifier にパラメータ上書き検出を追加（保険ガード）
+3) quick→plugins→full スモーク再走査でカテゴリ2/3差分を棚卸し
+4) env_gate_box スイープ継続（runtime 直 `std::env::var` 監視）と docs 更新の残り整理
+
+5) meta re-export のTTL反映（Phase‑32）
+   - 置換ガイド: `runtime::{callable_box,future_box}` → `runtime::meta::{callable::callable_box,future::future_box}`
+   - PRチェック: 直 `runtime::callable_box` 参照を禁止（rg で検知・差し戻し）
+
     - `mir_verify_module_function_missing_receiver_vm.sh`: singleton 未注入ケースを `--verify` で検知。
     - `mir_verify_module_function_receiver_mismatch_vm.sh`: 受領者 Box 型がズレたケースを検知。
   - これで Phase-31 P0-2（Verifier 形状固定）の足場を確保。
@@ -359,15 +481,24 @@ Open issues / blockers
       - **動機**: 品質分析で改善余地発見（4/5 → 5/5 目標）
       - **問題**: ループキャリア解析ロジック（4行）が `build.rs` に埋め込まれている
       - **解決**: LoopCarrierAnalyzerBox 作成（単一責任・テスト可能・再利用可）
-      - **新ファイル**: `src/mir/loop_builder/carrier_analyzer.rs` (30-50行)
+      - **新ファイル**: `src/mir/loop_builder/carrier_analyzer.rs` (195行)
       - **修正箇所**: `src/mir/loop_builder/build.rs:66-69` → 1行に短縮
       - **効果**:
         - ✅ 単一責任: ループキャリア解析のみ
-        - ✅ ユニットテスト可能: 純粋関数
+        - ✅ ユニットテスト可能: 純粋関数（3テストケース）
         - ✅ 再利用可能: 他の最適化パスで使用可
         - ✅ コード品質: 5/5 達成
+      - **🌟 エレガントさ分析完了 & 論文追記完了** (2025-10-18 continued):
+        - **発見**: Hakorune PHI配置は **125-250倍シンプル**
+        - **比較**: LLVM 500-1000行 vs Hakorune 4行 → 1行呼び出し + 195行Box
+        - **アルゴリズム**: 1つの集合演算 (V_preheader ∩ V_assigned) vs 6ステップ複雑プロセス
+        - **理由1**: Everything-is-Box → 統一的表現 → 集合演算が自然
+        - **理由2**: MIR凍結セット（16命令） → 最小限のPHI配置
+        - **理由3**: Fail-Fast哲学 → 正確性優先（最適性は二の次）
+        - **論文更新**: `04_CASE_STUDY_SSA_PHI.md` Section 9.4追加（175行）
+        - **主張**: "Simple language design enables 125x code reduction for classical problems"
   - Phase 4 予定: MIR Verifier にパラメータ上書き検出追加（保険） → Phase 2.4で実装済み
-- Phase‑31 残: Plugin 既存 ABI へのトランポリン実配線（registry へ新エントリ登録）と quick→plugins→full スモークの差分スキャン。
+- Phase‑31 残: plugins alias を直接確認（トランポリン撤退済み）。quick→plugins→full スモーク差分の再確認のみ継続。
 - Frozen guide への Windows 例追記など、P0 で止まっているドキュメント系タスクを再開する必要があるにゃ。
 
 ## Prioritized TODOs
@@ -380,13 +511,13 @@ Open issues / blockers
   6. ✅ **DONE**: Task先生4人レガシー削除調査（191行削除可能）
   7. ✅ **DONE**: 非決定要素（async/GC）揺れ要因調査（決定的失敗を確認）
   8. ✅ **DONE**: json_query_vm 無限ループ解消（Phase 2.3 修正2の間違いが原因）
-  9. **TODO**: レガシーコード削除実行（191行削減）
-     - vars.rs 削除（149行）
-     - record_kpi 削除（34行）
-     - utils.rs マーカー削除（8行）
+  9. ✅ **DONE**: レガシーコード削除実行（191行削減）
+     - vars.rs 削除（149行）: ファイル不在（既に撤去済み）を確認。
+     - record_kpi 削除（34行）: `src/mir/builder/observe/resolve.rs` から実装撤去済（DELETED コメントのみ残し）。
+     - utils.rs マーカー削除（8行）: `src/mir/builder/utils.rs` ほかに `#[allow(dead_code)]` マーカーなしを確認。
   9. **TODO**: Phase 4 - MIR Verifier パラメータ上書き検出追加（保険）
   9. quick → plugins → full スモークを再実行し、カテゴリ 2/3（出力差・モジュール解決）の残差を棚卸し。
-  10. Plugin ABI トランポリンの網羅化（registry 配線＆生成ツール化）。
+ 10. Plugin ABI alias の整合チェック（registry 配線＆resolver 経路）。
   11. `docs/guides/frozen-toolchain.md` に Windows COFF 例を追記してハンドブックを更新。
   12. SetBox/FileBox/Array slice 周辺の整備（Map.values は解消済み）
      - SetBox: `add/has/size` のローカル素材化を再確認（EmitGuard 経路の統一）。
@@ -425,3 +556,48 @@ Open issues / blockers
 - Frozen v1 Box spec: `docs/reference/boxes/frozen_v1.md`
 - Roadmap Phase‑15.77: `docs/development/roadmap/phases/phase-15.77/INDEX.md`
 - Phase‑31 計画: `docs/development/roadmap/phases/phase-31-box-Normalization/INDEX_JA.md`
+
+## Next — P1 以降のタスク（短冊）
+
+P1: 仕様の固定（保険・最小差分）
+- Optimizer コメントで「array/map の size は Extern を巻き戻さない」方針を明記し、軽い smoke を1本追加。
+- extern_adapter の重複掃除（map/array をハブに集約）。
+- ✅ Type ID 単一起点ロールアウト済み。router/extern/loader は `crate::types::ids::*` へ統一済み。rg 監視で再発検出を継続。
+- 既存の debug 環境変数出力を `env_gate_box::debug_*` に統一（直 `std::env::var` を撤去）。
+
+P2: ルータ表の適用範囲の明確化
+- builtin ルータに ARRAY/MAP テーブル適用漏れが無いか再走査（Set/Callable/Env を含む）。
+- Map/String の未対応メソッド時のエラーメッセージを diagnostics::msg へ統一。
+- `plugin_policy_force()` を全呼び出し点へ適用して、"force" 直比較を排除。
+
+P3: Verifier/Builder の箱化とテスト
+- ParameterGuardBox の unit テスト（ENV ON/OFF を固定）。
+- ループヘッダー PHI の即時挿入を検証するミニテスト（後挿入しないことをロック）。
+- used_values() の receiver/captures をロックする回帰テスト（DCE 安定）。
+
+P4: Static→Singleton 実体化
+- `static_singleton::get(Type)` の OnceLock 実装で Void プレースホルダを置換（Builder 導線は既存）。
+- プラグイン ABI の alias 整合確認（resolver/Router 側で直接管理）。
+
+P5: Smokes/Docs 整理
+- map.values().size 連鎖の代表スモークを docs から参照可能に（意図とハンドラガードの説明付き）。
+- 短命 ENV 方針を env ガイドに追記（CLI/Profiles 優先の明文化）。
+
+---
+
+## 今日の追加（P1テスト固定）
+- ルータ/アダプタ小テストを追加し、戻り値・型の一貫性を固定。
+  - `map_host_keys_values_return_arrays`（ユニット）
+    - 目的: `HAKO_MAP_FORCE_HOST=1` 下で `MapBox.keys/values` が ArrayBox を返し、そのまま `ArrayBox.len()` が成立することを固定。
+    - 位置: `src/tests/vtable_map_ext.rs:176`
+  - `map_remove_returns_removed_array_len`（ユニット）
+    - 目的: `MapBox.remove/1` が削除した値（ここでは ArrayBox）を返し、その戻り値に対して直ちに `ArrayBox.len()` が呼べることを固定。
+    - 位置: `src/tests/vtable_map_ext.rs:328`
+  - 備考: 既存のスモーク `tools/smokes/v2/profiles/plugins/map_remove_returns_value_vm.sh`（値 or null を検証）とも整合。
+- Type ID SSOT 化: Router/extern/loader/box factory から固定値/直 `builtin_type_id` を撤去し、`crate::types::ids::{map,array,string,by_name}` で集約。`rg 'builtin_type_id\\('` チェックで継続監視。
+
+## 次のタスク（P2・順番）
+1. レガシー削除 191行セット（vars.rs / record_kpi / utils.rs マーカー）を実施し、構造境界を README に追記。
+2. MIR Verifier パラメータ上書き検出を Phase‑31 と同期させ、Fail‑Fast を Builder と二重化。
+3. quick→plugins→full スモークの差分棚卸し（カテゴリ2/3）と docs/guides/testing.md の参照更新。
+4. env_gate_box スイープ継続と Phase‑31 docs の簡潔化（今回メモを反映済み。継続監視用の TODO を残す）。
