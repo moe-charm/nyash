@@ -180,12 +180,14 @@ impl ValueIdAllocatorBox {
 │  │ (P0修正)           │  │ (P2修正)             │  │
 │  │ - v%0-v%N保護      │  │ - 衝突回避           │  │
 │  └────────────────────┘  └──────────────────────┘  │
-│                                                     │
+│                   ↑                 ↑              │
+│                   │                 │              │
 │  ┌────────────────────┐  ┌──────────────────────┐  │
 │  │OriginPropagation   │  │   LoopFormBox        │  │
 │  │ Box (P1修正)       │  │ (構造保証)           │  │
 │  │ - origin伝播       │  │ - Header正規化       │  │
-│  └────────────────────┘  └──────────────────────┘  │
+│  └────────────────────┘  │ - ⭐ safe_next_value()│  │
+│                          └──────────────────────┘  │
 │                                                     │
 │  ┌──────────────────────────────────────────────┐  │
 │  │       LoopFormVerifierBox                    │  │
@@ -195,6 +197,34 @@ impl ValueIdAllocatorBox {
 │  └──────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
+
+### ⭐ ValueIdAllocatorBox + LoopFormBox 統合戦略
+
+**核心アイデア**: 2つのBoxの**相補的関係**を活用
+
+**ValueIdAllocatorBox**: **経路の正規化** (Path Normalization)
+- すべてのValueId割り当てを1点に集約
+- 衝突回避（params, variable_map, value_types, local_ssa_map）
+- 117箇所の `value_gen.next()` 呼び出しを統一
+
+**LoopFormBox**: **構造の正規化** (Structure Normalization)
+- PHI配置ルールを構造的に強制
+- Header = PHI + Branch のみ
+- 条件式を別ブロックで構築（副作用隔離）
+
+**統合のメリット**:
+1. **二重の保証**: 経路（ValueIdAllocatorBox）+ 構造（LoopFormBox）
+2. **SSA違反の理論的防止**: PHI生成時に `safe_next_value()` 使用 → 衝突不可能
+3. **段階的実装**: Phase 2でValueIdAllocatorBox → LoopFormBoxがそれを利用
+
+**実装例**:
+```rust
+// LoopFormBox::create_header() 内
+let phi_value = builder.safe_next_value();  // ← ValueIdAllocatorBox経由
+```
+
+**関連ドキュメント**:
+- [ValueId割り当て経路分析](../../../analysis/valueid-allocation-paths-analysis.md)
 
 ---
 
@@ -352,7 +382,9 @@ impl LoopFormBox {
             let preheader_value = builder.variable_map.get(var_name)
                 .ok_or_else(|| format!("Carrier variable '{}' not found in preheader", var_name))?;
 
-            let phi_value = builder.value_gen.next();
+            // ⭐ ValueIdAllocatorBox統合: 衝突回避のため safe_next_value() を使用
+            // Phase 2.P2修正: builder.value_gen.next() → builder.safe_next_value()
+            let phi_value = builder.safe_next_value();
 
             // PHI emit（Latch入力はNoneで仮作成）
             builder.emit_instruction(MirInstruction::Phi {

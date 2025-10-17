@@ -40,26 +40,45 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
         // Phase 2.2: Avoid function parameters (v%0-v%N) - never reuse parameter registers
         // Phase 2.P2: Avoid variable_map collision - never reuse existing local variables
         // Phase 2.P2+: Also check value_types (all defined ValueIds, including PHI sources)
+        // Phase 2.P2++: Also check local_ssa_map (all cached local SSA copies)
         let mut loc = builder.value_gen.next();
         // Ensure the freshly allocated ValueId never aliases:
         // - the source value (v)
         // - function parameters (fun.params)
         // - existing local variables (variable_map)
         // - any defined values (value_types) - prevents SSA violations
+        // - cached local SSA copies (local_ssa_map) - prevents re-allocation conflicts
+        let mut attempts = 0;
         if let Some(ref fun) = builder.current_function {
             while loc == v
                 || fun.params.contains(&loc)
                 || builder.variable_map.values().any(|&vid| vid == loc)
                 || builder.value_types.contains_key(&loc)
+                || builder.local_ssa_map.values().any(|&vid| vid == loc)
             {
                 loc = builder.value_gen.next();
+                attempts += 1;
+                if attempts > 1000 {
+                    panic!(
+                        "ValueId allocation loop detected at bb={:?} v=%{} kind={:?} (attempts={})",
+                        bb, v.0, kind, attempts
+                    );
+                }
             }
         } else {
             while loc == v
                 || builder.variable_map.values().any(|&vid| vid == loc)
                 || builder.value_types.contains_key(&loc)
+                || builder.local_ssa_map.values().any(|&vid| vid == loc)
             {
                 loc = builder.value_gen.next();
+                attempts += 1;
+                if attempts > 1000 {
+                    panic!(
+                        "ValueId allocation loop detected at bb={:?} v=%{} kind={:?} (attempts={})",
+                        bb, v.0, kind, attempts
+                    );
+                }
             }
         }
         // Best-effort: errors are propagated by caller; we log but ignore to keep helper infallible

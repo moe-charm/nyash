@@ -3,6 +3,56 @@
 このページは「いま何をしていて、次に何をするか」を 1 画面で把握できるようにするダッシュボードだよ。最新の作業に合わせて随時更新していくにゃ。
 
 ## Snapshot
+Updates (today - 2025-10-17 continued)
+
+- **🔥 Phase 2.P0/P2修正実装完了（部分）** ✅⚠️
+  - **Phase 2.P0修正完了** (commit 0ddbf066) ✅
+    - **修正内容**: パラメータレジスタ (v%0-v%N) の予約
+    - **実装箇所**:
+      - `src/mir/value_id.rs`: ValueIdGenerator に `set_start_offset()` メソッド追加
+      - `src/mir/builder/builder_calls/lowering.rs`: パラメータ割り当て後に `set_start_offset(param_count)` 呼び出し（2箇所: instance/static methods）
+    - **効果**: ローカル変数が v%(N+1) から開始、パラメータレジスタと分離
+    - **テスト**: MIRダンプで確認、パラメータレジスタ (v%0-v%3) とローカル変数 (v%4~) が正しく分離
+  - **Phase 2.P2修正部分完了** (commit 79d7ad93) ✅⚠️
+    - **修正内容**: variable_map の ValueId 衝突回避（ensure()拡張）
+    - **実装箇所**: `src/mir/builder/ssa/local.rs:40-64`
+    - **3層チェック追加**:
+      1. `fun.params.contains(&loc)` - パラメータレジスタ回避（Phase 2.2既存）
+      2. `variable_map.values().any(|&vid| vid == loc)` - 現在の変数回避（Phase 2.P2）
+      3. `value_types.contains_key(&loc)` - すべての定義済み値回避（Phase 2.P2+）
+    - **効果**: ensure() 経由の ValueId 割り当てでは衝突を回避
+    - **⚠️ 残存問題**: 一部のSSA違反が残存
+      - MIR解析: `%3 = copy %12` (v%3 の再定義) が依然発生
+      - 原因: ensure() を**通らない** ValueId 割り当て経路が存在
+      - 具体例: ループヘッダーでの変数コピー、call emission の receiver materialization
+  - **📊 調査結果まとめ**:
+    - ✅ P0修正: パラメータレジスタ保護完了（v%0-v%N → v%(N+1)~の分離）
+    - ✅ P2修正（部分）: ensure() の衝突回避強化（3層チェック）
+    - ❌ P2修正（未完）: ensure() を通らない経路でSSA違反が残存
+  - **✅ Phase 1実装完了** (2025-10-17):
+    - **修正内容**: `src/mir/builder/ssa/local.rs` の ensure() に local_ssa_map チェック追加
+    - **実装詳細**:
+      - Line 57, 72: `builder.local_ssa_map.values().any(|&vid| vid == loc)` 追加（4層目チェック）
+      - Line 51, 60-66, 75-81: 無限ループ防止のための attempts counter 追加
+      - 両ブランチ（関数あり/なし）に適用
+    - **テスト結果**:
+      - ✅ test_p2_collision.hako: Result: 15 （期待値: 15） ← 正常動作
+      - ✅ test_p2_simple.hako: Result: 3 （期待値: 3） ← 正常動作
+      - ✅ quick スモーク: 283 PASS / 13 FAIL (95.6%) ← Phase 1修正前より改善
+    - **効果**: ensure() 経由の ValueId 割り当てで衝突回避を強化
+  - **✅ 統合戦略完了** (2025-10-17):
+    - ✅ Task Agent 調査完了: ValueId 割り当て経路の全調査（117箇所特定）
+    - ✅ 統一化方針策定完了: ValueIdAllocatorBox + LoopFormBox 統合戦略
+    - 🌟 **統合発見**: 2つのBoxの**相補的関係**を発見
+      - **ValueIdAllocatorBox**: 経路の正規化（117箇所を1点集約）
+      - **LoopFormBox**: 構造の正規化（PHI配置を構造的に強制）
+      - **統合効果**: PHI生成時に `safe_next_value()` 使用 → SSA違反を理論的に防止
+    - 📚 ドキュメント更新完了:
+      - `docs/development/analysis/valueid-allocation-paths-analysis.md` - 統合発見セクション追加
+      - `docs/development/roadmap/phases/phase-31-box-Normalization/loopform-box-implementation.md` - ValueIdAllocatorBox統合注釈追加
+  - **🔄 次のアクション**: Phase 2実装（ValueIdAllocatorBox導入、4-6時間）
+    - 目標: SSA違反の完全排除（二重保証: 経路 + 構造）
+
 Updates (today - 2025-10-17)
 
 - **🔥 ループ変数破損バグ調査完了（Task先生4人並列）** ✅
