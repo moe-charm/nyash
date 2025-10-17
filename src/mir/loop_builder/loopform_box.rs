@@ -583,12 +583,14 @@ impl LoopFormBox {
     ///
     /// **Purpose**: Verify loop structure conformance
     fn verify_structure(&self, builder: &MirBuilder) -> Result<(), String> {
-        // TODO Task 4: Implement verify_structure()
-        // - Get header block from builder
-        // - Call LoopFormVerifierBox::verify_loop_header()
-        // - Return verification result
-        // Note: LoopFormVerifierBox will be implemented in Day 4, stub for now
-        Ok(()) // Stub: Always succeed until Day 4
+        // Call LoopFormVerifierBox to verify header structure
+        let result = super::loopform_verifier_box::LoopFormVerifierBox::verify_loop_header(
+            builder,
+            self.header_bb,
+        );
+
+        // Convert VerificationResult to Result<(), String>
+        result.to_result()
     }
 }
 
