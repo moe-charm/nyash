@@ -143,7 +143,7 @@ impl LoopFormBox {
 
     /// Build loop structure (main entry point)
     ///
-    /// **builder**: MIR builder
+    /// **loop_builder**: Loop builder (for continue/break support)
     /// **condition**: Loop condition expression
     /// **preheader_vars**: Variables defined in preheader
     /// **body**: Loop body statements
@@ -151,7 +151,7 @@ impl LoopFormBox {
     /// **Returns**: LoopStructure (Header/Condition/Body/Latch/Exit block IDs + PHI nodes)
     pub fn build_loop(
         &mut self,
-        builder: &mut MirBuilder,
+        loop_builder: &mut super::LoopBuilder,
         condition: &crate::ast::ASTNode,
         preheader_vars: &HashMap<String, ValueId>,
         body: &[crate::ast::ASTNode],
@@ -171,31 +171,45 @@ impl LoopFormBox {
         }
 
         // Step 2: Create Header block (PHI nodes only)
-        let header_bb = self.create_header(builder)?;
+        let header_bb = self.create_header(loop_builder.parent_builder)?;
 
         // Step 3: Create Condition block (side-effect isolation)
-        let cond_bb = self.create_condition_block(builder, condition)?;
+        let cond_bb = self.create_condition_block(loop_builder.parent_builder, condition)?;
 
         // Step 4: Create Body/Latch/Exit blocks
-        let (body_bb, latch_bb, exit_bb) = self.create_body_latch_exit(builder, body)?;
+        let (body_bb, latch_bb, exit_bb) = self.create_body_latch_exit(loop_builder, body)?;
 
         // Step 5: Update PHI inputs (Latch confirmed)
-        self.update_phi_inputs(builder, latch_bb)?;
+        self.update_phi_inputs(loop_builder.parent_builder, latch_bb)?;
 
         // Step 5.5: Wire control flow
-        self.wire_control_flow(builder, cond_bb, body_bb, exit_bb)?;
+        self.wire_control_flow(loop_builder.parent_builder, cond_bb, body_bb, exit_bb)?;
 
         // Step 6: Structure verification
-        self.verify_structure(builder)?;
+        self.verify_structure(loop_builder.parent_builder)?;
 
         // Trace output
         if crate::runtime::env_gate_box::bool_any(&[
             "HAKO_TRACE_LOOPFORM",
             "NYASH_TRACE_LOOPFORM",
         ]) {
+            // 🔥 CRITICAL DEBUG: Check condition block inst_count at the END of build_loop
+            let final_cond_inst_count = if let Some(ref function) = loop_builder.parent_builder.current_function {
+                if let Some(block) = function.get_block(cond_bb) {
+                    block.instructions.len()
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
             eprintln!(
                 "[loopform] ✅ build_loop complete: header={:?} body={:?} latch={:?} exit={:?}",
                 header_bb, body_bb, latch_bb, exit_bb
+            );
+            eprintln!(
+                "[loopform] 🔥 FINAL CHECK: cond_bb={:?} final_inst_count={}",
+                cond_bb, final_cond_inst_count
             );
         }
 
@@ -321,8 +335,75 @@ impl LoopFormBox {
         // Set condition block as current
         builder.start_new_block(cond_bb)?;
 
+        // Get instruction count before build_expression
+        let inst_count_before = if let Some(ref function) = builder.current_function {
+            if let Some(block) = function.get_block(cond_bb) {
+                block.instructions.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        // Trace: current_block before build_expression
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            let func_name = builder.current_function.as_ref()
+                .map(|f| f.signature.name.as_str())
+                .unwrap_or("<no-func>");
+            eprintln!(
+                "[loopform] 🔍 before build_expression: func={} current_block={:?} cond_bb={:?} inst_count={}",
+                func_name,
+                builder.current_block,
+                cond_bb,
+                inst_count_before
+            );
+        }
+
         // Build condition expression (using PHI values from Header)
         let cond_value = builder.build_expression(condition.clone())?;
+
+        // Get instruction count after build_expression
+        let inst_count_after = if let Some(ref function) = builder.current_function {
+            if let Some(block) = function.get_block(cond_bb) {
+                block.instructions.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        // Trace: current_block after build_expression
+        if crate::runtime::env_gate_box::bool_any(&[
+            "HAKO_TRACE_LOOPFORM",
+            "NYASH_TRACE_LOOPFORM",
+        ]) {
+            let func_name = builder.current_function.as_ref()
+                .map(|f| f.signature.name.as_str())
+                .unwrap_or("<no-func>");
+            eprintln!(
+                "[loopform] 🔍 after build_expression: func={} current_block={:?} cond_bb={:?} cond_value=v%{} inst_count={}",
+                func_name,
+                builder.current_block,
+                cond_bb,
+                cond_value.as_u32(),
+                inst_count_after
+            );
+        }
+
+        // 🔥 CRITICAL VERIFICATION: Ensure build_expression() emitted instructions
+        if inst_count_after == inst_count_before {
+            return Err(format!(
+                "⚠️ LOOPFORM BUG: build_expression() emitted 0 instructions in condition block {:?}. \
+                 Condition value v%{} is undefined! This will cause VM execution to fail with 'use of undefined value'. \
+                 Likely cause: Method vs Function compilation path difference.",
+                cond_bb, cond_value.as_u32()
+            ));
+        }
 
         // Record pin slot (condition value for later branching)
         self.pin_slots.push(cond_value);
@@ -352,13 +433,13 @@ impl LoopFormBox {
     /// **Returns**: (body_bb, latch_bb, exit_bb)
     fn create_body_latch_exit(
         &mut self,
-        builder: &mut MirBuilder,
+        loop_builder: &mut super::LoopBuilder,
         body: &[crate::ast::ASTNode],
     ) -> Result<(BasicBlockId, BasicBlockId, BasicBlockId), String> {
         // Create body/latch/exit blocks
-        let body_bb = builder.block_gen.next();
-        let latch_bb = builder.block_gen.next();
-        let exit_bb = builder.block_gen.next();
+        let body_bb = loop_builder.parent_builder.block_gen.next();
+        let latch_bb = loop_builder.parent_builder.block_gen.next();
+        let exit_bb = loop_builder.parent_builder.block_gen.next();
 
         // Trace output
         if crate::runtime::env_gate_box::bool_any(&[
@@ -372,14 +453,15 @@ impl LoopFormBox {
         }
 
         // Build Body block
-        builder.start_new_block(body_bb)?;
+        loop_builder.parent_builder.start_new_block(body_bb)?;
 
+        // 🔥 FIX: Use loop_builder.build_statement() for continue/break support
         // Build body statements
         for stmt in body {
-            builder.build_expression(stmt.clone())?;
+            loop_builder.build_statement(stmt.clone())?;
 
             // Check if block is terminated (break/continue/return)
-            if let Some(ref func) = builder.current_function {
+            if let Some(ref func) = loop_builder.parent_builder.current_function {
                 if let Some(block) = func.get_block(body_bb) {
                     if block.is_terminated() {
                         break;
@@ -389,10 +471,10 @@ impl LoopFormBox {
         }
 
         // Capture variable_map for PHI latch inputs (after body, before latch)
-        self.latch_vars = builder.variable_map.clone();
+        self.latch_vars = loop_builder.parent_builder.variable_map.clone();
 
         // Emit Jump from Body to Latch (if not already terminated)
-        let body_terminated = if let Some(ref func) = builder.current_function {
+        let body_terminated = if let Some(ref func) = loop_builder.parent_builder.current_function {
             if let Some(block) = func.get_block(body_bb) {
                 block.is_terminated()
             } else {
@@ -403,17 +485,17 @@ impl LoopFormBox {
         };
 
         if !body_terminated {
-            builder.emit_instruction(MirInstruction::Jump { target: latch_bb })?;
+            loop_builder.parent_builder.emit_instruction(MirInstruction::Jump { target: latch_bb })?;
         }
 
         // Build Latch block
-        builder.start_new_block(latch_bb)?;
+        loop_builder.parent_builder.start_new_block(latch_bb)?;
 
         // Emit Jump from Latch to Header
-        builder.emit_instruction(MirInstruction::Jump { target: self.header_bb })?;
+        loop_builder.parent_builder.emit_instruction(MirInstruction::Jump { target: self.header_bb })?;
 
         // Build Exit block (empty for now, caller will set as current for continuation)
-        builder.start_new_block(exit_bb)?;
+        loop_builder.parent_builder.start_new_block(exit_bb)?;
 
         // Store block IDs
         self.latch_bb = Some(latch_bb);
@@ -541,7 +623,10 @@ impl LoopFormBox {
         // Wire Header → Condition (Jump)
         if let Some(ref mut function) = builder.current_function {
             if let Some(block) = function.get_block_mut(self.header_bb) {
-                block.instructions.push(MirInstruction::Jump { target: cond_bb });
+                // 🔧 FIX: Only add terminator if not already present
+                if block.terminator.is_none() {
+                    block.add_instruction(MirInstruction::Jump { target: cond_bb });
+                }
             } else {
                 return Err(format!("Header block {:?} not found", self.header_bb));
             }
@@ -556,11 +641,14 @@ impl LoopFormBox {
 
         if let Some(ref mut function) = builder.current_function {
             if let Some(block) = function.get_block_mut(cond_bb) {
-                block.instructions.push(MirInstruction::Branch {
-                    condition: cond_value,
-                    then_bb: body_bb,
-                    else_bb: exit_bb,
-                });
+                // 🔧 FIX: Only add terminator if not already present
+                if block.terminator.is_none() {
+                    block.add_instruction(MirInstruction::Branch {
+                        condition: cond_value,
+                        then_bb: body_bb,
+                        else_bb: exit_bb,
+                    });
+                }
             } else {
                 return Err(format!("Condition block {:?} not found", cond_bb));
             }
@@ -573,7 +661,17 @@ impl LoopFormBox {
             "HAKO_TRACE_LOOPFORM",
             "NYASH_TRACE_LOOPFORM",
         ]) {
-            eprintln!("[loopform] ✅ wire_control_flow complete");
+            // Get final instruction count after wiring
+            let final_inst_count = if let Some(ref function) = builder.current_function {
+                if let Some(block) = function.get_block(cond_bb) {
+                    block.instructions.len()
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+            eprintln!("[loopform] ✅ wire_control_flow complete: cond_bb={:?} final_inst_count={}", cond_bb, final_inst_count);
         }
 
         Ok(())

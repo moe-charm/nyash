@@ -202,52 +202,39 @@ impl LoopFormVerifierBox {
         block_id: BasicBlockId,
         block: &BasicBlock,
     ) -> VerificationResult {
-        if block.instructions.is_empty() {
-            return VerificationResult::HeaderStructureViolation {
-                block_id,
-                message: "Header block is empty".to_string(),
-            };
-        }
-
-        // Find end of PHI group
-        let mut phi_end = 0;
-        for (index, inst) in block.instructions.iter().enumerate() {
-            if matches!(inst, MirInstruction::Phi { .. }) {
-                phi_end = index + 1;
-            } else {
-                break;
+        // Header instructions must be exclusively PHI nodes
+        for inst in block.instructions.iter() {
+            if !matches!(inst, MirInstruction::Phi { .. }) {
+                return VerificationResult::HeaderStructureViolation {
+                    block_id,
+                    message: format!(
+                        "Header contains non-PHI instruction before terminator: {:?}",
+                        inst
+                    ),
+                };
             }
         }
 
-        // Check if last instruction is terminator (Jump or Branch)
-        let last_inst = &block.instructions[block.instructions.len() - 1];
-        let is_terminator = matches!(
-            last_inst,
-            MirInstruction::Jump { .. } | MirInstruction::Branch { .. }
-        );
-
-        if !is_terminator {
-            return VerificationResult::HeaderStructureViolation {
-                block_id,
-                message: format!(
-                    "Last instruction must be Jump or Branch, got: {:?}",
-                    last_inst
-                ),
-            };
-        }
-
-        // Check no instructions between PHI group and terminator
-        let non_phi_non_term_count = block.instructions.len() - phi_end - 1;
-        if non_phi_non_term_count > 0 {
-            return VerificationResult::HeaderStructureViolation {
-                block_id,
-                message: format!(
-                    "Found {} non-PHI, non-terminator instructions in header (PHI count: {}, total: {})",
-                    non_phi_non_term_count,
-                    phi_end,
-                    block.instructions.len()
-                ),
-            };
+        // Expect a terminator (Jump or Branch) stored separately
+        match &block.terminator {
+            Some(MirInstruction::Jump { .. }) | Some(MirInstruction::Branch { .. }) => {
+                // OK
+            }
+            Some(other) => {
+                return VerificationResult::HeaderStructureViolation {
+                    block_id,
+                    message: format!(
+                        "Header terminator must be Jump or Branch, got: {:?}",
+                        other
+                    ),
+                };
+            }
+            None => {
+                return VerificationResult::HeaderStructureViolation {
+                    block_id,
+                    message: "Header missing terminator (expected Jump or Branch)".to_string(),
+                };
+            }
         }
 
         // Trace output
@@ -256,8 +243,7 @@ impl LoopFormVerifierBox {
             "NYASH_TRACE_LOOPFORM",
         ]) {
             eprintln!(
-                "[loopform-verify] Rule 2 ✅: Header = {} PHI + 1 terminator (total {})",
-                phi_end,
+                "[loopform-verify] Rule 2 ✅: Header = {} PHI + 1 terminator",
                 block.instructions.len()
             );
         }
