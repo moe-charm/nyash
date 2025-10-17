@@ -66,7 +66,7 @@ pub fn invoke(hh: HostHandle, route: HostSlotRoute, args: &[VMValue]) -> Option<
                 {
                     if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
                         let norm = normalize_host_value(v);
-                        if std::env::var("NYASH_DEBUG_HOST_SLOT").ok().as_deref() == Some("1") {
+                        if crate::runtime::env_gate_box::debug_host_slot() {
                             eprintln!(
                                 "[debug:host_slot] route={} slot={} -> {:?}",
                                 route.names.first().copied().unwrap_or("<unknown>"),
