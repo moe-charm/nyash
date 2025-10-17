@@ -386,6 +386,27 @@ impl MirBuilder {
             }
         }
 
+        // Method-specific origin propagation (substring/keys/values/slice)
+        if let Some(dst_id) = mir_call.dst {
+            if let Callee::Method { method, receiver: Some(r), .. } = &callee2 {
+                let propagated = crate::mir::builder::origin::propagation::propagate_method_result(
+                    self,
+                    *r,
+                    method,
+                    dst_id,
+                );
+                if propagated && super::super::utils::builder_debug_enabled() {
+                    super::super::utils::builder_debug_log(&format!(
+                        "[origin-propagate] method={} recv=%{} -> dst=%{} origin={}",
+                        method,
+                        r.0,
+                        dst_id.0,
+                        self.origin_get(dst_id).unwrap_or("<none>")
+                    ));
+                }
+            }
+        }
+
         // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {
             dst: mir_call.dst,

@@ -7,7 +7,9 @@
 //! Modules
 //! - infer: entry points for annotating origins（me/receiver/newbox）
 //! - phi: lightweight propagation at PHI when全入力が一致
+//! - propagation: method-specific origin propagation (substring/keys/values/slice)
 
 pub mod infer;
 pub mod phi;
+pub mod propagation;
 pub mod tracker;

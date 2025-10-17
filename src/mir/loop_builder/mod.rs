@@ -18,6 +18,7 @@ mod control_flow;
 mod phi;
 mod build;
 pub(crate) mod carrier_analyzer;
+pub(crate) mod loopform_box;
 
 /// ループビルダー - SSA形式でのループ構築を管理
 pub struct LoopBuilder<'a> {
