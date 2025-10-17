@@ -9,7 +9,7 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let res_val = self.build_expression_impl(expression)?;
         let res_local = self.local_ssa_ensure(res_val, 0);
-        let ok_id = self.value_gen.next();
+        let ok_id = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::BoxCall {
             dst: Some(ok_id),
             box_val: res_local,
@@ -27,7 +27,7 @@ impl super::MirBuilder {
             value: Some(res_local),
         })?;
         self.start_new_block(else_block)?;
-        let val_id = self.value_gen.next();
+        let val_id = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::BoxCall {
             dst: Some(val_id),
             box_val: res_local,

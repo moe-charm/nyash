@@ -20,7 +20,7 @@ impl MirBuilder {
         if method == "unborn" {
             let mut arg_values = Vec::new();
             for arg in arguments { arg_values.push(self.build_expression(arg.clone())?); }
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             self.emit_instruction(MirInstruction::NewBox { dst, box_type: box_name.to_string(), args: arg_values , auto_birth: None})?;
             // Origin register for downstream routing/debug
             self.origin_register(dst, box_name.to_string());
@@ -38,7 +38,7 @@ impl MirBuilder {
             Ok(n) => n,
             Err(e) => return Err(format!("static call name error: {}", e)),
         };
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
 
         if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[builder] static-call {}", func_name);
@@ -70,7 +70,7 @@ impl MirBuilder {
         type_name: &str,
     ) -> Result<ValueId, String> {
         let mir_ty = Self::parse_type_name_to_mir(type_name);
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         let op = if method == "is" {
             TypeOpKind::Check
         } else {
@@ -126,7 +126,7 @@ impl MirBuilder {
             #[inline]
             fn try_lower_via_table(builder: &mut MirBuilder, recv_cls: Option<&str>, method: &str, obj: ValueId, args: &mut Vec<ValueId>) -> Option<ValueId> {
                 if let Some(spec) = crate::mir::builder::lowering::lower_builtin_method(recv_cls, method, args.len()) {
-                    let dst = builder.value_gen.next();
+                    let dst = builder.safe_next_value();
                     let full = spec.extern_name.to_string();
                     let name_const = crate::mir::builder::name_const::make_name_const_result(builder, &full).ok()?;
                     // LocalSSA materialization: ensure receiver/args have in-block defs
@@ -170,7 +170,7 @@ impl MirBuilder {
                 if cls == "ArrayBox" || cls == "MapBox" || cls == "StringBox" {
                     // Emit BoxCall only when we have a known builtin method_id
                     if let Some(mid_u32) = crate::runtime::type_registry::resolve_builtin_method_id(cls, &method) {
-                        let dst = self.value_gen.next();
+                        let dst = self.safe_next_value();
                         self.emit_instruction(MirInstruction::BoxCall {
                             dst: Some(dst),
                             box_val: object_value,
@@ -206,7 +206,7 @@ impl MirBuilder {
         // Special-case: instance.birth(args) must call user-defined ModuleFunction(Class.birth/N)
         // to ensure contracts and user Box initializer run even when RouterPolicy prefers BoxCall.
         if method == "birth" {
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             // Delegate to legacy path which rewrites Method-birth → ModuleFunction(Class.birth/N)
             self.emit_legacy_call(
                 Some(dst),
@@ -218,7 +218,7 @@ impl MirBuilder {
 
         // Receiver class hintは emit_unified_call 側で起源/型から判断する（重複回避）
         // 統一経路: emit_unified_call に委譲（RouterPolicy と rewrite::* で安定化）
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_unified_call(
             Some(dst),
             CallTarget::Method { box_type: None, method, receiver: object_value },

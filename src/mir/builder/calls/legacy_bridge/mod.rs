@@ -30,7 +30,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     let changed = crate::mir::builder::normalize::string_length::normalize_string_length_call(builder, &mut callee, &mut argv);
                     if changed {
                         crate::mir::builder::ssa::local::finalize_args(builder, &mut argv);
-                        let dstv = dst.unwrap_or_else(|| builder.value_gen.next());
+                        let dstv = dst.unwrap_or_else(|| builder.safe_next_value());
                         let name_const = crate::mir::builder::name_const::make_name_const_result(builder, "nyrt.string.length")?;
                         emit_call(
                             builder,
@@ -52,7 +52,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     let changed = crate::mir::builder::normalize::array_length::normalize_array_length_call(builder, &mut callee, &mut argv);
                     if changed {
                         crate::mir::builder::ssa::local::finalize_args(builder, &mut argv);
-                        let dstv = dst.unwrap_or_else(|| builder.value_gen.next());
+                        let dstv = dst.unwrap_or_else(|| builder.safe_next_value());
                         let name_const = crate::mir::builder::name_const::make_name_const_result(builder, "nyrt.array.size")?;
                         emit_call(
                             builder,
@@ -81,7 +81,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     call_args.push(me_local);
                     call_args.extend(args.into_iter());
                     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-                    let out = dst.unwrap_or_else(|| builder.value_gen.next());
+                    let out = dst.unwrap_or_else(|| builder.safe_next_value());
                     let fname = function_lowering::generate_method_function_name(&cls, &method, call_args.len() - 1);
                     let name_val = crate::mir::builder::name_const::make_name_const_result(builder, &fname)?;
                     emit_call(
@@ -111,7 +111,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     call_args.push(me_local);
                     call_args.extend(args.into_iter());
                     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-                    let out = dst.unwrap_or_else(|| builder.value_gen.next());
+                    let out = dst.unwrap_or_else(|| builder.safe_next_value());
                     let fname = function_lowering::generate_method_function_name(&cls, &method, call_args.len() - 1);
                     let name_val = crate::mir::builder::name_const::make_name_const_result(builder, &fname)?;
                     emit_call(
@@ -162,7 +162,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     let recv_local = builder.local_recv(args[0]);
                     let mut argv = vec![recv_local];
                     crate::mir::builder::ssa::local::finalize_args(builder, &mut argv);
-                    let dstv = dst.unwrap_or_else(|| builder.value_gen.next());
+                    let dstv = dst.unwrap_or_else(|| builder.safe_next_value());
                     let name_const = crate::mir::builder::name_const::make_name_const_result(builder, "nyrt.string.length")?;
                     emit_call(
                         builder,
@@ -245,7 +245,7 @@ impl<'a> LegacyCallBridgeBox<'a> {
                     }
                 }
                 // Emit unified Global callee instead of legacy string-based call
-                let actual_dst = if let Some(d) = dst { d } else { builder.value_gen.next() };
+                let actual_dst = if let Some(d) = dst { d } else { builder.safe_next_value() };
                 let mut args = args;
                 crate::mir::builder::ssa::local::finalize_args(builder, &mut args);
                 emit_call(

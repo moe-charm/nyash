@@ -70,7 +70,7 @@ impl super::MirBuilder {
         let saved_allow_ret = self.cleanup_allow_return;
         let saved_allow_throw = self.cleanup_allow_throw;
 
-        let ret_slot = self.value_gen.next();
+        let ret_slot = self.safe_next_value();
         self.return_defer_active = true;
         self.return_defer_slot = Some(ret_slot);
         self.return_deferred_emitted = false;
@@ -83,7 +83,7 @@ impl super::MirBuilder {
                     catch_clause.exception_type
                 );
             }
-            let exception_value = self.value_gen.next();
+            let exception_value = self.safe_next_value();
             self.emit_instruction(MirInstruction::Catch {
                 exception_type: catch_clause.exception_type.clone(),
                 exception_value,

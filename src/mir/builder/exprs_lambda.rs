@@ -162,7 +162,7 @@ impl super::MirBuilder {
             }
         }
         let me = self.variable_map.get("me").copied();
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::NewClosure {
             dst,
             params: params.clone(),

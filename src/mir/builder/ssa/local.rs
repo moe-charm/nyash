@@ -41,7 +41,7 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
         // Phase 2.P2: Avoid variable_map collision - never reuse existing local variables
         // Phase 2.P2+: Also check value_types (all defined ValueIds, including PHI sources)
         // Phase 2.P2++: Also check local_ssa_map (all cached local SSA copies)
-        let mut loc = builder.value_gen.next();
+        let mut loc = builder.safe_next_value();
         // Ensure the freshly allocated ValueId never aliases:
         // - the source value (v)
         // - function parameters (fun.params)

@@ -56,6 +56,10 @@ impl MirBuilder {
                 // Ensure local variables start from v%(N+1) to prevent parameter overwrite
                 let param_count = f.params.len() as u32;
                 self.value_gen.set_start_offset(param_count);
+                // Phase 2.P2: ValueIdAllocatorBox param_count update
+                if let Some(ref mut allocator) = self.value_allocator {
+                    allocator.set_param_count(param_count);
+                }
             }
             if let Some(me_id) = me_origin {
                 self.origin_register(me_id, box_name.clone());
@@ -192,6 +196,10 @@ impl MirBuilder {
                 // Ensure local variables start from v%(N+1) to prevent parameter overwrite
                 let param_count = f.params.len() as u32;
                 self.value_gen.set_start_offset(param_count);
+                // Phase 2.P2: ValueIdAllocatorBox param_count update
+                if let Some(ref mut allocator) = self.value_allocator {
+                    allocator.set_param_count(param_count);
+                }
             }
             if let (Some(me_id), Some(ref cls)) = (me_origin, static_box_name.as_ref()) {
                 self.origin_register(me_id, cls.to_string());

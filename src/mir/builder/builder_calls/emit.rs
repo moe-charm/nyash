@@ -101,7 +101,7 @@ impl MirBuilder {
                 if let CallTarget::Global(ref name) = target {
                     // 0) Dev-only safety: treat condition_fn as always-true predicate when missing
                     if name == "condition_fn" {
-                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                        let dstv = if let Some(d) = dst { d } else { self.value_gen.next() };
                         // Emit integer constant via ConstantEmissionBox
                         let one = crate::mir::builder::emission::constant::emit_integer(self, 1);
                         if dst.is_none() {
@@ -120,7 +120,7 @@ impl MirBuilder {
                     if let Some(ref module) = self.current_module {
                         // Only proceed if name is already fully qualified (contains '.' and '/')
                         if name.contains('.') && name.contains('/') && module.functions.contains_key(name) {
-                            let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                            let dstv = if let Some(d) = dst { d } else { self.value_gen.next() };
                             let mut args2 = args.clone();
                             if self.method_index.static_signature(name).is_some() {
                                 if let Some(fun) = module.functions.get(name) {
@@ -158,7 +158,7 @@ impl MirBuilder {
                             let (bx, _arity) = matches.remove(0);
                             let func_name = format!("{}.{}{}", bx, name, format!("/{}", arity_for_try));
                             // Emit unified ModuleFunction instead of legacy string-based call
-                            let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                            let dstv = if let Some(d) = dst { d } else { self.value_gen.next() };
                             let mut args2 = args.clone();
                             if self.method_index.static_signature(&func_name).is_some() {
                                 if let Some(ref module) = self.current_module {

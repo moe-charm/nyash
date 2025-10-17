@@ -24,7 +24,7 @@ impl MirBuilder {
                 }
                 ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
                     let iv = match self.build_expression(arguments[0].clone()) { Ok(v) => v, Err(e) => return Some(Err(e)) };
-                    let fv = self.value_gen.next();
+                    let fv = self.safe_next_value();
                     if let Err(e) = self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: TypeOpKind::Cast, value: iv, ty: MirType::Float }) { return Some(Err(e)); }
                     math_args.push(fv);
                 }
@@ -37,13 +37,13 @@ impl MirBuilder {
             }
         }
         // new MathBox()
-        let math_recv = self.value_gen.next();
+        let math_recv = self.safe_next_value();
         if let Err(e) = self.emit_constructor_call(math_recv, "MathBox".to_string(), vec![]) { return Some(Err(e)); }
         self.origin_register(math_recv, "MathBox".to_string());
         // birth()
         if let Err(e) = self.emit_method_call(None, math_recv, "birth".to_string(), vec![]) { return Some(Err(e)); }
         // call method
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         if let Err(e) = self.emit_method_call(Some(dst), math_recv, name.to_string(), math_args) { return Some(Err(e)); }
         Some(Ok(dst))
     }
@@ -66,7 +66,7 @@ impl MirBuilder {
             let iface = env_field.as_str();
             let m = method;
             let mut extern_call = |iface_name: &str, method_name: &str, _effects: EffectMask, returns: bool| -> Result<ValueId, String> {
-                let result_id = if returns { Some(self.value_gen.next()) } else { None };
+                let result_id = if returns { Some(self.safe_next_value()) } else { None };
                 let full = format!("{}.{}", iface_name, method_name);
                 self.emit_unified_call(
                     result_id,
@@ -112,7 +112,7 @@ impl MirBuilder {
         for a in arguments {
             match self.build_expression(a.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
         }
-        let result_id = self.value_gen.next();
+        let result_id = self.safe_next_value();
         // Canonicalize class for alias-alias form: JsonFragBox_JsonFragBox → JsonFragBox
         let canon_cls = if let Some((a,b)) = cls_name.split_once('_') { if a == b { a.to_string() } else { cls_name.clone() } } else { cls_name.clone() };
         // Build canonical function name strictly via normalizer to preserve underscores

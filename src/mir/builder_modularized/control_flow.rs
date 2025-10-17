@@ -35,7 +35,7 @@ impl MirBuilder {
         if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() == Some("1") {
             // Fallback: build try body only
         } else if let Some(catch_clause) = catch_clauses.first() {
-            let exception_value = self.value_gen.next();
+            let exception_value = self.safe_next_value();
             
             // Register catch handler for exceptions that may occur in try block
             self.emit_instruction(MirInstruction::Catch {
@@ -100,7 +100,7 @@ impl MirBuilder {
         self.start_new_block(exit_block)?;
         
         // Return void for now (in a complete implementation, would use phi for try/catch values)
-        let result = self.value_gen.next();
+        let result = self.safe_next_value();
         self.emit_instruction(MirInstruction::Const {
             dst: result,
             value: ConstValue::Void,

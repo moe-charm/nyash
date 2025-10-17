@@ -15,7 +15,7 @@ impl super::MirBuilder {
         }
 
         // Always use unified call with Value target (legacy callee=None deprecated)
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_unified_call(
             Some(dst),
             super::builder_calls::CallTarget::Value(callee_id),

@@ -103,7 +103,7 @@ impl MirBuilder {
         if let Some(ref module) = self.current_module {
             let func_name = format!("{}.{}{}", parent, method, format!("/{}", arg_values.len()));
             if module.functions.contains_key(&func_name) {
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &func_name)?;
                 self.emit_call_with_guard(
                     Some(dst),
@@ -120,7 +120,7 @@ impl MirBuilder {
 
         // Fallback: treat as Box/Plugin call using parent as box type name string
         let parent_value = crate::mir::builder::emission::constant::emit_string(self, parent);
-        let result_id = self.value_gen.next();
+        let result_id = self.safe_next_value();
         self.emit_box_or_plugin_call(
             Some(result_id),
             parent_value,

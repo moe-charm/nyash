@@ -14,7 +14,7 @@ impl super::MirBuilder {
 
         // Prepare merge and result
         let merge_block: BasicBlockId = self.block_gen.next();
-        let result_val = self.value_gen.next();
+        let result_val = self.safe_next_value();
         let mut phi_inputs: Vec<(BasicBlockId, ValueId)> = Vec::new();
 
         // Create dispatch block where we start comparing arms
@@ -79,7 +79,7 @@ impl super::MirBuilder {
                 LiteralValue::Null => crate::mir::builder::emission::constant::emit_null(self),
                 LiteralValue::Void => crate::mir::builder::emission::constant::emit_void(self),
             };
-            let cond_id = self.value_gen.next();
+            let cond_id = self.safe_next_value();
             crate::mir::builder::emission::compare::emit_to(self, cond_id, super::CompareOp::Eq, scr_val, lit_id)?;
             crate::mir::builder::emission::branch::emit_conditional(self, cond_id, then_block, else_target)?;
 

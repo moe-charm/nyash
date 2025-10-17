@@ -32,7 +32,7 @@ pub(crate) fn try_early_str_like_to_dst(
             let mut call_args = Vec::with_capacity(1);
             call_args.push(object_value);
             crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-            let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
+            let actual_dst = want_dst.unwrap_or_else(|| builder.safe_next_value());
             if let Err(e) = builder.emit_unified_call(
                 Some(actual_dst),
                 crate::mir::builder::builder_calls::CallTarget::Global(chosen.clone()),
@@ -59,7 +59,7 @@ pub(crate) fn try_early_str_like_to_dst(
         let mut call_args = Vec::with_capacity(1);
         call_args.push(object_value);
         crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-        let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
+        let actual_dst = want_dst.unwrap_or_else(|| builder.safe_next_value());
         if let Err(e) = builder.emit_unified_call(
             Some(actual_dst),
             crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
@@ -82,7 +82,7 @@ pub(crate) fn try_early_str_like_to_dst(
         let mut call_args = Vec::with_capacity(1);
         call_args.push(object_value);
         crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-            let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
+            let actual_dst = want_dst.unwrap_or_else(|| builder.safe_next_value());
             if let Err(e) = builder.emit_unified_call(
                 Some(actual_dst),
                 crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),

@@ -39,7 +39,7 @@ impl super::MirBuilder {
                 // Bind default parameters if present (e.g., args=[])
                 let saved_var_map = std::mem::take(&mut self.variable_map);
                 for p in params.iter() {
-                    let pid = self.value_gen.next();
+                    let pid = self.safe_next_value();
                     if p == "args" {
                         // new ArrayBox() with no args
                         self.emit_instruction(MirInstruction::NewBox { dst: pid, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;

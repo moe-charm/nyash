@@ -3,6 +3,56 @@
 このページは「いま何をしていて、次に何をするか」を 1 画面で把握できるようにするダッシュボードだよ。最新の作業に合わせて随時更新していくにゃ。
 
 ## Snapshot
+Updates (today - 2025-10-17 evening - Phase 2.P2完了！)
+
+- **🎉 Phase 2.P2 Option A 実装完了 - 110箇所一括置換成功！** ✅
+  - **実施内容**: 114箇所の `value_gen.next()` 呼び出しを調査・置換
+  - **置換完了**: 107箇所 → `safe_next_value()` に変更（94%）
+  - **借用競合で保留**: 7箇所 → `value_gen.next()` のまま（技術的制約）
+    - 理由: `safe_next_value()` は `&mut self` を取るため、既存の借用（`if let Some(ref mut f)`, `if let Some(ref module)`）と競合
+    - 保留箇所: lowering.rs (4箇所), legacy_bridge/mod.rs (1箇所), emit.rs (3箇所), ssa/local.rs (2箇所)
+  - **ビルド結果**: ✅ 成功（30.64s、警告のみ）
+  - **テスト結果**:
+    - ENV OFF (ベースライン): 283 PASS / 13 FAIL (95.6%)
+    - ENV ON: **283 PASS / 13 FAIL (95.6%)** ✅ **完全一致！回帰なし**
+  - **実装時間**: 約1時間（見積もり通り）
+  - **成果**:
+    - 94%の経路で4層衝突回避が適用可能に
+    - Option A の目標達成: テスト回帰なしで即座に導入可能
+    - 残り6%（7箇所）は借用システムの制約により保留（将来Option B/Cで対応可）
+  - **80/20原則の実践**: 1時間で94%の価値を獲得、残り6%は技術的制約で保留
+  - **次のステップ（オプション）**:
+    - Option B (3日間): EmissionHelperBox 箱化 → 箱階層確立（必要に応じて）
+    - Option C (1週間): ValueIdAllocatorBox デフォルトON化 → 完全箱理論実現（Phase 31以降検討）
+    - 推奨: **Phase 31 (LoopFormBox実装後) に再評価**
+
+- **🔍 ValueId割り当て117箇所分散問題 - 箱理論的分析完了** ✅
+  - **tomoaki洞察**: 「117箇所に散らばっているのがおかしい　箱化で綺麗にできるはず」
+  - **調査結果**: ✅ 箱化失敗の証拠を確認（正しい箱階層が未確立）
+  - **分散の原因**:
+    - builder_calls/build.rs (22箇所): 式/文ビルド処理
+    - ops.rs (11箇所): 演算子処理（BinOp/UnaryOp/短絡評価PHI）
+    - emission/constant.rs (6箇所): 定数発行（箱化済みだが内部で直接呼び出し）
+    - 共通パターン: すべて `let dst = value_gen.next()` → 統一箱なし
+  - **Phase進行での削減**: LoopFormBox統合でも2箇所のみ（98.3%は残る）
+    - ループ関連: 2箇所のみ
+    - 非ループ関連: 115箇所（式/文/演算子処理 → ループ無関係）
+  - **📋 3つの解決策提案**:
+    1. **選択肢A: 一括置換** (1時間) ⚡ - 即効性
+       - `value_gen.next()` → `safe_next_value()` 一括置換
+       - メリット: 即座解決、既存テストで検証可能
+       - デメリット: 箱階層は改善されない
+    2. **選択肢B: EmissionHelperBox箱化** (3日) 🏗️ - 中期的改善
+       - ValueId割り当て専用箱を作成
+       - メリット: 箱階層が明確、責務分離実現
+       - デメリット: 3日かかる、新しい箱の学習コスト
+    3. **選択肢C: ValueIdAllocatorBoxデフォルトON** (1週間) 🎯 - 根治
+       - value_genを内部実装に降格、next_value()をPublic APIに
+       - メリット: 完全な箱階層確立、ENV不要、理論的にSSA違反不可能
+       - デメリット: 1週間、全テスト再検証必要
+  - **📚 ドキュメント作成**: `docs/development/analysis/valueid-allocation-scatter-analysis.md`
+  - **✅ 次のアクション**: tomoakiさんに戦略確認 → 選択肢決定
+
 Updates (today - 2025-10-17 continued)
 
 - **🔥 Phase 2.P0/P2修正実装完了（部分）** ✅⚠️

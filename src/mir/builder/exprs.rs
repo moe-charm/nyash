@@ -35,7 +35,7 @@ impl super::MirBuilder {
                     if let Some(type_name) = Self::extract_string_literal(&m.arguments[0]) {
                         let obj_val = self.build_expression_impl(*m.object.clone())?;
                         let ty = Self::parse_type_name_to_mir(&type_name);
-                        let dst = self.value_gen.next();
+                        let dst = self.safe_next_value();
                         let op = if m.method == "is" { crate::mir::TypeOpKind::Check } else { crate::mir::TypeOpKind::Cast };
                         self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
                         return Ok(dst);
@@ -77,7 +77,7 @@ impl super::MirBuilder {
                 // Normalize args into SSA locals
                 let full = format!("ffi.dynamic.{}", symbol);
                 let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects("ffi.dynamic", &symbol);
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 self.emit_call_with_guard(
                     Some(dst),
                     ValueId::new(0),
@@ -235,7 +235,7 @@ impl super::MirBuilder {
             } => self.build_new_expression(class.clone(), arguments.clone()),
 
             ASTNode::ArrayLiteral { elements, .. } => {
-                let arr_id = self.value_gen.next();
+                let arr_id = self.safe_next_value();
                 self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;
                 for e in elements {
                     let v = self.build_expression_impl(e)?;
@@ -251,7 +251,7 @@ impl super::MirBuilder {
                 Ok(arr_id)
             }
             ASTNode::MapLiteral { entries, .. } => {
-                let map_id = self.value_gen.next();
+                let map_id = self.safe_next_value();
                 self.emit_instruction(MirInstruction::NewBox { dst: map_id, box_type: "MapBox".to_string(), args: vec![], auto_birth: None })?;
                 for (k, expr) in entries {
                     // const string key

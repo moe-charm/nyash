@@ -26,7 +26,7 @@ impl MirBuilder {
         // Strip optional "/arity" suffix if present
         let base = name.split('/').next().unwrap_or(name).to_string();
 
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_unified_call(
             Some(dst),
             CallTarget::Extern(base),
@@ -134,7 +134,7 @@ impl MirBuilder {
                     .normalize_external_module_function_name(&target_name, call_args.len())
                     .or_else(|| if target_name.contains(".") { Some(target_name.clone()) } else { None });
                 if let Some(ext_name) = normalized {
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
                     self.maybe_prepend_static_me(&ext_name, &mut call_args);
                     self.emit_call_with_guard(
@@ -173,7 +173,7 @@ impl MirBuilder {
             if let Some(type_name) = special_handlers::extract_string_literal(&args[1]) {
                 let val = self.build_expression(args[0].clone())?;
                 let ty = special_handlers::parse_type_name_to_mir(&type_name);
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 let op = if name == "isType" {
                     TypeOpKind::Check
                 } else {
@@ -218,7 +218,7 @@ impl MirBuilder {
                         if is_self {
                             let target_key = if module.functions.contains_key(&cur_name) { cur_name.clone() } else { cand2.clone() };
                             if module.functions.contains_key(&target_key) {
-                                let dst2 = self.value_gen.next();
+                                let dst2 = self.safe_next_value();
                                 let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &target_key)?;
                                 let mut arg_values2 = Vec::new();
                                 for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
@@ -237,7 +237,7 @@ impl MirBuilder {
                     }
                 }
                 if dotted && module.functions.contains_key(&name) {
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
@@ -253,7 +253,7 @@ impl MirBuilder {
                     return Ok(dst);
                 }
                 if dotted && module.functions.contains_key(&cand2) {
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &cand2)?;
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
@@ -273,7 +273,7 @@ impl MirBuilder {
                     if let Some(fname) = crate::mir::resolve::call_resolver_core::resolve_module_function(
                         module.functions.keys().cloned(), &name, arity,
                     ) {
-                        let dst2 = self.value_gen.next();
+                        let dst2 = self.safe_next_value();
                         let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
                         let mut arg_values2 = Vec::new();
                         for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
@@ -306,7 +306,7 @@ impl MirBuilder {
         }
 
         if let Some(ext_name) = self.normalize_external_module_function_name(&name, arg_values.len()) {
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
             self.maybe_prepend_static_me(&ext_name, &mut arg_values);
             self.emit_call_with_guard(
@@ -327,7 +327,7 @@ impl MirBuilder {
                 Ok(full) => full,
                 Err(_) => if name.contains('/') { name.clone() } else { format!("{}/{}", name, arg_values.len()) },
             };
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &target)?;
             self.maybe_prepend_static_me(&target, &mut arg_values);
             self.emit_call_with_guard(
@@ -394,7 +394,7 @@ impl MirBuilder {
                     }
                 }
                 if let Some(fname) = chosen {
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     // func field retained for legacy compatibility (diagnostics/SSA references)
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
                     self.maybe_prepend_static_me(&fname, &mut arg_values);
@@ -417,7 +417,7 @@ impl MirBuilder {
         if std::env::var("NYASH_DEV").ok().as_deref() == Some("1") {
             if let Some(cls_name) = self.current_static_box.clone() {
                 if name.starts_with('_') && !name.contains('.') {
-                    let result_id = self.value_gen.next();
+                    let result_id = self.safe_next_value();
                     let fun_name = format!("{}.{}{}", cls_name, name, format!("/{}", arg_values.len()));
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fun_name)?;
                     self.maybe_prepend_static_me(&fun_name, &mut arg_values);
@@ -436,7 +436,7 @@ impl MirBuilder {
 
         // Special-case: global str(x) → x.str() に正規化（内部は関数へ統一される）
         if name == "str" && arg_values.len() == 1 {
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             // Use unified method emission; downstream rewrite will functionize as needed
             self.emit_method_call(Some(dst), arg_values[0], "str".to_string(), vec![])?;
             return Ok(dst);
@@ -449,7 +449,7 @@ impl MirBuilder {
 
         if !use_unified {
             // Legacy path（必要なら警告）
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
 
             // === ChatGPT5 Pro Design: Type-safe function call resolution ===
             // Resolve call target using new type-safe system; if it fails, try static-method fallback
@@ -466,7 +466,7 @@ impl MirBuilder {
                             .collect();
                         if matches.len() == 1 {
                             let (bx, _arity) = matches.remove(0);
-                            let dst = self.value_gen.next();
+                            let dst = self.safe_next_value();
                             let func_name = format!("{}.{}{}", bx, name, format!("/{}", arg_values.len()));
                             // Keep legacy emission for module-level function resolution
                             self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
@@ -483,7 +483,7 @@ impl MirBuilder {
                                 .collect();
                             if matches.len() == 1 {
                                 let (bx, _arity) = matches.remove(0);
-                                let dst = self.value_gen.next();
+                                let dst = self.safe_next_value();
                                 let func_name = format!("{}.{}{}", bx, method_only, format!("/{}", arg_values.len()));
                                 self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
                                 return Ok(dst);
@@ -510,7 +510,7 @@ impl MirBuilder {
                                 let pick = cands[0].clone();
                                 // Avoid immediate self-cycle just in case
                                 if !crate::common::call_policy::is_immediate_cycle(&pick, &name) {
-                                    let dst = self.value_gen.next();
+                                    let dst = self.safe_next_value();
                                     self.emit_legacy_call(Some(dst), CallTarget::Global(pick), arg_values)?;
                                     return Ok(dst);
                                 }
@@ -540,7 +540,7 @@ impl MirBuilder {
             Ok(dst)
         } else {
             // Unified path for builtins/externs
-            let dst = self.value_gen.next();
+            let dst = self.safe_next_value();
             self.emit_unified_call(
                 Some(dst),
                 CallTarget::Global(name),
@@ -564,7 +564,7 @@ impl MirBuilder {
                 let full = format!("hostbridge.{}", method);
                 let mut arg_values = Vec::new();
                 for a in &arguments { arg_values.push(self.build_expression(a.clone())?); }
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 // Route to Extern("hostbridge.*") unconditionally
                 self.emit_unified_call(
                     Some(dst),
@@ -642,7 +642,7 @@ impl MirBuilder {
                         let mut call_args = Vec::with_capacity(arity + 1);
                         call_args.push(me_id);
                         call_args.extend(arg_values.into_iter());
-                        let dst = self.value_gen.next();
+                        let dst = self.safe_next_value();
                         // Emit function name via NameConstBox
                         let c = match crate::mir::builder::name_const::make_name_const_result(self, &fname) {
                             Ok(v) => v,
@@ -716,7 +716,7 @@ impl MirBuilder {
     }
 
     fn emit_timer_now_ms_call(&mut self) -> Result<ValueId, String> {
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         let mut args: Vec<ValueId> = vec![];
         crate::mir::builder::ssa::local::finalize_args(self, &mut args);
         self.emit_unified_call(
@@ -729,7 +729,7 @@ impl MirBuilder {
 
     fn emit_array_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_unified_call(
             Some(dst),
             super::super::builder_calls::CallTarget::Extern("nyrt.array.size".to_string()),
@@ -741,7 +741,7 @@ impl MirBuilder {
 
     fn emit_map_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_unified_call(
             Some(dst),
             super::super::builder_calls::CallTarget::Extern("nyrt.map.size".to_string()),

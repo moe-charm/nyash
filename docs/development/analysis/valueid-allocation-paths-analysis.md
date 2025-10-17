@@ -1664,6 +1664,94 @@ let phi_value = builder.safe_next_value();
 
 ---
 
+## ✅ Phase 2実装完了 (2025-10-17)
+
+**実装日**: 2025-10-17
+**所要時間**: 3時間
+
+### 実装内容
+
+**1. ValueIdAllocatorBox実装**
+- **ファイル**: `src/mir/builder/value_allocator_box.rs` (236行)
+- **機能**:
+  - 4層衝突チェック（params, variable_map, value_types, local_ssa_map）
+  - ENV toggle: `HAKO_USE_VALUE_ALLOCATOR_BOX=1`
+  - トレース: `HAKO_TRACE_VALUE_ALLOC=1`
+  - 無限ループ防止（最大1000回試行）
+
+**2. MirBuilder統合**
+- **ファイル**: `src/mir/builder.rs`
+- **変更箇所**:
+  - Line 182-184: `value_allocator` フィールド追加
+  - Line 235: `new()` での初期化（`None`）
+  - Line 239-259: `safe_next_value()` メソッド追加
+
+**3. API設計改善**
+- **課題**: 借用エラー（`allocate_safe(&MirBuilder)` が二重借用を引き起こす）
+- **解決**: シグネチャ変更
+  ```rust
+  // 修正前
+  pub fn allocate_safe(&mut self, builder: &MirBuilder) -> ValueId
+
+  // 修正後
+  pub fn allocate_safe(
+      &mut self,
+      current_function: Option<&MirFunction>,
+      variable_map: &HashMap<String, ValueId>,
+      value_types: &HashMap<ValueId, MirType>,
+      local_ssa_map: &HashMap<(BasicBlockId, ValueId, u8), ValueId>,
+  ) -> ValueId
+  ```
+
+**4. ユニットテスト**
+- `test_allocate_safe_basic`: 基本割り当て（パラメータスキップ）
+- `test_collision_avoidance`: variable_map衝突回避
+- `test_sync_clears_previous_state`: sync動作検証
+
+### ビルド結果
+
+✅ **コンパイル成功** (30.24秒、warningなし)
+
+```bash
+$ cargo build --release
+   Compiling nyash-rust v0.1.0 (/home/tomoaki/git/hakorune-selfhost)
+    Finished `release` profile [optimized] target(s) in 30.24s
+```
+
+### 効果
+
+**統合完了**:
+- ✅ ValueIdAllocatorBox 単体動作
+- ✅ MirBuilder::safe_next_value() 経由で使用可能
+- ✅ ENV toggle でフォールバック可能（`value_gen.next()`）
+- ✅ ロールバック可能な設計
+
+**次のステップ準備完了**:
+- Phase 2 Week 3: 高頻度経路の置き換え（PHI生成6箇所、Call emission 35+箇所）
+- LoopFormBox統合: PHI生成時に `safe_next_value()` 使用
+
+### 残存課題
+
+- ⚠️ まだ実際の経路は置き換えていない（`value_gen.next()` が117箇所残存）
+- ⚠️ ENV toggle のデフォルト値は `disabled`（明示的に有効化必要）
+- 🔄 Week 3で高頻度経路から段階的に置き換え予定
+
+### アーキテクチャ完成
+
+```
+MirBuilder
+    ↓ safe_next_value()
+ValueIdAllocatorBox
+    ↓ allocate_safe()
+4-Layer Check
+    ├─ Layer 1: Function parameters
+    ├─ Layer 2: variable_map values
+    ├─ Layer 3: value_types keys
+    └─ Layer 4: local_ssa_map values
+```
+
+---
+
 **調査完了日**: 2025-10-17
-**調査時間**: 45分（統合発見: +10分、Phase 1実装: 1.5時間）
-**成果物**: 本レポート (`valueid-allocation-paths-analysis.md`) + LoopFormBox統合戦略 + Phase 1実装
+**調査時間**: 45分（統合発見: +10分、Phase 1実装: 1.5時間、Phase 2実装: 3時間）
+**成果物**: 本レポート (`valueid-allocation-paths-analysis.md`) + LoopFormBox統合戦略 + Phase 1&2実装

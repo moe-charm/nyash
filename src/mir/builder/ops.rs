@@ -28,7 +28,7 @@ impl super::MirBuilder {
         // Dev-only: dump varmap bindings for BinOp operands to chase sporadic mis-binding
         crate::mir::builder::observe::varmap::emit_recv_names(self, lhs, "binop-lhs");
         crate::mir::builder::observe::varmap::emit_recv_names(self, rhs, "binop-rhs");
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
 
         let mir_op = self.convert_binary_operator(operator)?;
 
@@ -182,7 +182,7 @@ impl super::MirBuilder {
                     crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs_copy, &mut rhs_copy);
 
                     // Emit unified external call: nyrt.ops.op_eq(lhs, rhs)
-                    let eq_result = self.value_gen.next();
+                    let eq_result = self.safe_next_value();
                     self.emit_unified_call(
                         Some(eq_result),
                         super::builder_calls::CallTarget::Extern("nyrt.ops.op_eq".to_string()),
@@ -214,8 +214,8 @@ impl super::MirBuilder {
                             .map(|s| s == "IntegerBox")
                             .unwrap_or(false)
                     {
-                        let li = self.value_gen.next();
-                        let ri = self.value_gen.next();
+                        let li = self.safe_next_value();
+                        let ri = self.safe_next_value();
                         self.emit_instruction(MirInstruction::TypeOp {
                             dst: li,
                             op: TypeOpKind::Cast,
@@ -279,7 +279,7 @@ impl super::MirBuilder {
         self.variable_map = pre_if_var_map.clone();
         // Materialize all variables at entry via single-pred PHI (correctness-first)
         for (name, &pre_v) in pre_if_var_map.iter() {
-            let phi_val = self.value_gen.next();
+            let phi_val = self.safe_next_value();
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);
@@ -308,7 +308,7 @@ impl super::MirBuilder {
             let rhs_false_exit = self.current_block()?;
             // join rhs result into a single bool（Helper 統一）
             self.start_new_block(rhs_join)?;
-            let rhs_bool = self.value_gen.next();
+            let rhs_bool = self.safe_next_value();
             let merged = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
                 self,
                 Some(rhs_true_exit),
@@ -338,7 +338,7 @@ impl super::MirBuilder {
         self.variable_map = pre_if_var_map.clone();
         // Materialize all variables at entry via single-pred PHI (correctness-first)
         for (name, &pre_v) in pre_if_var_map.iter() {
-            let phi_val = self.value_gen.next();
+            let phi_val = self.safe_next_value();
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);
@@ -368,7 +368,7 @@ impl super::MirBuilder {
             let rhs_false_exit = self.current_block()?;
             // join rhs result into a single bool
             self.start_new_block(rhs_join)?;
-            let rhs_bool = self.value_gen.next();
+            let rhs_bool = self.safe_next_value();
             let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
             if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
                 crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
@@ -391,7 +391,7 @@ impl super::MirBuilder {
         self.push_if_merge(merge_block);
 
         // Result merge（Helper 統一）
-        let result_val_dst = self.value_gen.next();
+        let result_val_dst = self.safe_next_value();
         let (then_pred_opt, else_pred_opt) =
             super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
         let result_val = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
@@ -440,7 +440,7 @@ impl super::MirBuilder {
             };
             if !name.is_empty() {
                 let in_guard = self.current_function.as_ref().map(|f| f.signature.name.starts_with(guard_prefix)).unwrap_or(false);
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 if !in_guard {
                     self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name.to_string()), vec![operand_val])?;
                     self.value_types.insert(dst, rett);
@@ -488,7 +488,7 @@ impl super::MirBuilder {
     }
 
     pub(super) fn emit_unop(&mut self, op: UnaryOp, operand: ValueId) -> Result<ValueId, String> {
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(MirInstruction::UnaryOp {
             dst,
             op,

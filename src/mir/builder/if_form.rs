@@ -65,8 +65,9 @@ impl MirBuilder {
         let then_ast_for_analysis = then_branch.clone();
         self.variable_map = pre_if_var_map.clone();
         // Materialize all variables at block entry via single-pred Phi (correctness-first)
+        // Phase 2.P2: ValueIdAllocatorBox統合 - PHI生成時の衝突回避
         for (name, &pre_v) in pre_if_var_map.iter() {
-            let phi_val = self.value_gen.next();
+            let phi_val = self.safe_next_value();
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);
@@ -95,8 +96,9 @@ impl MirBuilder {
         // Scope enter for else-branch
         self.hint_scope_enter(0);
         // Materialize all variables at block entry via single-pred Phi (correctness-first)
+        // Phase 2.P2: ValueIdAllocatorBox統合 - PHI生成時の衝突回避
         for (name, &pre_v) in pre_if_var_map.iter() {
-            let phi_val = self.value_gen.next();
+            let phi_val = self.safe_next_value();
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);

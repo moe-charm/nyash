@@ -15,7 +15,7 @@ impl super::MirBuilder {
                     super::utils::builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
                     let val = self.build_expression(call.arguments[0].clone())?;
                     let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let op = if call.name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     super::utils::builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
@@ -44,7 +44,7 @@ impl super::MirBuilder {
                     ));
                     let val = self.build_expression(arguments[0].clone())?;
                     let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let op = if name == "isType" {
                         TypeOpKind::Check
                     } else {
@@ -85,7 +85,7 @@ impl super::MirBuilder {
                     ));
                     let obj_val = self.build_expression(*object.clone())?;
                     let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
-                    let dst = self.value_gen.next();
+                    let dst = self.safe_next_value();
                     let op = if method == "is" {
                         TypeOpKind::Check
                     } else {
@@ -184,7 +184,7 @@ impl super::MirBuilder {
             self.variable_map.insert(var_name.clone(), var_id);
             last_value = Some(var_id);
         }
-        Ok(last_value.unwrap_or_else(|| self.value_gen.next()))
+        Ok(last_value.unwrap_or_else(|| self.safe_next_value()))
     }
 
     // Return statement
@@ -246,7 +246,7 @@ impl super::MirBuilder {
             for a in arguments.into_iter() {
                 arg_vals.push(self.build_expression(a)?);
             }
-            let future_id = self.value_gen.next();
+            let future_id = self.safe_next_value();
             self.emit_unified_call(
                 Some(future_id),
                 super::builder_calls::CallTarget::Extern("env.future.spawn_instance".to_string()),
@@ -256,7 +256,7 @@ impl super::MirBuilder {
             return Ok(future_id);
         }
         let expression_value = self.build_expression(expression)?;
-        let future_id = self.value_gen.next();
+        let future_id = self.safe_next_value();
         self.emit_instruction(MirInstruction::FutureNew {
             dst: future_id,
             value: expression_value,
@@ -272,7 +272,7 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let future_value = self.build_expression(expression)?;
         self.emit_instruction(MirInstruction::Safepoint)?;
-        let result_id = self.value_gen.next();
+        let result_id = self.safe_next_value();
         self.emit_instruction(MirInstruction::Await {
             dst: result_id,
             future: future_value,

@@ -39,7 +39,7 @@ pub(crate) fn try_known_rewrite_to_dst(
     let mut call_args = Vec::with_capacity(arity + 1);
     call_args.push(object_value);
     call_args.append(&mut arg_values);
-    let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
+    let actual_dst = want_dst.unwrap_or_else(|| builder.safe_next_value());
     if let Err(e) = builder.emit_call_with_guard(
         Some(actual_dst),
         name_const,
@@ -81,7 +81,7 @@ pub(crate) fn try_unique_suffix_rewrite_to_dst(
     let arity_us = arg_values.len();
     call_args.append(&mut arg_values);
     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
-    let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
+    let actual_dst = want_dst.unwrap_or_else(|| builder.safe_next_value());
     if let Err(e) = builder.emit_unified_call(
         Some(actual_dst),
         crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),

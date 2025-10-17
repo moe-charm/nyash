@@ -53,7 +53,7 @@ impl super::MirBuilder {
         let mut args_vec = vec![field_name_id];
         crate::mir::builder::ssa::local::finalize_field_base_and_args(self, &mut base, &mut args_vec);
         // BoxCall: getField(name)
-        let field_val = self.value_gen.next();
+        let field_val = self.safe_next_value();
         self.emit_instruction(MirInstruction::BoxCall {
             dst: Some(field_val),
             box_val: base,

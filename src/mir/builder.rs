@@ -68,6 +68,7 @@ pub(crate) enum PropertyKind {
 
 /// MIR builder for converting AST to SSA form
 pub mod guards;
+pub mod value_allocator_box; // Phase 2: ValueIdAllocatorBox（統一的ValueId割り当て機構）
 
 pub struct MirBuilder {
     /// Current module being built
@@ -177,6 +178,10 @@ pub struct MirBuilder {
 
     /// Function-local cache to reuse static singleton placeholders within the same function.
     current_fn_singletons: HashMap<String, ValueId>,
+
+    /// Phase 2: ValueIdAllocatorBox for centralized collision-free allocation
+    /// Initialized per-function via set_function() when ENV toggle is enabled
+    value_allocator: Option<value_allocator_box::ValueIdAllocatorBox>,
 }
 
 impl MirBuilder {
@@ -227,6 +232,39 @@ impl MirBuilder {
             schedule_mat_map: HashMap::new(),
             pending_entry_pin_copies: HashMap::new(),
             current_fn_singletons: HashMap::new(),
+            // Phase 2.P2: ENV toggle for ValueIdAllocatorBox
+            // Enabled: HAKO_USE_VALUE_ALLOCATOR_BOX=1 or NYASH_USE_VALUE_ALLOCATOR_BOX=1
+            // param_count is initially 0; updated per-function in builder_calls/lowering.rs
+            value_allocator: if crate::runtime::env_gate_box::bool_any(&[
+                "HAKO_USE_VALUE_ALLOCATOR_BOX",
+                "NYASH_USE_VALUE_ALLOCATOR_BOX",
+            ]) {
+                Some(value_allocator_box::ValueIdAllocatorBox::new(0))
+            } else {
+                None
+            },
+        }
+    }
+
+    /// Allocate a ValueId with collision avoidance (Phase 2: ValueIdAllocatorBox)
+    ///
+    /// **Behavior**:
+    /// - If `HAKO_USE_VALUE_ALLOCATOR_BOX=1`: uses 4-layer collision check
+    /// - Otherwise: falls back to `value_gen.next()` (legacy behavior)
+    ///
+    /// **Integration Progress**: Phase 2.P2
+    /// - Week 3: Replace PHI generation (6 sites)
+    /// - Week 4: Replace call emission (35+ sites)
+    pub fn safe_next_value(&mut self) -> ValueId {
+        if let Some(ref mut allocator) = self.value_allocator {
+            allocator.allocate_safe(
+                self.current_function.as_ref(),
+                &self.variable_map,
+                &self.value_types,
+                &self.local_ssa_map,
+            )
+        } else {
+            self.safe_next_value()
         }
     }
 
@@ -673,7 +711,7 @@ impl MirBuilder {
                 ..
             } = arguments[0].clone()
             {
-                let dst = self.value_gen.next();
+                let dst = self.safe_next_value();
                 self.emit_instruction(MirInstruction::Const {
                     dst,
                     value: ConstValue::Integer(n),
@@ -691,7 +729,7 @@ impl MirBuilder {
         }
 
         // Generate the destination ValueId
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
 
         // Emit NewBox instruction for all Box types
         // VM will handle optimization for basic types internally

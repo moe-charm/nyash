@@ -52,8 +52,9 @@ impl MirBuilder {
                     if fun.signature.name.starts_with("ParserBox.") && name != "me" {
                         if let Some(&me_vid) = self.variable_map.get("me") {
                             // if either incoming was `me`,または merged==me と見做せる状況は Copy を噛ませる
+                            // Phase 2.P2: ValueIdAllocatorBox統合 - VarMapGuard Copy生成時の衝突回避
                             if then_v == me_vid || else_v == me_vid {
-                                let loc = self.value_gen.next();
+                                let loc = self.safe_next_value();
                                 self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
                                 crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
                                 loc
@@ -110,7 +111,8 @@ impl MirBuilder {
         let assigned_var_else = else_ast_for_analysis
             .as_ref()
             .and_then(|a| crate::mir::phi_core::if_phi::extract_assigned_var(a));
-        let result_val = self.value_gen.next();
+        // Phase 2.P2: ValueIdAllocatorBox統合 - PHI result値生成時の衝突回避
+        let result_val = self.safe_next_value();
 
         // フェーズM: no_phi_mode分岐削除（常にPHI命令を使用）
 
@@ -142,8 +144,9 @@ impl MirBuilder {
                 let bind_val = if let Some(fun) = self.current_function.as_ref() {
                     if fun.signature.name.starts_with("ParserBox.") && var_name != "me" {
                         if let Some(&me_vid) = self.variable_map.get("me") {
+                            // Phase 2.P2: ValueIdAllocatorBox統合 - VarMapGuard Copy生成時の衝突回避
                             if then_value_for_var == me_vid || else_value_for_var == me_vid {
-                                let loc = self.value_gen.next();
+                                let loc = self.safe_next_value();
                                 self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
                                 crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
                                 loc

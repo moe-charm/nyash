@@ -145,7 +145,7 @@ impl<'a> LoopBuilder<'a> {
     }
 
     pub(super) fn new_value(&mut self) -> ValueId {
-        self.parent_builder.value_gen.next()
+        self.parent_builder.safe_next_value()
     }
 
     pub(super) fn set_current_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
@@ -263,7 +263,7 @@ impl<'a> LoopBuilder<'a> {
             // Check if value is ANY function parameter (v%0, v%1, ..., v%N) regardless of function name
             if fun.params.contains(&value) {
                 // This value is a parameter register (v%0, v%1, ..., v%N)
-                let loc = self.parent_builder.value_gen.next();
+                let loc = self.parent_builder.safe_next_value();
                 // Copy を現在ブロックに挿入（PHI後でも可）。型/起源は伝播。
                 let _ = self.parent_builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: value });
                 guarded = true;

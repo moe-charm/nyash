@@ -92,7 +92,8 @@ impl PhiMergeHelper {
             1 => Ok(Some(inputs[0].1)), // 単一predecessor: 直接代入
             _ => {
                 // 複数predecessors: PHI発行
-                let merged = dst_opt.unwrap_or_else(|| builder.value_gen.next());
+                // Phase 2.P2: ValueIdAllocatorBox統合 - PHI生成時の衝突回避
+                let merged = dst_opt.unwrap_or_else(|| builder.safe_next_value());
 
                 // デバッグ診断（変数名情報付き）
                 if let (Some(func), Some(cur_bb)) = (&builder.current_function, builder.current_block) {

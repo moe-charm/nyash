@@ -56,7 +56,7 @@ impl super::MirBuilder {
         if is_ambiguous && !(is_string_ty || is_string_origin) {
             // Emit: tmp = "" + recv  (stringify via concat; VM fast-path guarantees string result)
             let empty = crate::mir::builder::emission::constant::emit_string(self, "");
-            let tmp = self.value_gen.next();
+            let tmp = self.safe_next_value();
             let _ = self.emit_instruction(super::MirInstruction::BinOp {
                 dst: tmp,
                 op: crate::mir::BinaryOp::Add,
@@ -112,7 +112,7 @@ impl super::MirBuilder {
                 for name in names.iter() {
                     if !name.starts_with("__pin$") { continue; }
                     if let Some(&src) = self.variable_map.get(name) {
-                        let dst = self.value_gen.next();
+                        let dst = self.safe_next_value();
                         pending.push(super::MirInstruction::Copy { dst, src });
                         crate::mir::builder::metadata::propagate::propagate(self, src, dst);
                         self.variable_map.insert(name.clone(), dst);
@@ -162,7 +162,7 @@ impl super::MirBuilder {
             let mut call_args: Vec<super::ValueId> = Vec::with_capacity(1 + arity);
             call_args.push(recv_local);
             call_args.extend(argv.drain(..));
-            let out = dst.unwrap_or_else(|| self.value_gen.next());
+            let out = dst.unwrap_or_else(|| self.safe_next_value());
             self.emit_call_with_guard(
                 Some(out),
                 name_val,
@@ -264,7 +264,7 @@ impl super::MirBuilder {
         box_val: super::ValueId,
     ) -> Result<super::ValueId, String> {
         // Core‑13 pure mode removed; keep WeakRef emission available.
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,
             op: WeakRefOp::New,
@@ -278,7 +278,7 @@ impl super::MirBuilder {
         weak_ref: super::ValueId,
     ) -> Result<super::ValueId, String> {
         // Core‑13 pure mode removed; keep WeakRef emission available.
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,
             op: WeakRefOp::Load,
@@ -306,7 +306,7 @@ impl super::MirBuilder {
     pub(crate) fn pin_to_slot(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
         self.temp_slot_counter = self.temp_slot_counter.wrapping_add(1);
         let slot_name = format!("__pin${}${}", self.temp_slot_counter, hint);
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
         if super::utils::builder_debug_enabled() || std::env::var("NYASH_PIN_TRACE").ok().as_deref() == Some("1") {
             super::utils::builder_debug_log(&format!("pin slot={} src={} dst={}", slot_name, v.0, dst.0));
@@ -319,7 +319,7 @@ impl super::MirBuilder {
 
     /// Ensure a value has a local definition in the current block by inserting a Copy.
     pub(crate) fn materialize_local(&mut self, v: super::ValueId) -> Result<super::ValueId, String> {
-        let dst = self.value_gen.next();
+        let dst = self.safe_next_value();
         self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
         // Propagate metadata (type/origin) from source to the new local copy
         crate::mir::builder::metadata::propagate::propagate(self, v, dst);

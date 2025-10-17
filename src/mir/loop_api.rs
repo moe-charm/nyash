@@ -96,7 +96,7 @@ impl LoopBuilderApi for super::builder::MirBuilder {
         super::builder::MirBuilder::emit_instruction(self, inst)
     }
     fn new_value(&mut self) -> ValueId {
-        self.value_gen.next()
+        self.safe_next_value()
     }
 
     fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
